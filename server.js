@@ -7,7 +7,13 @@ const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const sgMail = require('@sendgrid/mail');
+// Conditionally require SendGrid (only if package is installed)
+let sgMail = null;
+try {
+  sgMail = require('@sendgrid/mail');
+} catch (error) {
+  console.warn('⚠️  @sendgrid/mail package not installed. Install it with: npm install @sendgrid/mail');
+}
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
@@ -352,7 +358,7 @@ console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
 console.log('================================');
 
 // Check if SendGrid is configured (preferred for cloud platforms like Render)
-if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
+if (sgMail && process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
   useSendGrid = true;
   console.log('✅ SendGrid configured for email sending');
@@ -471,7 +477,7 @@ const sendVerificationEmail = async (email, code) => {
   `;
 
   // Use SendGrid if configured (preferred for cloud platforms like Render)
-  if (useSendGrid) {
+  if (useSendGrid && sgMail) {
     try {
       console.log(`📧 Attempting to send verification email via SendGrid:`);
       console.log(`   From: ${process.env.SENDGRID_FROM_EMAIL}`);

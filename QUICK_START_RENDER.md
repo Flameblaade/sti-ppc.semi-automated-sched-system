@@ -70,9 +70,24 @@ Click **"Add Environment Variable"** and add these:
 | `CLIENT_URL` | `https://your-app.onrender.com` | Update after deployment |
 
 **Generate JWT_SECRET:**
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+
+**Option 1: Generate a new one (Recommended)**
+1. Open your terminal/command prompt in your project folder
+2. Run this command:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+3. **Copy the output** (it will be a long random string like `a1b2c3d4e5f6789...`)
+4. In Render's Environment Variables:
+   - **Variable name:** `JWT_SECRET`
+   - **Value:** Paste the copied string (the output from the command)
+
+**Option 2: Use your existing one**
+If you already have a `JWT_SECRET` in your `.env` file, you can use that same value:
+- **Variable name:** `JWT_SECRET`
+- **Value:** Copy the value from your `.env` file (the part after `JWT_SECRET=`)
+
+**Important:** Never share your JWT_SECRET publicly! It should be a long, random string.
 
 **Get Gmail App Password:**
 1. Go to Google Account → Security
@@ -116,13 +131,68 @@ See the full guide: `RENDER_DEPLOYMENT_GUIDE.md`
 
 ## 🔄 Updating Your App
 
-After making changes:
+After making changes to your code:
 
+### Step 1: Stage Your Changes
 ```bash
 git add .
-git commit -m "Your changes"
+```
+This adds all modified files to be committed.
+
+### Step 2: Commit Your Changes
+```bash
+git commit -m "Description of your changes"
+```
+Examples:
+- `git commit -m "Fix login redirect issue"`
+- `git commit -m "Update CORS settings"`
+- `git commit -m "Add new feature"`
+
+### Step 3: Push to GitHub
+```bash
 git push
 ```
+If this is your first push, use:
+```bash
+git push -u origin main
+```
 
-Render will automatically redeploy! ✨
+### Step 4: Wait for Auto-Deploy
+- Render will automatically detect the push
+- Check your Render dashboard - you'll see a new deployment starting
+- Wait 2-5 minutes for deployment to complete
+- Your changes will be live!
+
+**Render will automatically redeploy! ✨**
+
+---
+
+## 📤 First Time Pushing to GitHub?
+
+If you haven't pushed your code yet, follow these steps:
+
+### 1. Initialize Git (if not done)
+```bash
+git init
+```
+
+### 2. Add All Files
+```bash
+git add .
+```
+
+### 3. Create First Commit
+```bash
+git commit -m "Initial commit - ready for deployment"
+```
+
+### 4. Connect to GitHub
+```bash
+# Replace YOUR_USERNAME and YOUR_REPO_NAME with your actual values
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+git branch -M main
+git push -u origin main
+```
+
+**Note:** You'll need to create the repository on GitHub first (see Step 1 in the main guide above).
 
