@@ -67,7 +67,10 @@ document.addEventListener('DOMContentLoaded', function() {
         loginBtn.disabled = true;
         loginBtn.textContent = 'Logging in...';
         try {
-            // Send login request to the server
+            // Send login request to the server with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
@@ -76,9 +79,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     email,
                     password
-                })
+                }),
+                signal: controller.signal
             });
-            const data = await response.json();
+            
+            clearTimeout(timeoutId);
+            
+            // Check if response is ok before parsing JSON
+            let data;
+            try {
+                const text = await response.text();
+                data = text ? JSON.parse(text) : {};
+            } catch (parseError) {
+                console.error('Failed to parse response:', parseError);
+                throw new Error('Server returned invalid response. Please try again.');
+            }
+            
             if (!response.ok) {
                 // Handle pending approval status
                 if (response.status === 401 && data.requiresApproval) {
@@ -145,14 +161,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Superadmin data stored in localStorage');
                 }
                 
-                // Redirect based on user role
-                redirectBasedOnRole(data.user.role);
+            // Redirect based on user role
+            console.log('About to redirect, user role:', data.user.role);
+            // Redirect immediately - localStorage is synchronous
+            redirectBasedOnRole(data.user.role);
             } else {
                 console.error('No user data received in login response');
                 throw new Error('Login successful but user data is missing');
             }
         } catch (error) {
-            alert(error.message);
+            console.error('Login error:', error);
+            if (error.name === 'AbortError') {
+                alert('Request timed out. The server may be sleeping (Render free tier). Please try again - it should be faster on the second attempt.');
+            } else {
+                alert(error.message || 'Login failed. Please check your connection and try again.');
+            }
             loginBtn.disabled = false;
             loginBtn.textContent = 'Log In';
         }

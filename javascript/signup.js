@@ -213,16 +213,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 
                 try {
-                    // Try to send data to the server
+                    // Try to send data to the server with timeout
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                    
                     const response = await fetch('/api/auth/register', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(userData)
+                        body: JSON.stringify(userData),
+                        signal: controller.signal
                     });
                     
-                    const data = await response.json();
+                    clearTimeout(timeoutId);
+                    
+                    // Check if response is ok before parsing JSON
+                    let data;
+                    try {
+                        const text = await response.text();
+                        data = text ? JSON.parse(text) : {};
+                    } catch (parseError) {
+                        console.error('Failed to parse response:', parseError);
+                        throw new Error('Server returned invalid response. Please try again.');
+                    }
                     
                     if (!response.ok) {
                         // Handle email validation error
@@ -273,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     alert(`Registration successful! Please check your email for a verification code. Your verification code is: ${verificationCode}`);
                     
-                    // Redirect to email verification page after successful registration
+                    // Redirect to email verification page immediately
                     window.location.href = 'email-verification.html';
                 } catch (serverError) {
                     console.error('Server error:', serverError);
@@ -313,11 +327,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Alert to simulate email being sent
                     alert(`Server not available - using demo mode. Verification code: ${verificationCode}`);
                     
-                    // Redirect to email verification page after fallback registration
+                    // Redirect to email verification page immediately
                     window.location.href = 'email-verification.html';
                 }
             } catch (error) {
-                alert(error.message);
+                console.error('Signup error:', error);
+                if (error.name === 'AbortError') {
+                    alert('Request timed out. The server may be sleeping (Render free tier). Please try again - it should be faster on the second attempt.');
+                } else {
+                    alert(error.message || 'Registration failed. Please check your connection and try again.');
+                }
                 // Re-enable the submit button if there's an error
                 signUpBtn.disabled = false;
                 signUpBtn.textContent = 'Sign Up';
