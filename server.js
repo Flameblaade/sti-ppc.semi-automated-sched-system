@@ -491,15 +491,24 @@ const sendVerificationEmail = async (email, code) => {
         html: emailHtml
       };
 
-      await sgMail.send(msg);
+      const result = await sgMail.send(msg);
       console.log('✅ Email sent successfully via SendGrid!');
       console.log(`   📬 Email delivered to: ${email}`);
       console.log(`   🔑 Verification code: ${code}`);
+      console.log(`   📧 SendGrid Response:`, JSON.stringify(result, null, 2));
+      console.log(`   📧 SendGrid Status Code:`, result[0]?.statusCode);
+      console.log(`   📧 SendGrid Headers:`, result[0]?.headers);
       return true;
     } catch (error) {
       console.error('❌ SendGrid error:', error.message);
+      console.error('❌ SendGrid error code:', error.code);
       if (error.response) {
-        console.error('Error details:', error.response.body);
+        console.error('❌ SendGrid response status:', error.response.statusCode);
+        console.error('❌ SendGrid response body:', JSON.stringify(error.response.body, null, 2));
+        console.error('❌ SendGrid response headers:', error.response.headers);
+      }
+      if (error.message) {
+        console.error('❌ Full error message:', error.message);
       }
       return false;
     }
