@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
@@ -336,24 +337,61 @@ const login2FACodes = {}; // email: { code, expiry }
   console.log('Database initialized with default accounts');
 })();
 
-// Email transporter setup with enhanced Gmail configuration
+// Email configuration: SendGrid (preferred) or Gmail SMTP (fallback)
+let useSendGrid = false;
 let transporter = null;
 
-// Only create transporter if email credentials are configured
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  transporter = nodemailer.createTransport({
+// Debug: Check what environment variables are available
+console.log('=== EMAIL CONFIGURATION DEBUG ===');
+console.log('SENDGRID_API_KEY exists:', !!process.env.SENDGRID_API_KEY);
+console.log('SENDGRID_API_KEY length:', process.env.SENDGRID_API_KEY ? process.env.SENDGRID_API_KEY.length : 0);
+console.log('SENDGRID_FROM_EMAIL exists:', !!process.env.SENDGRID_FROM_EMAIL);
+console.log('SENDGRID_FROM_EMAIL value:', process.env.SENDGRID_FROM_EMAIL || 'NOT SET');
+console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+console.log('================================');
+
+// Check if SendGrid is configured (preferred for cloud platforms like Render)
+if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  useSendGrid = true;
+  console.log('✅ SendGrid configured for email sending');
+  console.log('📧 SendGrid from email:', process.env.SENDGRID_FROM_EMAIL);
+  console.log('💡 SendGrid uses HTTP API (not blocked by Render)');
+} else if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  // Fallback to Gmail SMTP (may be blocked on Render free tier)
+  // Try multiple SMTP configurations for better compatibility with cloud platforms
+  const smtpConfig = {
     service: 'gmail',
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // true for 465, false for other ports
+    port: parseInt(process.env.EMAIL_PORT) || 465, // Try 465 first (SSL), fallback to 587
+    secure: true, // Use SSL for port 465
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     },
     tls: {
-      rejectUnauthorized: false
-    }
-  });
+      rejectUnauthorized: false,
+      ciphers: 'SSLv3'
+    },
+    // Connection timeout settings for cloud platforms
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    // Retry settings
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 3
+  };
+
+  // If port 465 doesn't work, try 587 (TLS)
+  if (process.env.EMAIL_USE_TLS === 'true' || process.env.EMAIL_PORT === '587') {
+    smtpConfig.port = 587;
+    smtpConfig.secure = false;
+    smtpConfig.requireTLS = true;
+  }
+
+  transporter = nodemailer.createTransport(smtpConfig);
 
   // Verify transporter configuration
   transporter.verify(function(error, success) {
@@ -371,8 +409,10 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     }
   });
 } else {
-  console.warn('⚠️  Email not configured: EMAIL_USER or EMAIL_PASS not set in environment variables');
-  console.warn('⚠️  Email sending will be disabled. Set these in Render dashboard → Environment tab');
+  console.warn('⚠️  Email not configured!');
+  console.warn('💡 Recommended: Use SendGrid (works on Render free tier)');
+  console.warn('   Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL in Render environment variables');
+  console.warn('   OR use Gmail SMTP: Set EMAIL_USER and EMAIL_PASS (may be blocked on Render free tier)');
 }
 
 // Helper function to safely read JSON file (creates file if doesn't exist)
@@ -418,10 +458,51 @@ const generateVerificationCode = () => {
 };
 
 const sendVerificationEmail = async (email, code) => {
-  // Check if email is configured
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1A609B;">Verify Your Email Address</h2>
+      <p>Thank you for registering with our Scheduling System. Please use the following code to verify your email address:</p>
+      <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; font-weight: bold;">
+        ${code}
+      </div>
+      <p>This code will expire in 10 minutes.</p>
+      <p>If you did not request this verification, please ignore this email.</p>
+    </div>
+  `;
+
+  // Use SendGrid if configured (preferred for cloud platforms like Render)
+  if (useSendGrid) {
+    try {
+      console.log(`📧 Attempting to send verification email via SendGrid:`);
+      console.log(`   From: ${process.env.SENDGRID_FROM_EMAIL}`);
+      console.log(`   To: ${email}`);
+      console.log(`   Code: ${code}`);
+
+      const msg = {
+        to: email,
+        from: process.env.SENDGRID_FROM_EMAIL,
+        subject: 'Email Verification Code',
+        html: emailHtml
+      };
+
+      await sgMail.send(msg);
+      console.log('✅ Email sent successfully via SendGrid!');
+      console.log(`   📬 Email delivered to: ${email}`);
+      console.log(`   🔑 Verification code: ${code}`);
+      return true;
+    } catch (error) {
+      console.error('❌ SendGrid error:', error.message);
+      if (error.response) {
+        console.error('Error details:', error.response.body);
+      }
+      return false;
+    }
+  }
+
+  // Fallback to Gmail SMTP (may be blocked on Render free tier)
   if (!transporter) {
-    console.error('❌ Cannot send email: Email transporter not configured');
-    console.error('Please set EMAIL_USER and EMAIL_PASS in Render environment variables');
+    console.error('❌ Email transporter not configured');
+    console.error('💡 Tip: Use SendGrid (SENDGRID_API_KEY) for better reliability on cloud platforms');
     return false;
   }
 
@@ -434,24 +515,22 @@ const sendVerificationEmail = async (email, code) => {
     from: process.env.EMAIL_USER,
     to: email,
     subject: 'Email Verification Code',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1A609B;">Verify Your Email Address</h2>
-        <p>Thank you for registering with our Scheduling System. Please use the following code to verify your email address:</p>
-        <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; font-weight: bold;">
-          ${code}
-        </div>
-        <p>This code will expire in 10 minutes.</p>
-        <p>If you did not request this verification, please ignore this email.</p>
-      </div>
-    `
+    html: emailHtml
   };
 
   try {
-    console.log(`📧 Attempting to send verification email to: ${email}`);
+    console.log(`📧 Attempting to send verification email via Gmail SMTP:`);
+    console.log(`   From: ${process.env.EMAIL_USER}`);
+    console.log(`   To: ${email}`);
+    console.log(`   Code: ${code}`);
+    console.log(`   Subject: ${mailOptions.subject}`);
+    
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email sent successfully:', info.messageId);
-    console.log('📬 Email sent to:', email);
+    console.log('✅ Email sent successfully!');
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Response: ${info.response}`);
+    console.log(`   📬 Email delivered to: ${email}`);
+    console.log(`   🔑 Verification code: ${code} (also check server logs if email doesn't arrive)`);
     return true;
   } catch (error) {
     console.error('❌ Error sending email:', error.message);
@@ -466,8 +545,10 @@ const sendVerificationEmail = async (email, code) => {
       console.error('1. Enabled 2-Step Verification on Gmail');
       console.error('2. Generated an App Password (not your regular password)');
       console.error('3. Used the 16-character app password in EMAIL_PASS');
-    } else if (error.code === 'ECONNECTION') {
-      console.error('🌐 Connection failed. Check your internet connection or Gmail settings.');
+    } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+      console.error('🌐 Connection failed or timeout.');
+      console.error('⚠️  Render free tier BLOCKS SMTP ports (465, 587)!');
+      console.error('💡 Solution: Use SendGrid instead (SENDGRID_API_KEY) - it uses HTTP, not SMTP');
     }
     
     return false;
@@ -896,14 +977,18 @@ app.post('/api/auth/login', async (req, res) => {
     // For non-test emails, proceed with 2FA
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     login2FACodes[email] = { code, expiry: Date.now() + 10 * 60 * 1000 }; // 10 min expiry
-    console.log(`2FA code for ${email}: ${code}`);
+    console.log(`🔑 2FA code generated for ${email}: ${code}`);
+    console.log(`⏰ Code expires in 10 minutes`);
 
     // Try to send email
     const emailSent = await sendVerificationEmail(email, code);
     if (!emailSent) {
       console.error('❌ Failed to send 2FA email to:', email);
-      console.error('2FA code generated (but not sent):', code);
+      console.error('⚠️  2FA code is still valid - check server logs above for the code');
+      console.error(`🔑 CODE FOR ${email}: ${code} (use this if email doesn't arrive)`);
       // Still allow login with 2FA - user can check server logs or contact admin
+    } else {
+      console.log(`✅ 2FA email sent successfully to: ${email}`);
     }
 
     res.status(200).json({ message: '2FA required', twoFA: true });
