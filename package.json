@@ -1,0 +1,25 @@
+{
+  "name": "web-based-scheduling-system",
+  "version": "1.0.0",
+  "description": "Web-based automated scheduling system with custom timetable",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0",
+    "google-auth-library": "^10.1.0",
+    "helmet": "^7.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "nodemailer": "^6.9.1",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}

@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Superadmin Dashboard - Scheduling System</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        body, html { 
+            font-family: 'Poppins', sans-serif !important; 
+        }
+        
+        /* Enhanced Header Styles */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            margin-left: auto;
+            justify-content: flex-end;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        
+        .user-details {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 1rem;
+        }
+        
+        .role-badge {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Enhanced Dashboard Styles */
+        .section-subtitle {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            font-weight: 400;
+        }
+        
+        .dashboard-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+        }
+        
+        .stat-card.primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+        }
+        
+        .stat-card.secondary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+        }
+        
+        .stat-card.accent {
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white;
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+        
+        .stat-card.info {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            transform: translate(30px, -30px);
+        }
+        
+        .stat-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+        
+        .stat-content h3 {
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            line-height: 1;
+        }
+        
+        .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+        
+        .dashboard-bottom {
+            display: flex;
+            justify-content: center;
+        }
+        
+        .recent-activity-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e2e8f0;
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        .recent-activity-panel h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+        
+        .activity-item:hover {
+            background: #f8fafc;
+        }
+        
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+        }
+        
+        .activity-content p {
+            margin: 0;
+            font-weight: 500;
+            color: #1e293b;
+        }
+        
+        .activity-time {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+        
+        @media (max-width: 768px) {
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .logout-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+        }
+        
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        
+        .logout-btn i {
+            margin-right: 0.5rem;
+        }
+        
+        /* Academic Management Styles */
+        .academic-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 1rem;
+        }
+        
+        .academic-tab {
+            background: none;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #64748b;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .academic-tab:hover {
+            background: #f8fafc;
+            color: #dc2626;
+        }
+        
+        .academic-tab.active {
+            background: #dc2626;
+            color: white;
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+        }
+        
+        .academic-section {
+            display: none;
+        }
+        
+        .academic-section.active {
+            display: block;
+        }
+        
+        .academic-section .section-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .academic-section .section-title h3 {
+            color: #1e293b;
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* Ensure only the active main section is visible */
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+
+        /* Modal base styles (hide by default on this page) */
+        .modal {
+            display: none; /* critical: keep modals hidden until opened */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* match global modal overlay */
+            z-index: 10000;
+            overflow-y: auto;
+        }
+        .modal-content {
+            margin: 40px auto;
+            max-width: 800px;
+            width: 90%;
+            background: #ffffff; /* match global modal panel */
+            border: 1px solid rgba(0,0,0,0.05);
+            color: #0f172a;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-radius: 12px;
+            transform: translateY(8px) scale(0.98);
+            opacity: 0;
+            transition: opacity .25s ease, transform .25s ease;
+        }
+
+        .modal.show .modal-content {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* Data management UI improvements */
+        .data-management-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+        }
+
+        .data-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+
+        .data-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+
+        .data-card .card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .backup-card .card-icon { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+        .import-card .card-icon { background: linear-gradient(135deg, #10b981, #059669); }
+        .clear-card .card-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+        .data-card .card-content h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: #0f172a;
+        }
+
+        .data-card .card-content p {
+            margin: 6px 0 0 0;
+            color: #475569;
+            font-size: .9rem;
+        }
+
+        .data-card .card-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Modal sections styling */
+        .modal-header h3 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid #eef2f7; }
+        .modal-body { padding: 16px 18px; }
+        .modal-footer { 
+            padding: 14px 18px; 
+            border-top: 1px solid #eef2f7; 
+            display: flex; 
+            justify-content: flex-end; 
+            gap: 10px; 
+            flex-wrap: wrap;
+            overflow: visible;
+        }
+        .modal-footer .btn {
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; }
+
+        .backup-info { display: flex; gap: 14px; background: #f8fafc; border: 1px solid #eef2f7; padding: 12px; border-radius: 10px; }
+        .backup-info .info-icon { color: #2563eb; font-size: 20px; margin-top: 2px; }
+        .backup-list { margin: 8px 0 0 0; padding-left: 18px; display: grid; gap: 6px; }
+        .backup-warning { margin-top: 14px; display: flex; align-items: flex-start; gap: 8px; color: #b45309; background: #fffbeb; border: 1px solid #fef3c7; padding: 10px 12px; border-radius: 8px; }
+
+        .warning-content { display: flex; gap: 14px; background: #fff7ed; border: 1px solid #ffedd5; padding: 12px; border-radius: 10px; }
+        .warning-icon { color: #ef4444; font-size: 22px; margin-top: 2px; }
+        .clear-list { margin: 8px 0 0 0; padding-left: 18px; display: grid; gap: 6px; }
+        .critical-warning { margin-top: 12px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; }
+
+        .confirmation-content { display: flex; gap: 14px; }
+        .danger-icon { color: #991b1b; font-size: 22px; margin-top: 2px; }
+        .confirmation-input { margin-top: 10px; }
+        .confirmation-input input { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+
+        .import-info {
+            display: flex;
+            gap: 14px;
+            background: #f0f9ff;
+            border: 1px solid #bfdbfe;
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .import-info .info-icon {
+            color: #0ea5e9;
+            font-size: 20px;
+            margin-top: 2px;
+        }
+
+        .import-warning {
+            margin-top: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            color: #b45309;
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+
+        /* Beautiful Notification Toast - Top Right */
+        .notification-modal {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 400px;
+            min-width: 300px;
+            opacity: 0;
+            transform: translateX(120%);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            pointer-events: none;
+        }
+
+        .notification-modal.show {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+        }
+
+        .notification-content {
+            background: white;
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            border-left: 4px solid;
+        }
+
+        .notification-content.success {
+            border-left-color: #10b981;
+        }
+
+        .notification-content.error {
+            border-left-color: #ef4444;
+        }
+
+        .notification-content.info {
+            border-left-color: #3b82f6;
+        }
+
+        .notification-content.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .notification-icon-wrapper {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .notification-icon-wrapper.success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .notification-icon-wrapper.error {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+        .notification-icon-wrapper.info {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+
+        .notification-icon-wrapper.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+
+        .notification-icon {
+            font-size: 20px;
+        }
+
+        .notification-message {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .notification-title {
+            margin: 0 0 4px 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .notification-text {
+            margin: 0;
+            font-size: 0.85rem;
+            color: #64748b;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .notification-close {
+            background: none;
+            border: none;
+            font-size: 16px;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .notification-close:hover {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .notification-progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            width: 100%;
+            transform-origin: left;
+            animation: progressAnimation 4s linear forwards;
+        }
+
+        @keyframes progressAnimation {
+            from { transform: scaleX(1); }
+            to { transform: scaleX(0); }
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-success:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-crown"></i>
+                </div>
+                <h2>Superadmin</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item active" data-section="dashboard">
+                        <a href="#dashboard" class="nav-link">
+                            <i class="fas fa-tachometer-alt"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="pending-accounts">
+                        <a href="#pending-accounts" class="nav-link">
+                            <i class="fas fa-clock"></i>
+                            <span>Pending Accounts</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="manage-users">
+                        <a href="#manage-users" class="nav-link">
+                            <i class="fas fa-users"></i>
+                            <span>Manage Users</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="academic-management">
+                        <a href="#academic-management" class="nav-link">
+                            <i class="fas fa-graduation-cap"></i>
+                            <span>Academic Management</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="data-management">
+                        <a href="#data-management" class="nav-link">
+                            <i class="fas fa-database"></i>
+                            <span>Data Management</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="index.html" class="view-schedules-btn">
+                    <i class="fas fa-calendar"></i>
+                    <span>View Schedules</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <h1 class="page-title">Superadmin Dashboard</h1>
+                    <div class="department-info" style="margin-top: 5px;">
+                        <span style="font-size: 0.9em; color: #4b5563;">System Administration & Management</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <div class="user-details">
+                            <span class="user-name" id="superadminName">Super Admin</span>
+                            <span class="role-badge" id="superadminRole">Superadmin</span>
+                        </div>
+                        <button class="logout-btn" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Sections -->
+            <div class="content-wrapper">
+                <!-- Dashboard Section -->
+                <section class="content-section active" id="dashboard">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2><i class="fas fa-tachometer-alt"></i> System Overview</h2>
+                            <p class="section-subtitle">Monitor and manage your scheduling system</p>
+                        </div>
+                        <!-- Section actions removed -->
+                    </div>
+                    <div class="section-content">
+                        <!-- Main Stats Grid -->
+                        <div class="dashboard-grid">
+                            <!-- Primary Stats Row -->
+                            <div class="stats-row primary">
+                                <div class="stat-card primary">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-users"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <h3>Total Users</h3>
+                                        <div class="stat-number" id="totalUsersCount">0</div>
+                                        <div class="stat-trend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <span>Active users</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="stat-card secondary">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-user-tie"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <h3>Faculty Members</h3>
+                                        <div class="stat-number" id="totalFacultyCount">0</div>
+                                        <div class="stat-trend">
+                                            <i class="fas fa-chalkboard-teacher"></i>
+                                            <span>Teaching staff</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="stat-card accent">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-building"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <h3>Departments</h3>
+                                        <div class="stat-number" id="totalDepartmentsCount">0</div>
+                                        <div class="stat-trend">
+                                            <i class="fas fa-sitemap"></i>
+                                            <span>Academic units</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Secondary Stats Row -->
+                            <div class="stats-row secondary">
+                                <div class="stat-card success">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-book"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <h3>Subjects</h3>
+                                        <div class="stat-number" id="totalSubjectsCount">0</div>
+                                        <div class="stat-trend">
+                                            <i class="fas fa-graduation-cap"></i>
+                                            <span>Course offerings</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="stat-card warning">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-graduation-cap"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <h3>Courses</h3>
+                                        <div class="stat-number" id="totalCoursesCount">0</div>
+                                        <div class="stat-trend">
+                                            <i class="fas fa-certificate"></i>
+                                            <span>Programs</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="stat-card info">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-door-open"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <h3>Rooms</h3>
+                                        <div class="stat-number" id="totalRoomsCount">0</div>
+                                        <div class="stat-trend">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            <span>Available spaces</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </section>
+
+                <!-- Pending Accounts Section -->
+                <section class="content-section" id="pending-accounts">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Pending Account Approvals</h2>
+                                </div>
+                        <div class="section-actions">
+                            <div class="search-box">
+                                <input type="text" id="pendingSearchInput" placeholder="Search by name or email">
+                                <i class="fas fa-search" id="pendingSearchBtn"></i>
+                            </div>
+                            <button class="btn btn-primary" id="refreshPendingBtn">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                            </div>
+                    <div class="section-content">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Department</th>
+                                        <th>Role</th>
+                                        <th>Requested Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pendingUsersTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="6">
+                                <div class="empty-state">
+                                                <i class="fas fa-clock"></i>
+                                                <p>No pending accounts found</p>
+                                </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Manage Users Section -->
+                <section class="content-section" id="manage-users">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Manage Users</h2>
+                        </div>
+                        <div class="section-actions">
+                            <div class="search-box">
+                                <input type="text" id="userSearchInput" placeholder="Search by name or email">
+                                <i class="fas fa-search" id="userSearchBtn"></i>
+                            </div>
+                            <button class="btn btn-primary" id="refreshUsersBtn">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Department</th>
+                                        <th>Role</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                <tbody id="approvedUsersTableBody">
+                                        <tr class="empty-row">
+                                            <td colspan="6">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-users"></i>
+                                                    <p>No users found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Academic Management Section -->
+                <section class="content-section" id="academic-management">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Academic Management</h2>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-primary" id="refreshAcademicBtn">
+                                <i class="fas fa-sync-alt"></i> Refresh All
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <!-- Academic Management Tabs -->
+                        <div class="academic-tabs">
+                            <button class="academic-tab active" data-academic="departments">
+                                <i class="fas fa-building"></i> Departments
+                            </button>
+                            <button class="academic-tab" data-academic="faculty">
+                                <i class="fas fa-user-tie"></i> Faculty
+                            </button>
+                            <button class="academic-tab" data-academic="subjects">
+                                <i class="fas fa-book"></i> Subject/Course
+                            </button>
+                            <button class="academic-tab" data-academic="courses">
+                                <i class="fas fa-graduation-cap"></i> Program/Strand
+                            </button>
+                            <button class="academic-tab" data-academic="rooms">
+                                <i class="fas fa-door-open"></i> Rooms
+                            </button>
+                        </div>
+
+                        <!-- Academic Content -->
+                        <div class="academic-content">
+                            <!-- Departments Tab -->
+                            <div class="academic-section active" id="departments-section">
+                                <div class="section-header">
+                                    <div class="section-title">
+                                        <h3>Departments</h3>
+                                </div>
+                                    <div class="section-actions">
+                                        <button class="btn btn-primary" id="addDepartmentBtn">
+                                            <i class="fas fa-plus"></i> Add Department
+                                        </button>
+                                        <button class="btn btn-secondary" id="refreshDepartmentsBtn">
+                                            <i class="fas fa-sync-alt"></i> Refresh
+                                </button>
+                            </div>
+                        </div>
+                                <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Name</th>
+                                        <th>Color</th>
+                                        <th>Description</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                        <tbody id="departmentsTableBody">
+                                    <tr class="empty-row">
+                                                <td colspan="5">
+                                            <div class="empty-state">
+                                                        <i class="fas fa-building"></i>
+                                                <p>No departments found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                            </div>
+
+                            <!-- Faculty Tab -->
+                            <div class="academic-section" id="faculty-section">
+                                <div class="section-header">
+                                    <div class="section-title">
+                                        <h3>Faculty Members</h3>
+                                    </div>
+                                    <div class="section-actions">
+                                        <button class="btn btn-primary" id="addFacultyBtn">
+                                            <i class="fas fa-plus"></i> Add Faculty
+                                        </button>
+                                        <button class="btn btn-secondary" id="refreshFacultyBtn">
+                                            <i class="fas fa-sync-alt"></i> Refresh
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                                <th>Email</th>
+                                        <th>Department</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                        <tbody id="facultyTableBody">
+                                    <tr class="empty-row">
+                                                <td colspan="4">
+                                            <div class="empty-state">
+                                                        <i class="fas fa-user-tie"></i>
+                                                <p>No faculty found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                            </div>
+
+                            <!-- Subjects Tab -->
+                            <div class="academic-section" id="subjects-section">
+                                <div class="section-header">
+                                    <div class="section-title">
+                                        <h3>Subject/Course</h3>
+                                    </div>
+                                    <div class="section-actions">
+                                        <button class="btn btn-primary" id="addSubjectBtn">
+                                            <i class="fas fa-plus"></i> Add Subject/Course
+                                        </button>
+                                        <button class="btn btn-secondary" id="refreshSubjectsBtn">
+                                            <i class="fas fa-sync-alt"></i> Refresh
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Subject Code</th>
+                                        <th>Subject Name</th>
+                                        <th>Department</th>
+                                        <th>Units</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                        <tbody id="subjectsTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="5">
+                                            <div class="empty-state">
+                                                        <i class="fas fa-book"></i>
+                                                <p>No subjects found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                                            </div>
+
+                            <!-- Courses Tab -->
+                            <div class="academic-section" id="courses-section">
+                                <div class="section-header">
+                                    <div class="section-title">
+                                        <h3>Program/Strand</h3>
+                        </div>
+                                    <div class="section-actions">
+                                        <button class="btn btn-primary" id="addCourseBtn">
+                                            <i class="fas fa-plus"></i> Add Program/Strand
+                                        </button>
+                                        <button class="btn btn-secondary" id="refreshCoursesBtn">
+                                            <i class="fas fa-sync-alt"></i> Refresh
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                                <th>Code</th>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                        <tbody id="coursesTableBody">
+                                    <tr class="empty-row">
+                                                <td colspan="4">
+                                            <div class="empty-state">
+                                                        <i class="fas fa-graduation-cap"></i>
+                                                        <p>No programs/strands found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                            <!-- Rooms Tab -->
+                            <div class="academic-section" id="rooms-section">
+                    <div class="section-header">
+                        <div class="section-title">
+                                        <h3>Rooms</h3>
+                        </div>
+                                    <div class="section-actions">
+                                        <button class="btn btn-primary" id="addRoomBtn">
+                                            <i class="fas fa-plus"></i> Add Room
+                                    </button>
+                                        <button class="btn btn-secondary" id="refreshRoomsBtn">
+                                    <i class="fas fa-sync-alt"></i> Refresh
+                                </button>
+                    </div>
+                </div>
+                
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Capacity</th>
+                                <th>Department</th>
+                                <th>Priority</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                                        <tbody id="roomsTableBody">
+                            <tr class="empty-row">
+                                                <td colspan="5">
+                                    <div class="empty-state">
+                                                        <i class="fas fa-door-open"></i>
+                                                        <p>No rooms found</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                </div>
+            </div>
+        </div>
+                </section>
+
+                <!-- Data Management Section -->
+                <section class="content-section" id="data-management">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Data Management</h2>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <div class="data-management-grid">
+                            <div class="data-card backup-card">
+                                <div class="card-icon">
+                                    <i class="fas fa-download"></i>
+                                </div>
+                                <div class="card-content">
+                                    <h3>Backup Data</h3>
+                                    <p>Export all system data including users, departments, programs, subjects, rooms, and schedules.</p>
+                                </div>
+                                <div class="card-actions">
+                                    <button class="btn btn-primary" id="openBackupModalBtn">
+                                        <i class="fas fa-save"></i> Create Backup
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="data-card import-card">
+                                <div class="card-icon">
+                                    <i class="fas fa-upload"></i>
+                                </div>
+                                <div class="card-content">
+                                    <h3>Import Data</h3>
+                                    <p>Restore all system data from a backup file including users, academic management, schedules, and classes.</p>
+                                </div>
+                                <div class="card-actions">
+                                    <button class="btn btn-success" id="openImportDataModalBtn">
+                                        <i class="fas fa-upload"></i> Import Data
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="data-card clear-card">
+                                <div class="card-icon">
+                                    <i class="fas fa-trash-alt"></i>
+                                </div>
+                                <div class="card-content">
+                                    <h3>Clear All Data</h3>
+                                    <p>Remove all data from the system. This action will sign out all users and cannot be undone.</p>
+                                </div>
+                                <div class="card-actions">
+                                    <button class="btn btn-danger" id="openClearDataModalBtn">
+                                        <i class="fas fa-exclamation-triangle"></i> Clear Data
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+    </div>
+        </main>
+                                </div>
+
+    <!-- Modals -->
+    <div id="modals"></div>
+
+    <!-- Backup Data Modal -->
+    <div class="modal" id="backupModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-download"></i> Create Data Backup</h3>
+                <button class="modal-close" id="closeBackupModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="backup-info">
+                    <div class="info-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="info-content">
+                        <h4>What will be backed up?</h4>
+                        <ul class="backup-list">
+                            <li><i class="fas fa-users"></i> User accounts and profiles</li>
+                            <li><i class="fas fa-building"></i> Departments and faculty</li>
+                            <li><i class="fas fa-book"></i> Subjects and courses</li>
+                            <li><i class="fas fa-graduation-cap"></i> Programs and strands</li>
+                            <li><i class="fas fa-door-open"></i> Rooms and facilities</li>
+                            <li><i class="fas fa-calendar"></i> Schedules and timetables</li>
+                            <li><i class="fas fa-file-alt"></i> System logs and settings</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="backup-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>This backup will be downloaded as a JSON file. Keep it secure as it contains sensitive information.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelBackupBtn">Cancel</button>
+                <button class="btn btn-primary" id="confirmBackupBtn">
+                    <i class="fas fa-download"></i> Download Backup
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clear Data Info Modal -->
+    <div class="modal" id="clearDataInfoModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Clear All Data</h3>
+                <button class="modal-close" id="closeClearDataInfoModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="warning-content">
+                    <div class="warning-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="warning-text">
+                        <h4>This action will permanently delete ALL data from the system</h4>
+                        <p>This includes:</p>
+                        <ul class="clear-list">
+                            <li>All user accounts and profiles</li>
+                            <li>All departments, faculty, and academic data</li>
+                            <li>All subjects, courses, programs, and strands</li>
+                            <li>All room assignments and schedules</li>
+                            <li>All system logs and configuration data</li>
+                        </ul>
+                        <div class="critical-warning">
+                            <strong>⚠️ CRITICAL WARNING:</strong> This action cannot be undone. All users will be immediately signed out and redirected to the login page.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelClearDataInfoBtn">Cancel</button>
+                <button class="btn btn-danger" id="proceedToClearDataBtn">
+                    <i class="fas fa-trash-alt"></i> I Understand, Proceed
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clear Data Confirmation Modal -->
+    <div class="modal" id="clearDataConfirmModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Final Confirmation</h3>
+                <button class="modal-close" id="closeClearDataConfirmModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="confirmation-content">
+                    <div class="danger-icon">
+                        <i class="fas fa-skull-crossbones"></i>
+                    </div>
+                    <div class="confirmation-text">
+                        <h4>Are you absolutely sure?</h4>
+                        <p>This is your final chance to cancel. Once you proceed, ALL data will be permanently deleted.</p>
+                        <div class="confirmation-input">
+                            <label for="confirmClearInput">Type <strong>"CONFIRM"</strong> to proceed:</label>
+                            <input type="text" id="confirmClearInput" placeholder="Type CONFIRM here" class="form-control">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelClearDataConfirmBtn">Cancel</button>
+                <button class="btn btn-danger" id="finalClearDataBtn" disabled>
+                    <i class="fas fa-trash-alt"></i> Delete All Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Data Modal -->
+    <div class="modal" id="importDataModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-upload"></i> Import Data</h3>
+                <button class="modal-close" id="closeImportDataModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="import-info">
+                    <div class="info-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="info-content">
+                        <h4>What will be imported?</h4>
+                        <ul class="backup-list">
+                            <li><i class="fas fa-user-clock"></i> Pending user accounts</li>
+                            <li><i class="fas fa-users"></i> Approved and rejected users</li>
+                            <li><i class="fas fa-building"></i> Departments and faculty assignments</li>
+                            <li><i class="fas fa-book"></i> Subjects and courses</li>
+                            <li><i class="fas fa-graduation-cap"></i> Programs and strands</li>
+                            <li><i class="fas fa-door-open"></i> Rooms and facilities</li>
+                            <li><i class="fas fa-calendar"></i> Schedules and timetables</li>
+                            <li><i class="fas fa-list"></i> Created classes</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="import-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Warning: Importing data will replace existing data. Make sure you have a backup before proceeding.</span>
+                </div>
+                <div class="file-upload-section" style="margin-top: 20px;">
+                    <label for="importFileInput" style="display: block; margin-bottom: 10px; font-weight: 600; color: #374151;">
+                        <i class="fas fa-file-upload"></i> Select Backup File
+                    </label>
+                    <input type="file" id="importFileInput" accept=".json" style="
+                        width: 100%;
+                        padding: 12px;
+                        border: 2px dashed #d1d5db;
+                        border-radius: 8px;
+                        background: #f9fafb;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    ">
+                    <p style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                        <i class="fas fa-info-circle"></i> Only JSON backup files are supported
+                    </p>
+                </div>
+                <div id="importFilePreview" style="display: none; margin-top: 15px; padding: 12px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                    <p style="margin: 0; color: #1e40af;">
+                        <i class="fas fa-check-circle"></i> <span id="importFileName"></span> selected
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelImportDataBtn">Cancel</button>
+                <button class="btn btn-success" id="confirmImportDataBtn" disabled>
+                    <i class="fas fa-upload"></i> Import Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Beautiful Notification Modal -->
+    <div id="notificationModal" class="notification-modal">
+        <div class="notification-content">
+            <div class="notification-icon-wrapper">
+                <i class="notification-icon"></i>
+            </div>
+            <div class="notification-message">
+                <h4 class="notification-title"></h4>
+                <p class="notification-text"></p>
+            </div>
+            <button class="notification-close" id="closeNotificationModal">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="notification-progress-bar"></div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Offline Support -->
+    <script src="javascript/service-worker-register.js"></script>
+    <script src="javascript/offline-storage.js"></script>
+    <script src="javascript/offline-sync.js"></script>
+    <script src="javascript/offline-ui.js"></script>
+    <script src="javascript/main.js"></script>
+    <script src="javascript/superadmin.js"></script>
+    <!-- Role synchronization - automatically updates when role changes -->
+    <script src="javascript/role-sync.js"></script>
+    <script src="javascript/modals.js"></script>
+
+    <script>
+        // Handle navigation exactly like admin.js
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuItems = document.querySelectorAll('.nav-link');
+            
+            menuItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Remove active class from all menu items and sections
+                    document.querySelectorAll('.nav-item').forEach(li => li.classList.remove('active'));
+                    document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+                    
+                    // Add active class to clicked item's parent
+                    this.parentElement.classList.add('active');
+                    
+                    // Show corresponding section
+                    const sectionId = this.getAttribute('href').replace('#', '');
+                    document.getElementById(sectionId).classList.add('active');
+                });
+            });
+            
+            // Handle academic management tabs
+            const academicTabs = document.querySelectorAll('.academic-tab');
+            const academicSections = document.querySelectorAll('.academic-section');
+            
+            academicTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remove active class from all tabs and sections
+                    academicTabs.forEach(t => t.classList.remove('active'));
+                    academicSections.forEach(s => s.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    
+                    // Show corresponding section
+                    const academicType = this.getAttribute('data-academic');
+                    const targetSection = document.getElementById(academicType + '-section');
+                    if (targetSection) {
+                        targetSection.classList.add('active');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "name": "Automated Scheduling System",
+  "short_name": "Schedule System",
+  "description": "Web-based automated scheduling system with custom timetable",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/sti.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/sti.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "View Schedule",
+      "short_name": "Schedule",
+      "description": "View your class schedule",
+      "url": "/index.html",
+      "icons": [{ "src": "/assets/sti.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Admin Dashboard",
+      "short_name": "Dashboard",
+      "description": "Access admin dashboard",
+      "url": "/superadmin.html",
+      "icons": [{ "src": "/assets/sti.png", "sizes": "96x96" }]
+    }
+  ]
+}
+

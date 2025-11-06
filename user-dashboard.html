@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/superadmin.css">
+    <style>
+        body, html { 
+            font-family: 'Poppins', sans-serif !important; 
+        }
+        
+        /* Enhanced Header Styles */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            margin-left: auto;
+            justify-content: flex-end;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        
+        .user-details {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 1rem;
+            line-height: 1.5;
+            display: flex;
+            align-items: center;
+        }
+        
+        .role-badge {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: inline-flex;
+            align-items: center;
+            line-height: 1;
+        }
+        
+        .role-badge.superadmin {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+        }
+        
+        .role-badge.admin {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+        
+        .role-badge.user {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+            box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+        }
+        
+        .logout-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            line-height: 1.5;
+        }
+        
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        
+        .logout-btn i {
+            margin-right: 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Enhanced Sidebar Footer */
+        .view-only-notice {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border: 1px solid #93c5fd;
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 0.8rem;
+            text-align: center;
+            color: #1e40af;
+            font-weight: 500;
+            margin-top: 1rem;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+        }
+        
+        .view-only-notice i {
+            margin-right: 0.5rem;
+            color: #3b82f6;
+        }
+        
+        /* Enhanced Profile Details */
+        .profile-details {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .profile-details > div {
+            padding: 1.5rem 0;
+            border-bottom: 1px solid #f3f4f6;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        
+        .profile-details > div:last-child {
+            border-bottom: none;
+        }
+        
+        .profile-details strong {
+            color: #374151;
+            font-weight: 600;
+            min-width: 140px;
+            font-size: 1.1rem;
+        }
+        
+        .profile-details span {
+            color: #6b7280;
+            font-weight: 500;
+            font-size: 1.1rem;
+            flex: 1;
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-user"></i>
+                </div>
+                <h2>User</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item active" data-section="user-info">
+                        <a href="#user-info" class="nav-link">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Information</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="index.html" class="view-schedules-btn" id="viewScheduleBtn">
+                    <i class="fas fa-calendar"></i>
+                    <span>View Schedule</span>
+                </a>
+                <div class="view-only-notice" style="margin-top: 10px; padding: 8px; background: #e3f2fd; border-radius: 4px; font-size: 12px; text-align: center; color: #1976d2;">
+                    <i class="fas fa-eye"></i> View Only Mode
+                </div>
+            </div>
+        </aside>
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <div class="header-left">
+                    <h1 class="page-title">User Dashboard</h1>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <div class="user-details">
+                            <span class="user-name" id="userFullName">User</span>
+                            <span class="role-badge" id="userRole">Role</span>
+                        </div>
+                        <button class="logout-btn" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+            <div class="content-wrapper">
+                <section class="content-section active" id="user-info">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Information</h2>
+                            <p>View your account details</p>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <div class="profile-details">
+                            <div><strong>Email:</strong> <span id="userEmail"></span></div>
+                            <div><strong>First Name:</strong> <span id="userFirstName"></span></div>
+                            <div><strong>Middle Name:</strong> <span id="userMiddleName"></span></div>
+                            <div><strong>Last Name:</strong> <span id="userLastName"></span></div>
+                            <div><strong>User Type:</strong> <span id="userType"></span></div>
+                            <div><strong>Department:</strong> <span id="userDepartment"></span></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script src="javascript/user-dashboard.js"></script>
+    <!-- Role synchronization - automatically updates when role changes -->
+    <script src="javascript/role-sync.js"></script>
+</body>
+</html> 

@@ -1,0 +1,767 @@
+/* Pending Approval Modal Styles */
+.pending-approval-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    padding: 20px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+}
+
+.pending-approval-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.pending-approval-container {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    transform: translateY(20px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pending-approval-overlay.show .pending-approval-container {
+    transform: translateY(0) scale(1);
+}
+
+/* Header */
+.pending-approval-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 24px;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+}
+
+.pending-approval-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+    pointer-events: none;
+}
+
+.pending-approval-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-right: 16px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.pending-approval-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    flex: 1;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pending-approval-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.pending-approval-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+/* Body */
+.pending-approval-body {
+    padding: 32px 24px;
+}
+
+.pending-approval-content {
+    text-align: center;
+}
+
+.pending-approval-main-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    box-shadow: 0 8px 32px rgba(255, 193, 7, 0.3);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.pending-approval-main-icon i {
+    font-size: 36px;
+    color: white;
+}
+
+.pending-approval-content h3 {
+    margin: 0 0 16px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.pending-approval-description {
+    color: #6b7280;
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0 0 32px;
+}
+
+/* Info Box */
+.pending-approval-info-box {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+    margin: 24px 0;
+    text-align: left;
+}
+
+.pending-approval-info-box h4 {
+    margin: 0 0 20px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pending-approval-info-box h4 i {
+    color: #3b82f6;
+}
+
+.pending-approval-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.pending-approval-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s ease;
+}
+
+.pending-approval-steps li:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.pending-approval-steps li:last-child {
+    margin-bottom: 0;
+}
+
+.pending-approval-steps li i {
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.pending-approval-steps li span {
+    color: #374151;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* Note */
+.pending-approval-note {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #f59e0b;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.pending-approval-note i {
+    color: #d97706;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.pending-approval-note span {
+    color: #92400e;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Footer */
+.pending-approval-footer {
+    padding: 24px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+    border-radius: 0 0 20px 20px;
+}
+
+.pending-approval-btn {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+}
+
+.pending-approval-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+}
+
+.pending-approval-btn:active {
+    transform: translateY(0);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+    .pending-approval-overlay {
+        padding: 16px;
+    }
+    
+    .pending-approval-container {
+        max-width: 100%;
+        border-radius: 16px;
+    }
+    
+    .pending-approval-header {
+        padding: 20px;
+        border-radius: 16px 16px 0 0;
+    }
+    
+    .pending-approval-header h2 {
+        font-size: 1.25rem;
+    }
+    
+    .pending-approval-body {
+        padding: 24px 20px;
+    }
+    
+    .pending-approval-main-icon {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 20px;
+    }
+    
+    .pending-approval-main-icon i {
+        font-size: 28px;
+    }
+    
+    .pending-approval-content h3 {
+        font-size: 1.25rem;
+    }
+    
+    .pending-approval-info-box {
+        padding: 20px;
+        margin: 20px 0;
+    }
+    
+    .pending-approval-steps li {
+        padding: 12px;
+    }
+    
+    .pending-approval-footer {
+        padding: 20px;
+        border-radius: 0 0 16px 16px;
+    }
+    
+    .pending-approval-btn {
+        padding: 14px 24px;
+    }
+}
+
+/* Animation for modal entrance */
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.pending-approval-overlay.show .pending-approval-container {
+    animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Ensure modal is above everything */
+.pending-approval-overlay {
+    z-index: 10001;
+}
+
+/* Prevent scrolling on body when modal is open */
+body.modal-open {
+    overflow: hidden;
+}
+
+/* ========================================
+   USER NOT FOUND MODAL STYLES
+   ======================================== */
+
+/* User Not Found Modal Overlay */
+.user-not-found-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    padding: 20px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+}
+
+.user-not-found-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.user-not-found-container {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    transform: translateY(20px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-not-found-overlay.show .user-not-found-container {
+    transform: translateY(0) scale(1);
+}
+
+/* User Not Found Header */
+.user-not-found-header {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    padding: 24px;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+}
+
+.user-not-found-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+    pointer-events: none;
+}
+
+.user-not-found-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-right: 16px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.user-not-found-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    flex: 1;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-not-found-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.user-not-found-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+/* User Not Found Body */
+.user-not-found-body {
+    padding: 32px 24px;
+}
+
+.user-not-found-content {
+    text-align: center;
+}
+
+.user-not-found-main-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3);
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.user-not-found-main-icon i {
+    font-size: 36px;
+    color: white;
+}
+
+.user-not-found-content h3 {
+    margin: 0 0 16px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.user-not-found-description {
+    color: #6b7280;
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0 0 32px;
+}
+
+/* User Not Found Info Box */
+.user-not-found-info-box {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 1px solid #fecaca;
+    border-radius: 16px;
+    padding: 24px;
+    margin: 24px 0;
+    text-align: left;
+}
+
+.user-not-found-info-box h4 {
+    margin: 0 0 20px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-not-found-info-box h4 i {
+    color: #f59e0b;
+}
+
+.user-not-found-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.user-not-found-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #fecaca;
+    transition: all 0.2s ease;
+}
+
+.user-not-found-steps li:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+}
+
+.user-not-found-steps li:last-child {
+    margin-bottom: 0;
+}
+
+.user-not-found-steps li i {
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.user-not-found-steps li span {
+    color: #374151;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* User Not Found Note */
+.user-not-found-note {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border: 1px solid #3b82f6;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.user-not-found-note i {
+    color: #1d4ed8;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.user-not-found-note span {
+    color: #1e40af;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* User Not Found Footer */
+.user-not-found-footer {
+    padding: 24px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+    border-radius: 0 0 20px 20px;
+    display: flex;
+    gap: 12px;
+}
+
+.user-not-found-btn-secondary {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    color: #374151;
+    border: 1px solid #d1d5db;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    transition: all 0.2s ease;
+}
+
+.user-not-found-btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+}
+
+.user-not-found-btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+    border: none;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+}
+
+.user-not-found-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+}
+
+.user-not-found-btn-secondary:active,
+.user-not-found-btn-primary:active {
+    transform: translateY(0);
+}
+
+/* User Not Found Responsive Design */
+@media (max-width: 640px) {
+    .user-not-found-overlay {
+        padding: 16px;
+    }
+    
+    .user-not-found-container {
+        max-width: 100%;
+        border-radius: 16px;
+    }
+    
+    .user-not-found-header {
+        padding: 20px;
+        border-radius: 16px 16px 0 0;
+    }
+    
+    .user-not-found-header h2 {
+        font-size: 1.25rem;
+    }
+    
+    .user-not-found-body {
+        padding: 24px 20px;
+    }
+    
+    .user-not-found-main-icon {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 20px;
+    }
+    
+    .user-not-found-main-icon i {
+        font-size: 28px;
+    }
+    
+    .user-not-found-content h3 {
+        font-size: 1.25rem;
+    }
+    
+    .user-not-found-info-box {
+        padding: 20px;
+        margin: 20px 0;
+    }
+    
+    .user-not-found-steps li {
+        padding: 12px;
+    }
+    
+    .user-not-found-footer {
+        padding: 20px;
+        border-radius: 0 0 16px 16px;
+        flex-direction: column;
+    }
+    
+    .user-not-found-btn-secondary,
+    .user-not-found-btn-primary {
+        padding: 14px 24px;
+    }
+}
+
+/* User Not Found Animation for modal entrance */
+@keyframes userNotFoundSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.user-not-found-overlay.show .user-not-found-container {
+    animation: userNotFoundSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Ensure user not found modal is above everything */
+.user-not-found-overlay {
+    z-index: 10001;
+}

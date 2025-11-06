@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two-Factor Authentication</title>
+    <link rel="stylesheet" href="css/signup.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .verification-container {
+            padding: 0 30px;
+        }
+        
+        .verification-message {
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .verification-code {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 25px 0;
+        }
+        
+        .verification-code input {
+            width: 45px;
+            height: 50px;
+            font-size: 24px;
+            text-align: center;
+            border: 1px solid #D9D9D9;
+            background-color: #D9D9D9;
+            border-radius: 10px;
+        }
+        
+        .verification-code input:focus {
+            outline: none;
+            border-color: #457B9D;
+            background-color: #e5e5e5;
+        }
+        
+        .resend-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        
+        .resend-link a {
+            color: #457B9D;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        .resend-link a:hover {
+            text-decoration: underline;
+            color: #1A609B;
+        }
+        
+        .back-to-login {
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .back-to-login a {
+            color: #457B9D;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        .back-to-login a:hover {
+            text-decoration: underline;
+            color: #1A609B;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+    </nav>
+
+    <img class="sti_logo" src="assets/sti.png" alt="sti logo">
+
+    <div class="blue_box">
+        <div class="white_box">
+            <h3 id="lbl-signup">Two-Factor Authentication</h3>
+            
+            <div class="verification-container">
+                <div class="verification-message">
+                    <p>We've sent a verification code to <strong id="user-email"></strong></p>
+                    <p>Please enter the 6-digit code to complete your login</p>
+                </div>
+                
+                <form id="verification-form">
+                    <div class="verification-code">
+                        <input type="text" maxlength="1" autofocus>
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                    </div>
+                    
+                    <button type="submit" class="sign-up-btn">Verify Code</button>
+                    
+                    <div class="resend-link">
+                        Didn't receive the code? <a href="#" id="resend-link">Resend code</a>
+                    </div>
+                    
+                    <div class="back-to-login">
+                        <a href="login.html">Back to Login</a>
+                    </div>
+                </form>
+            </div>
+        </div>  
+    </div>
+    <script src="javascript/login-2fa.js"></script>
+</body>
+</html> 

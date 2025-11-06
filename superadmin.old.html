@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Superadmin Dashboard - Scheduling System</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/superadmin.css">
+    <style>
+        body, html { 
+            font-family: 'Poppins', sans-serif !important; 
+        }
+        
+        /* Enhanced Header Styles */
+        .header-right {
+            display: flex;
+            align-items: center;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        
+        .user-details {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 1rem;
+        }
+        
+        .role-badge {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .logout-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+        }
+        
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        
+        /* Content Section Styles */
+        .content-section {
+            display: none;
+        }
+        
+        .content-section.active {
+            display: block;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .section-title h2 {
+            color: #1e293b;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .section-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        /* Table Styles */
+        .table-wrapper {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .data-table th {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: #475569;
+            font-weight: 600;
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .data-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .data-table tr:hover {
+            background-color: #f8fafc;
+        }
+        
+        /* Button Styles */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #cbd5e1;
+        }
+        
+        /* Search Box */
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .search-box input {
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            width: 300px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        
+        .search-box i {
+            position: absolute;
+            left: 0.75rem;
+            color: #94a3b8;
+        }
+        
+        /* Overview Cards */
+        .overview-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .overview-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .overview-card h3 {
+            color: #64748b;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin: 0 0 0.5rem 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .overview-card .count {
+            color: #1e293b;
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .overview-card i {
+            color: #3b82f6;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-left">
+                <div class="logo">
+                    <img src="assets/sti.png" alt="STI Logo" class="logo-img">
+                    <div class="logo-text">
+                        <h1>Superadmin Dashboard</h1>
+                        <p>Manage departments, faculty, subjects, courses, and rooms</p>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <div class="user-details">
+                        <div class="user-name" id="userName">Super Admin</div>
+                        <div class="role-badge">Superadmin</div>
+                    </div>
+                    <button class="logout-btn" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Sidebar -->
+            <aside class="dashboard-sidebar">
+                <nav class="sidebar-nav">
+                    <ul class="nav-list">
+                        <li class="nav-item active" data-section="pending-accounts">
+                            <a href="#" class="nav-link">
+                                <i class="fas fa-clock"></i>
+                                <span>Pending Accounts</span>
+                            </a>
+                        </li>
+                        <li class="nav-item" data-section="manage-users">
+                            <a href="#" class="nav-link">
+                                <i class="fas fa-users"></i>
+                                <span>Manage Users</span>
+                            </a>
+                        </li>
+                        <li class="nav-item" data-section="entities">
+                            <a href="#" class="nav-link">
+                                <i class="fas fa-building"></i>
+                                <span>Entities</span>
+                            </a>
+                        </li>
+                        <li class="nav-item" data-section="data">
+                            <a href="#" class="nav-link">
+                                <i class="fas fa-database"></i>
+                                <span>Data</span>
+                            </a>
+                        </li>
+                        <li class="nav-item" data-section="logs">
+                            <a href="#" class="nav-link">
+                                <i class="fas fa-file-alt"></i>
+                                <span>Logs</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </aside>
+
+            <!-- Content Area -->
+            <div class="content-wrapper">
+                <!-- Pending Accounts Section -->
+                <section class="content-section active" id="pending-accounts">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Pending Account Approvals</h2>
+                        </div>
+                        <div class="section-actions">
+                            <div class="search-box">
+                                <input type="text" id="pendingSearchInput" placeholder="Search by name or email">
+                                <i class="fas fa-search" id="pendingSearchBtn"></i>
+                            </div>
+                            <button class="btn btn-primary" id="refreshPendingBtn">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Department</th>
+                                        <th>Role</th>
+                                        <th>Requested Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pendingUsersTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="6">
+                                            <div class="empty-state">
+                                                <i class="fas fa-clock"></i>
+                                                <p>No pending accounts found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Manage Users Section -->
+                <section class="content-section" id="manage-users">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Manage Users</h2>
+                        </div>
+                        <div class="section-actions">
+                            <div class="search-box">
+                                <input type="text" id="userSearchInput" placeholder="Search by name or email">
+                                <i class="fas fa-search" id="userSearchBtn"></i>
+                            </div>
+                            <button class="btn btn-primary" id="refreshUsersBtn">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Department</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="approvedUsersTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="6">
+                                            <div class="empty-state">
+                                                <i class="fas fa-users"></i>
+                                                <p>No users found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Entities Section -->
+                <section class="content-section" id="entities">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Entity Management</h2>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-primary" id="addEntityBtn">
+                                <i class="fas fa-plus"></i> Add Entity
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <!-- Overview Cards -->
+                        <div class="overview-cards">
+                            <div class="overview-card">
+                                <i class="fas fa-building"></i>
+                                <h3>Departments</h3>
+                                <p class="count" id="totalDepartmentsOverview">0</p>
+                            </div>
+                            <div class="overview-card">
+                                <i class="fas fa-user-tie"></i>
+                                <h3>Faculty Members</h3>
+                                <p class="count" id="totalFacultyOverview">0</p>
+                            </div>
+                            <div class="overview-card">
+                                <i class="fas fa-book"></i>
+                                <h3>Subject/Course</h3>
+                                <p class="count" id="totalSubjectsOverview">0</p>
+                            </div>
+                            <div class="overview-card">
+                                <i class="fas fa-graduation-cap"></i>
+                                <h3>Program/Strand</h3>
+                                <p class="count" id="totalCoursesOverview">0</p>
+                            </div>
+                            <div class="overview-card">
+                                <i class="fas fa-door-open"></i>
+                                <h3>Rooms</h3>
+                                <p class="count" id="totalRoomsOverview">0</p>
+                            </div>
+                        </div>
+
+                        <!-- Entity Tabs -->
+                        <div class="entity-tabs">
+                            <button class="entity-tab active" data-entity="department">
+                                <i class="fas fa-building"></i> Departments
+                            </button>
+                            <button class="entity-tab" data-entity="faculty">
+                                <i class="fas fa-user-tie"></i> Faculty
+                            </button>
+                            <button class="entity-tab" data-entity="subject">
+                                <i class="fas fa-book"></i> Subject/Course
+                            </button>
+                            <button class="entity-tab" data-entity="course">
+                                <i class="fas fa-graduation-cap"></i> Program/Strand
+                            </button>
+                            <button class="entity-tab" data-entity="room">
+                                <i class="fas fa-door-open"></i> Rooms
+                            </button>
+                        </div>
+
+                        <!-- Entity Tables -->
+                        <div class="entity-tables">
+                            <!-- Department Table -->
+                            <div class="table-wrapper entity-table-wrapper" id="department-table">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Code</th>
+                                            <th>Name</th>
+                                            <th>Description</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="empty-row">
+                                            <td colspan="4">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-building"></i>
+                                                    <p>No departments found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Faculty Table -->
+                            <div class="table-wrapper entity-table-wrapper" id="faculty-table" style="display:none;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Department</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="empty-row">
+                                            <td colspan="4">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-user-tie"></i>
+                                                    <p>No faculty found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Subject Table -->
+                            <div class="table-wrapper entity-table-wrapper" id="subject-table" style="display:none;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Subject Code</th>
+                                            <th>Subject Name</th>
+                                            <th>Department</th>
+                                            <th>Units</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="empty-row">
+                                            <td colspan="5">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-book"></i>
+                                                    <p>No subjects found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Course Table -->
+                            <div class="table-wrapper entity-table-wrapper" id="course-table" style="display:none;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Code</th>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="empty-row">
+                                            <td colspan="4">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-graduation-cap"></i>
+                                                    <p>No courses found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Room Table -->
+                            <div class="table-wrapper entity-table-wrapper" id="room-table" style="display:none;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Capacity</th>
+                                            <th>Type</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="empty-row">
+                                            <td colspan="4">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-door-open"></i>
+                                                    <p>No rooms found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Data Section -->
+                <section class="content-section" id="data">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Data Management</h2>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-primary" id="exportDataBtn">
+                                <i class="fas fa-download"></i> Export Data
+                            </button>
+                            <button class="btn btn-primary" id="importDataBtn">
+                                <i class="fas fa-upload"></i> Import Data
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <div class="data-actions">
+                            <div class="data-category">
+                                <div class="category-header">
+                                    <h3>Export Data</h3>
+                                    <p>Download system data in various formats</p>
+                                </div>
+                                <div class="category-actions">
+                                    <button class="btn btn-primary" data-action="export" data-type="users">
+                                        <i class="fas fa-users"></i> Export Users
+                                    </button>
+                                    <button class="btn btn-primary" data-action="export" data-type="departments">
+                                        <i class="fas fa-building"></i> Export Departments
+                                    </button>
+                                    <button class="btn btn-primary" data-action="export" data-type="subjects">
+                                        <i class="fas fa-book"></i> Export Subjects
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="data-category">
+                                <div class="category-header">
+                                    <h3>System Reset</h3>
+                                    <p>Clear all system data (use with caution)</p>
+                                </div>
+                                <div class="category-actions">
+                                    <button class="btn btn-danger" id="clearSessionsBtn" data-action="clear-all-data">
+                                        <i class="fas fa-trash-alt"></i> Clear All Data
+                                    </button>
+                                    <div class="reset-sessions-note">
+                                        <small>This will remove ALL data: users, departments, faculty, subjects, courses/strands, and rooms.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Logs Section -->
+                <section class="content-section" id="logs">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>System Logs</h2>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-primary" id="refreshLogsBtn">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Level</th>
+                                        <th>Message</th>
+                                        <th>User</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="4">
+                                            <div class="empty-state">
+                                                <i class="fas fa-file-alt"></i>
+                                                <p>No logs found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modals"></div>
+
+    <!-- Scripts -->
+    <script src="javascript/main.js"></script>
+    <script src="javascript/superadmin.js"></script>
+    <script src="javascript/entity-management.js"></script>
+    <script src="javascript/modals.js"></script>
+</body>
+</html>

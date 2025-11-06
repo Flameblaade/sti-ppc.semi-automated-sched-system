@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sign up for the STI Scheduling System">
+    <title>Sign Up | STI Scheduling System</title>
+    <link rel="stylesheet" href="css/signup.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Additional styles to improve the UI */
+        .white_box {
+            height: auto; /* Allow box to expand with content */
+            min-height: 450px;
+            padding-bottom: 30px;
+            overflow-y: auto;
+        }
+        
+        .blue_box {
+            height: auto; /* Allow box to expand with content */
+            min-height: 500px;
+        }
+        
+        .form-name, .form-email, .form-password, .form-repassword {
+            margin-bottom: 20px;
+        }
+        
+        input:focus {
+            outline: none;
+            border: 1px solid #1A609B;
+            background-color: #eaf4fd;
+        }
+        
+        .error-message {
+            color: #d9534f;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+        
+        .password-requirements {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            padding-left: 5px;
+        }
+        
+        .form-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        /* Progress bar for strong password */
+        .password-strength {
+            height: 4px;
+            background-color: #e0e0e0;
+            margin-top: 8px;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .password-strength-meter {
+            height: 100%;
+            width: 0%;
+            background-color: #d9534f;
+            transition: width 0.3s, background-color 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-title">STI Scheduling System</div>
+    </nav>
+
+    <img class="sti_logo" src="assets/sti.png" alt="sti logo">
+
+    <div class="blue_box">
+        <div class="white_box">
+            <h3 id="lbl-signup">Sign Up</h3>
+            <form id="signup-form" novalidate>                <div class="form-row" style="display: flex; gap: 10px;">
+                    <div class="form-name" style="flex: 1;">
+                        <label for="firstname">FIRST NAME</label>
+                        <input type="text" id="firstname" name="firstname" placeholder="First name" required>
+                        <div class="error-message" id="firstname-error">Required</div>
+                    </div>
+
+                    <div class="form-name" style="flex: 1;">
+                        <label for="lastname">LAST NAME</label>
+                        <input type="text" id="lastname" name="lastname" placeholder="Last name" required>
+                        <div class="error-message" id="lastname-error">Required</div>
+                    </div>
+                </div>
+                  <div class="form-name" style="margin-bottom: 12px;">
+                    <label for="middlename">MIDDLE NAME <small>(optional)</small></label>
+                    <input type="text" id="middlename" name="middlename" placeholder="Middle name (optional)">
+                </div>                <div class="form-email" style="margin-bottom: 12px;">
+                    <label for="email">EMAIL</label>
+                    <input type="email" id="email" name="email" placeholder="Enter your email address" required>
+                    <div class="error-message" id="email-error">Please enter a valid email address</div>
+                </div>
+                  <div class="form-password">
+                    <label for="password">PASSWORD</label>
+                    <div class="password-container">
+                        <input type="password" id="password" name="password" placeholder="Create password (min. 6 chars)" required>
+                        <i class="fa-solid fa-eye toggle-password"></i>
+                    </div>
+                    <div class="password-strength" style="margin-top: 4px; height: 3px;">
+                        <div class="password-strength-meter" id="password-strength-meter"></div>
+                    </div>
+                    <div class="error-message" id="password-error">Min. 6 characters</div>
+                </div>
+
+                <div class="form-repassword">
+                    <label for="repassword">CONFIRM PASSWORD</label>
+                    <div class="password-container">
+                        <input type="password" id="repassword" name="repassword" placeholder="Confirm password" required>
+                        <i class="fa-solid fa-eye toggle-password"></i>
+                    </div>
+                    <div class="error-message" id="repassword-error">Passwords don't match</div>
+                </div>
+
+                <button type="submit" class="sign-up-btn">Sign Up</button>
+                
+                <div class="login-link">
+                    Already have an account? <a href="login.html">Log in</a>
+                </div>
+            </form>
+        </div>  
+    </div>
+    <script src="javascript/signup.js"></script>
+</body>
+</html>

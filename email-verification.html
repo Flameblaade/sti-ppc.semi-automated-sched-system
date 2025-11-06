@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification</title>
+    <link rel="stylesheet" href="css/signup.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Success Modal Styles */
+        .success-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .success-modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .success-icon {
+            color: #4CAF50;
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        
+        .success-modal h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .success-modal p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        
+        .success-modal button {
+            background-color: #457B9D;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        .success-modal button:hover {
+            background-color: #3a6a8c;
+        }
+    </style>
+    <style>
+        .verification-container {
+            padding: 0 30px;
+        }
+        
+        .verification-message {
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .verification-code {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 25px 0;
+        }
+        
+        .verification-code input {
+            width: 45px;
+            height: 50px;
+            font-size: 24px;
+            text-align: center;
+            border: 1px solid #D9D9D9;
+            background-color: #D9D9D9;
+            border-radius: 10px;
+        }
+        
+        .verification-code input:focus {
+            outline: none;
+            border-color: #457B9D;
+            background-color: #e5e5e5;
+        }
+        
+        .resend-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        
+        .resend-link a {
+            color: #457B9D;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        .resend-link a:hover {
+            text-decoration: underline;
+            color: #1A609B;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+    </nav>
+
+    <img class="sti_logo" src="assets/sti.png" alt="sti logo">
+
+    <div class="blue_box">
+        <div class="white_box">
+            <h3 id="lbl-signup">Email Verification</h3>
+            
+            <div class="verification-container">
+                <div class="verification-message">
+                    <p>We've sent a verification code to <strong id="user-email"></strong></p>
+                    <p>Please enter the 6-digit code to verify your account</p>
+                </div>
+                
+                <form id="verification-form">
+                    <div class="verification-code">
+                        <input type="text" maxlength="1" autofocus>
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                        <input type="text" maxlength="1">
+                    </div>
+                    
+                    <button type="submit" class="sign-up-btn">Verify Email</button>
+                    
+                    <div class="resend-link">
+                        Didn't receive the code? <a href="#" id="resend-link">Resend code</a>
+                    </div>
+                </form>
+            </div>
+        </div>  
+    </div>
+    
+    <!-- Success Modal -->
+    <div id="successModal" class="success-modal">
+        <div class="success-modal-content">
+            <div class="success-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h2>Registration Successful!</h2>
+            <p>Your account has been created successfully and is pending approval from the administrator. You will receive an email once your account is approved.</p>
+            <button id="backToLoginBtn">Back to Login</button>
+        </div>
+    </div>
+
+    <script src="javascript/email-verification.js"></script>
+    <script>
+        // Add event listener for the back to login button
+        document.addEventListener('DOMContentLoaded', function() {
+            const backToLoginBtn = document.getElementById('backToLoginBtn');
+            if (backToLoginBtn) {
+                backToLoginBtn.addEventListener('click', function() {
+                    window.location.href = 'login.html';
+                });
+            }
+        });
+    </script>
+</body>
+</html>
