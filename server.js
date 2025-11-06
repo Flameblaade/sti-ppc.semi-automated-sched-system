@@ -337,28 +337,43 @@ const login2FACodes = {}; // email: { code, expiry }
 })();
 
 // Email transporter setup with enhanced Gmail configuration
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
+let transporter = null;
 
-// Verify transporter configuration
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('Email transporter verification failed:', error);
-  } else {
-    console.log('Email server is ready to send messages');
-  }
-});
+// Only create transporter if email credentials are configured
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
+
+  // Verify transporter configuration
+  transporter.verify(function(error, success) {
+    if (error) {
+      console.error('❌ Email transporter verification failed:', error.message);
+      console.error('Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
+      });
+      console.error('⚠️  Email sending will not work. Please check your EMAIL_USER and EMAIL_PASS in Render environment variables.');
+    } else {
+      console.log('✅ Email server is ready to send messages');
+      console.log('📧 Email configured for:', process.env.EMAIL_USER);
+    }
+  });
+} else {
+  console.warn('⚠️  Email not configured: EMAIL_USER or EMAIL_PASS not set in environment variables');
+  console.warn('⚠️  Email sending will be disabled. Set these in Render dashboard → Environment tab');
+}
 
 // Helper functions
 const generateVerificationCode = () => {
@@ -366,6 +381,18 @@ const generateVerificationCode = () => {
 };
 
 const sendVerificationEmail = async (email, code) => {
+  // Check if email is configured
+  if (!transporter) {
+    console.error('❌ Cannot send email: Email transporter not configured');
+    console.error('Please set EMAIL_USER and EMAIL_PASS in Render environment variables');
+    return false;
+  }
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error('❌ Cannot send email: EMAIL_USER or EMAIL_PASS not set');
+    return false;
+  }
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
@@ -384,10 +411,28 @@ const sendVerificationEmail = async (email, code) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    console.log(`📧 Attempting to send verification email to: ${email}`);
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email sent successfully:', info.messageId);
+    console.log('📬 Email sent to:', email);
     return true;
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('❌ Error sending email:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error command:', error.command);
+    console.error('Error response:', error.response);
+    
+    // Common error messages
+    if (error.code === 'EAUTH') {
+      console.error('🔐 Authentication failed. Check your Gmail app password.');
+      console.error('Make sure you:');
+      console.error('1. Enabled 2-Step Verification on Gmail');
+      console.error('2. Generated an App Password (not your regular password)');
+      console.error('3. Used the 16-character app password in EMAIL_PASS');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('🌐 Connection failed. Check your internet connection or Gmail settings.');
+    }
+    
     return false;
   }
 };
@@ -543,7 +588,12 @@ app.post('/api/auth/register', async (req, res) => {
     // For regular users, send verification email
     const emailSent = await sendVerificationEmail(email, verificationCode);
     if (!emailSent) {
-      return res.status(500).json({ message: 'Failed to send verification email' });
+      console.error('❌ Failed to send verification email to:', email);
+      console.error('Verification code generated (but not sent):', verificationCode);
+      return res.status(500).json({ 
+        message: 'Failed to send verification email. Please check server logs or contact administrator.',
+        debug: process.env.NODE_ENV === 'development' ? 'Email service not configured or failed' : undefined
+      });
     }
 
     res.status(201).json({ 
@@ -811,11 +861,12 @@ app.post('/api/auth/login', async (req, res) => {
     login2FACodes[email] = { code, expiry: Date.now() + 10 * 60 * 1000 }; // 10 min expiry
     console.log(`2FA code for ${email}: ${code}`);
 
-    // Try to send email (will fail if email not configured, but that's ok for dev)
-    try {
-      await sendVerificationEmail(email, code);
-    } catch (emailError) {
-      console.error('Error sending 2FA email (this is ok in development):', emailError);
+    // Try to send email
+    const emailSent = await sendVerificationEmail(email, code);
+    if (!emailSent) {
+      console.error('❌ Failed to send 2FA email to:', email);
+      console.error('2FA code generated (but not sent):', code);
+      // Still allow login with 2FA - user can check server logs or contact admin
     }
 
     res.status(200).json({ message: '2FA required', twoFA: true });
