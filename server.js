@@ -187,9 +187,26 @@ const corsOptions = {
       'http://127.0.0.1:8000'
     ];
     
+    // Also allow Render URLs (for same-origin requests)
+    const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.CLIENT_URL;
+    if (renderUrl) {
+      allowedOrigins.push(renderUrl);
+      // Also allow without protocol if needed
+      const urlWithoutProtocol = renderUrl.replace(/^https?:\/\//, '');
+      allowedOrigins.push(`https://${urlWithoutProtocol}`);
+      allowedOrigins.push(`http://${urlWithoutProtocol}`);
+    }
+    
+    // Allow any .onrender.com subdomain in production
+    if (process.env.NODE_ENV === 'production' && origin && origin.includes('.onrender.com')) {
+      return callback(null, true);
+    }
+    
     if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin);
+      console.log('Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
