@@ -67,10 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loginBtn.disabled = true;
         loginBtn.textContent = 'Logging in...';
         try {
-            // Send login request to the server with timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-            
+            // Send login request to the server
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
@@ -79,11 +76,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     email,
                     password
-                }),
-                signal: controller.signal
+                })
             });
-            
-            clearTimeout(timeoutId);
             
             // Check if response is ok before parsing JSON
             let data;
@@ -171,11 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.error('Login error:', error);
-            if (error.name === 'AbortError') {
-                alert('Request timed out. The server may be sleeping (Render free tier). Please try again - it should be faster on the second attempt.');
-            } else {
-                alert(error.message || 'Login failed. Please check your connection and try again.');
-            }
+            alert(error.message || 'Login failed. Please check your connection and try again.');
             loginBtn.disabled = false;
             loginBtn.textContent = 'Log In';
         }
