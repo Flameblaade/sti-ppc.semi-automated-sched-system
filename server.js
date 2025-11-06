@@ -375,6 +375,43 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
   console.warn('⚠️  Email sending will be disabled. Set these in Render dashboard → Environment tab');
 }
 
+// Helper function to safely read JSON file (creates file if doesn't exist)
+const readJsonFile = (filePath, defaultValue = []) => {
+  try {
+    // Ensure data directory exists
+    const dataDir = path.dirname(filePath);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    // If file doesn't exist, create it with default value
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf8');
+      console.log(`Created missing file: ${filePath}`);
+      return defaultValue;
+    }
+    
+    // Read and parse file
+    const content = fs.readFileSync(filePath, 'utf8');
+    if (!content || content.trim() === '') {
+      fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf8');
+      return defaultValue;
+    }
+    
+    return JSON.parse(content);
+  } catch (error) {
+    console.error(`Error reading ${filePath}:`, error);
+    // If file is corrupted, create a new one
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf8');
+      console.log(`Recreated corrupted file: ${filePath}`);
+    } catch (writeError) {
+      console.error(`Failed to recreate ${filePath}:`, writeError);
+    }
+    return defaultValue;
+  }
+};
+
 // Helper functions
 const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -2485,7 +2522,7 @@ async function handleImportData(req, res) {
 app.get('/api/courses', isAuthenticated, (req, res) => {
     try {
         const { departmentId } = req.query;
-        const courses = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'courses.json'), 'utf8') || '[]');
+        const courses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
         
         if (departmentId) {
             // Filter courses by department
@@ -2508,7 +2545,7 @@ app.get('/api/courses', isAuthenticated, (req, res) => {
 app.get('/api/courses/:id', isAuthenticated, (req, res) => {
     try {
         const { id } = req.params;
-        const courses = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'courses.json'), 'utf8') || '[]');
+        const courses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
         
         const course = courses.find(c => c.id === id);
         if (!course) {
@@ -2537,7 +2574,7 @@ app.post('/api/courses', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
             return res.status(400).json({ message: 'Department not found' });
         }
 
-        const courses = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'courses.json'), 'utf8') || '[]');
+        const courses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
         
         // Check if course with same code already exists
         if (courses.some(course => course.code === code)) {
@@ -2582,7 +2619,7 @@ app.put('/api/courses/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
             return res.status(400).json({ message: 'Department not found' });
         }
 
-        let courses = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'courses.json'), 'utf8') || '[]');
+        let courses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
         const courseIndex = courses.findIndex(c => c.id === id);
         
         if (courseIndex === -1) {
@@ -2618,7 +2655,7 @@ app.put('/api/courses/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
 app.delete('/api/courses/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
     try {
         const { id } = req.params;
-        let courses = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'courses.json'), 'utf8') || '[]');
+        let courses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
         
         const courseIndex = courses.findIndex(c => c.id === id);
         
@@ -2652,26 +2689,21 @@ app.get('/api/strands', isAuthenticated, (req, res) => {
     try {
         const { departmentId } = req.query;
         
-        // Check if strands file exists (similar to courses)
+        // Use safe read function for strands
         const strandsPath = path.join(__dirname, 'data', 'strands.json');
-        let strands = [];
+        let strands = readJsonFile(strandsPath, []);
         
-        if (fs.existsSync(strandsPath)) {
-            strands = JSON.parse(fs.readFileSync(strandsPath, 'utf8') || '[]');
-            
-            if (departmentId) {
-                // Filter strands by department
-                const filteredStrands = strands.filter(strand => 
-                    strand.departmentId === departmentId
-                );
-                console.log(`GET /api/strands?departmentId=${departmentId} - Returning ${filteredStrands.length} strands for department`);
-                res.status(200).json(filteredStrands);
-                return;
-            }
+        if (departmentId) {
+            // Filter strands by department
+            const filteredStrands = strands.filter(strand => 
+                strand.departmentId === departmentId
+            );
+            console.log(`GET /api/strands?departmentId=${departmentId} - Returning ${filteredStrands.length} strands for department`);
+            res.status(200).json(filteredStrands);
+            return;
         }
         
-        // Return empty array or all strands (strands are primarily managed in localStorage)
-        // Client-side will handle filtering from localStorage if API returns empty
+        // Return all strands
         res.status(200).json(strands);
     } catch (error) {
         console.error('Error fetching strands:', error);
@@ -2681,10 +2713,26 @@ app.get('/api/strands', isAuthenticated, (req, res) => {
 
 app.post('/api/strands', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
     try {
-        const { code, name, description, type } = req.body;
+        const { code, name, description, type, departmentId } = req.body;
         
         if (!code || !name) {
             return res.status(400).json({ message: 'Code and name are required' });
+        }
+        
+        // Check if department exists (if provided)
+        if (departmentId) {
+            const department = departments.find(dept => dept.id === departmentId);
+            if (!department) {
+                return res.status(400).json({ message: 'Department not found' });
+            }
+        }
+        
+        const strandsPath = path.join(__dirname, 'data', 'strands.json');
+        let strands = readJsonFile(strandsPath, []);
+        
+        // Check if strand with same code already exists
+        if (strands.some(strand => strand.code === code)) {
+            return res.status(409).json({ message: 'A strand with this code already exists' });
         }
         
         const newStrand = {
@@ -2693,11 +2741,14 @@ app.post('/api/strands', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
             name: name.trim(),
             description: description || '',
             type: type || 'Strand',
+            departmentId: departmentId || null,
+            department: departmentId ? departments.find(d => d.id === departmentId)?.name : null,
             createdAt: new Date().toISOString()
         };
         
-        // In a real app, this would save to database
-        // For now, just return the created strand
+        strands.push(newStrand);
+        fs.writeFileSync(strandsPath, JSON.stringify(strands, null, 2));
+        
         res.status(201).json(newStrand);
     } catch (error) {
         console.error('Error creating strand:', error);
@@ -2708,21 +2759,38 @@ app.post('/api/strands', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
 app.put('/api/strands/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
     try {
         const { id } = req.params;
-        const { code, name, description, type } = req.body;
+        const { code, name, description, type, departmentId } = req.body;
         
         if (!code || !name) {
             return res.status(400).json({ message: 'Code and name are required' });
         }
         
-        // In a real app, this would update in database
+        const strandsPath = path.join(__dirname, 'data', 'strands.json');
+        let strands = readJsonFile(strandsPath, []);
+        const strandIndex = strands.findIndex(s => s.id === id);
+        
+        if (strandIndex === -1) {
+            return res.status(404).json({ message: 'Strand not found' });
+        }
+        
+        // Check if another strand with the same code exists
+        if (strands.some((strand, index) => strand.code === code && index !== strandIndex)) {
+            return res.status(409).json({ message: 'A strand with this code already exists' });
+        }
+        
         const updatedStrand = {
-            id,
+            ...strands[strandIndex],
             code: code.trim().toUpperCase(),
             name: name.trim(),
             description: description || '',
             type: type || 'Strand',
+            departmentId: departmentId || strands[strandIndex].departmentId || null,
+            department: departmentId ? departments.find(d => d.id === departmentId)?.name : strands[strandIndex].department || null,
             updatedAt: new Date().toISOString()
         };
+        
+        strands[strandIndex] = updatedStrand;
+        fs.writeFileSync(strandsPath, JSON.stringify(strands, null, 2));
         
         res.status(200).json(updatedStrand);
     } catch (error) {
@@ -2735,7 +2803,17 @@ app.delete('/api/strands/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) 
     try {
         const { id } = req.params;
         
-        // In a real app, this would delete from database
+        const strandsPath = path.join(__dirname, 'data', 'strands.json');
+        let strands = readJsonFile(strandsPath, []);
+        
+        const strandIndex = strands.findIndex(s => s.id === id);
+        if (strandIndex === -1) {
+            return res.status(404).json({ message: 'Strand not found' });
+        }
+        
+        strands = strands.filter(strand => strand.id !== id);
+        fs.writeFileSync(strandsPath, JSON.stringify(strands, null, 2));
+        
         res.status(200).json({ message: 'Strand deleted successfully' });
     } catch (error) {
         console.error('Error deleting strand:', error);
