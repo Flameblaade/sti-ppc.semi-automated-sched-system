@@ -465,15 +465,73 @@ const generateVerificationCode = () => {
 
 const sendVerificationEmail = async (email, code) => {
   const emailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #1A609B;">Verify Your Email Address</h2>
-      <p>Thank you for registering with our Scheduling System. Please use the following code to verify your email address:</p>
-      <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; font-weight: bold;">
-        ${code}
-      </div>
-      <p>This code will expire in 10 minutes.</p>
-      <p>If you did not request this verification, please ignore this email.</p>
-    </div>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 20px 0; text-align: center;">
+            <table role="presentation" style="width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <tr>
+                <td style="padding: 40px 30px; text-align: center; background-color: #1A609B; border-radius: 8px 8px 0 0;">
+                  <h1 style="margin: 0; color: #ffffff; font-size: 24px;">Email Verification</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 40px 30px;">
+                  <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    Hello,
+                  </p>
+                  <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    Thank you for registering with our Scheduling System. Please use the verification code below to complete your registration:
+                  </p>
+                  <div style="background-color: #f8f9fa; border: 2px dashed #1A609B; padding: 20px; text-align: center; margin: 30px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #1A609B; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                      ${code}
+                    </p>
+                  </div>
+                  <p style="margin: 20px 0 0 0; color: #666666; font-size: 14px; line-height: 1.5;">
+                    This verification code will expire in <strong>10 minutes</strong>.
+                  </p>
+                  <p style="margin: 20px 0 0 0; color: #666666; font-size: 14px; line-height: 1.5;">
+                    If you did not request this verification code, please ignore this email or contact support if you have concerns.
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 20px 30px; text-align: center; background-color: #f8f9fa; border-radius: 0 0 8px 8px;">
+                  <p style="margin: 0; color: #999999; font-size: 12px;">
+                    This is an automated message. Please do not reply to this email.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+  
+  const emailText = `
+Email Verification
+
+Hello,
+
+Thank you for registering with our Scheduling System. Please use the verification code below to complete your registration:
+
+Verification Code: ${code}
+
+This verification code will expire in 10 minutes.
+
+If you did not request this verification code, please ignore this email or contact support if you have concerns.
+
+---
+This is an automated message. Please do not reply to this email.
   `;
 
   // Use SendGrid if configured (preferred for cloud platforms like Render)
@@ -486,9 +544,20 @@ const sendVerificationEmail = async (email, code) => {
 
       const msg = {
         to: email,
-        from: process.env.SENDGRID_FROM_EMAIL,
-        subject: 'Email Verification Code',
-        html: emailHtml
+        from: {
+          email: process.env.SENDGRID_FROM_EMAIL,
+          name: 'Scheduling System'
+        },
+        replyTo: process.env.SENDGRID_FROM_EMAIL,
+        subject: 'Verify Your Email Address - Scheduling System',
+        text: emailText,
+        html: emailHtml,
+        categories: ['verification'],
+        mailSettings: {
+          sandboxMode: {
+            enable: false
+          }
+        }
       };
 
       const result = await sgMail.send(msg);
