@@ -641,6 +641,207 @@
             cursor: not-allowed;
             transform: none;
         }
+        
+        /* Simple action buttons for approve/reject */
+        .btn-action-approve,
+        .btn-action-reject {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            margin: 0 4px;
+        }
+        
+        .btn-action-approve {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-action-approve:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+        
+        .btn-action-reject {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-action-reject:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+        }
+        
+        /* New user notification modal */
+        .new-user-notification-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .new-user-notification-overlay.show {
+            opacity: 1;
+        }
+        
+        .new-user-notification-container {
+            background: white;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        
+        .new-user-notification-overlay.show .new-user-notification-container {
+            transform: scale(1);
+        }
+        
+        .new-user-notification-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-radius: 16px 16px 0 0;
+        }
+        
+        .new-user-notification-header h2 {
+            color: white;
+            margin: 0;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .new-user-notification-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+        
+        .new-user-notification-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .new-user-notification-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .new-user-notification-body {
+            padding: 24px;
+        }
+        
+        .new-user-notification-main-icon {
+            text-align: center;
+            font-size: 3rem;
+            color: #3b82f6;
+            margin-bottom: 16px;
+        }
+        
+        .new-user-notification-content h3 {
+            margin: 0 0 12px 0;
+            color: #1e293b;
+            font-size: 1.25rem;
+            text-align: center;
+        }
+        
+        .new-user-notification-description {
+            color: #64748b;
+            text-align: center;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .new-user-notification-info {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .new-user-notification-info p {
+            margin: 8px 0;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .new-user-notification-info i {
+            color: #3b82f6;
+            width: 20px;
+        }
+        
+        .new-user-notification-footer {
+            display: flex;
+            gap: 12px;
+            padding: 20px 24px;
+            border-top: 1px solid #e2e8f0;
+            justify-content: flex-end;
+        }
+        
+        .new-user-notification-btn-primary,
+        .new-user-notification-btn-secondary {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .new-user-notification-btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+        
+        .new-user-notification-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        
+        .new-user-notification-btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        
+        .new-user-notification-btn-secondary:hover {
+            background: #e2e8f0;
+        }
     </style>
 </head>
 <body>

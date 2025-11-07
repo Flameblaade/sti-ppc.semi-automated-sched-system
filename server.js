@@ -903,6 +903,14 @@ app.post('/api/auth/verify', (req, res) => {
     try {
       saveData();
       console.log('User verified successfully:', { email, status: users[userIndex].status, verified: users[userIndex].verified });
+      
+      // Notify that a new user has verified and is ready for approval
+      console.log('📢 New user verified and ready for approval:', {
+        email: users[userIndex].email,
+        name: `${users[userIndex].firstName} ${users[userIndex].lastName}`,
+        status: 'pending',
+        verified: true
+      });
     } catch (error) {
       console.error('Error saving user data after verification:', error);
       return res.status(500).json({ message: 'Failed to save user data' });

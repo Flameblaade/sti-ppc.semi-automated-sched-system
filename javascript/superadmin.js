@@ -435,18 +435,179 @@ function checkAuthentication() {
     document.getElementById('superadminName').textContent = userData.name || 'Super Admin';
 }
 
+// Track last known pending accounts count for notifications
+let lastPendingCount = 0;
+let pendingAccountsPollInterval = null;
+
 /**
  * Initialize the dashboard
  */
 function initializeDashboard() {
     loadDashboardData();
-    loadPendingAccounts();
+    loadPendingAccounts().then(() => {
+        // Start polling for new pending accounts
+        startPendingAccountsPolling();
+    });
     loadUsers();
     loadDepartments();
     loadFaculty();
     loadSubjects();
     loadCourses();
     loadRooms();
+}
+
+/**
+ * Start polling for new pending accounts (auto-refresh)
+ */
+function startPendingAccountsPolling() {
+    // Clear any existing interval
+    if (pendingAccountsPollInterval) {
+        clearInterval(pendingAccountsPollInterval);
+    }
+    
+    // Poll every 5 seconds for new pending accounts
+    pendingAccountsPollInterval = setInterval(async () => {
+        try {
+            const pendingUsers = await fetchData('/api/users/pending');
+            const currentCount = pendingUsers ? pendingUsers.length : 0;
+            
+            // If count increased, show notification and refresh
+            if (currentCount > lastPendingCount && lastPendingCount > 0) {
+                const newUsers = pendingUsers.slice(0, currentCount - lastPendingCount);
+                if (newUsers.length > 0) {
+                    const newUser = newUsers[0]; // Get the most recent
+                    showNewUserNotification(newUser);
+                    // Refresh the list
+                    loadPendingAccounts();
+                }
+            }
+            
+            // Update count
+            lastPendingCount = currentCount;
+        } catch (error) {
+            console.error('Error polling pending accounts:', error);
+        }
+    }, 5000); // Poll every 5 seconds
+}
+
+/**
+ * Show notification modal for new user registration
+ */
+function showNewUserNotification(user) {
+    // Remove any existing notification
+    const existing = document.getElementById('newUserNotificationModal');
+    if (existing) {
+        existing.remove();
+    }
+    
+    const userName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+    
+    const modalHTML = `
+        <div id="newUserNotificationModal" class="new-user-notification-overlay">
+            <div class="new-user-notification-container">
+                <div class="new-user-notification-header">
+                    <div class="new-user-notification-icon">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <h2>New User Registered</h2>
+                    <button class="new-user-notification-close" data-action="close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="new-user-notification-body">
+                    <div class="new-user-notification-content">
+                        <div class="new-user-notification-main-icon">
+                            <i class="fas fa-bell"></i>
+                        </div>
+                        <h3>New Account Pending Approval</h3>
+                        <p class="new-user-notification-description">
+                            <strong>${userName}</strong> has completed email verification and is waiting for your approval.
+                        </p>
+                        <div class="new-user-notification-info">
+                            <p><i class="fas fa-envelope"></i> <strong>Email:</strong> ${user.email}</p>
+                            <p><i class="fas fa-calendar"></i> <strong>Registered:</strong> ${new Date(user.createdAt).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="new-user-notification-footer">
+                    <button class="new-user-notification-btn-secondary" data-action="close">
+                        Dismiss
+                    </button>
+                    <button class="new-user-notification-btn-primary" data-action="view">
+                        <i class="fas fa-eye"></i> View Pending Accounts
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    const modal = document.getElementById('newUserNotificationModal');
+    if (modal) {
+        document.body.style.overflow = 'hidden';
+        
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+        
+        modal.addEventListener('click', (e) => {
+            const target = e.target.closest('button[data-action]');
+            if (!target) return;
+            
+            const action = target.getAttribute('data-action');
+            if (action === 'close') {
+                closeNewUserNotification();
+            } else if (action === 'view') {
+                closeNewUserNotification();
+                // Switch to pending accounts tab
+                const pendingTab = document.querySelector('[data-tab="pending-accounts"]');
+                if (pendingTab) {
+                    pendingTab.click();
+                } else {
+                    // Fallback: try to find by text content
+                    const tabs = document.querySelectorAll('.sidebar-menu-item, .nav-item, [role="tab"]');
+                    tabs.forEach(tab => {
+                        if (tab.textContent.toLowerCase().includes('pending') || tab.textContent.toLowerCase().includes('account')) {
+                            tab.click();
+                        }
+                    });
+                }
+            }
+        });
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeNewUserNotification();
+            }
+        });
+        
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                closeNewUserNotification();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    }
+}
+
+/**
+ * Close new user notification modal
+ */
+function closeNewUserNotification() {
+    const modal = document.getElementById('newUserNotificationModal');
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            if (modal && modal.parentNode) {
+                modal.remove();
+            }
+            document.body.style.overflow = 'auto';
+        }, 300);
+    } else {
+        document.body.style.overflow = 'auto';
+    }
 }
 
 /**
@@ -892,23 +1053,31 @@ async function loadPendingAccounts() {
             return;
         }
         
-        tbody.innerHTML = pendingUsers.map(user => `
+        const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+        
+        tbody.innerHTML = pendingUsers.map(user => {
+            const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+            return `
             <tr>
-                <td>${user.name || ''}</td>
+                <td>${displayName}</td>
                 <td>${user.email || ''}</td>
                 <td>${user.department || ''}</td>
                 <td>${user.role || ''}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
                 <td>
-                    <button class="btn btn-sm btn-success" data-action="approve" data-id="${user.id}">
+                    <button class="btn btn-sm btn-action-approve" data-action="approve" data-id="${user.id}">
                         <i class="fas fa-check"></i> Approve
                     </button>
-                    <button class="btn btn-sm btn-danger" data-action="reject" data-id="${user.id}">
+                    <button class="btn btn-sm btn-action-reject" data-action="reject" data-id="${user.id}">
                         <i class="fas fa-times"></i> Reject
                     </button>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
+        
+        // Update last known count
+        lastPendingCount = pendingUsers.length;
     } catch (error) {
         console.error('Error loading pending accounts:', error);
         showNotification('Failed to load pending accounts', 'error');
