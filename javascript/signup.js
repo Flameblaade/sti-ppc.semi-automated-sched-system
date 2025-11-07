@@ -269,9 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log(`${key}: ${value}`);
                     }
                     
-                    alert('Registration successful! Please check your email for a verification code.');
-                    
-                    // Redirect to email verification page immediately
+                    // Redirect to email verification page immediately (no alert)
                     window.location.href = 'email-verification.html';
                 } catch (serverError) {
                     console.error('Server error:', serverError);

@@ -115,7 +115,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 email: pendingUserEmail
             });
             
-            if (storedCode) {
+            // Skip local verification - always use server verification
+            // The server has the actual code sent via email
+            if (false && storedCode) {
                 console.log('Using local verification with stored code');
                 // We have local verification data, verify the code locally
                 if (enteredCode === storedCode) {
@@ -231,8 +233,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // If we don't have local verification data, try server verification
-            console.log('No local verification code found, trying server verification');
+            // Always try server verification first (server has the real code from email)
+            console.log('Attempting server verification with code:', enteredCode);
             try {
                 // Send verification request to the server
                 const response = await fetch('/api/auth/verify', {
@@ -246,9 +248,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     })
                 });
                 
-                const data = await response.json();
+                let data;
+                try {
+                    const text = await response.text();
+                    data = text ? JSON.parse(text) : {};
+                } catch (parseError) {
+                    console.error('Failed to parse response:', parseError);
+                    throw new Error('Server returned invalid response. Please try again.');
+                }
                 
                 if (!response.ok) {
+                    console.error('Verification failed:', data);
                     throw new Error(data.message || 'Verification failed');
                 }
                 

@@ -1291,11 +1291,14 @@ app.get('/api/users/pending', isAuthenticated, isSuperAdmin, (req, res) => {
   try {
     console.log('Fetching pending users. Total users:', users.length);
     
-    // Filter users with 'pending' status
+    // Filter users with 'pending' status AND verified (OTP confirmed)
+    // Only show users who have completed OTP verification
     const pendingUsers = users.filter(user => {
       const isPending = user.status === 'pending';
-      console.log(`User ${user.email} - Status: ${user.status} - Pending: ${isPending}`);
-      return isPending;
+      const isVerified = user.verified === true || user.emailVerified === true;
+      const shouldShow = isPending && isVerified;
+      console.log(`User ${user.email} - Status: ${user.status} - Verified: ${isVerified} - Show: ${shouldShow}`);
+      return shouldShow;
     });
     
     console.log(`Found ${pendingUsers.length} pending users`);
