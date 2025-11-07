@@ -247,18 +247,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         throw new Error(data.message || 'Registration failed');
                     }
                     
-                    // Server registration successful - also add to localStorage for demo purposes
-                    let pendingAccounts = JSON.parse(localStorage.getItem('pendingAccounts') || '[]');
-                    // Use a consistent ID based on email hash to ensure same ID across processes
-                    const userId = data.user?.id || 'user_' + btoa(email).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
-                    pendingAccounts.push({
-                        id: userId,
-                        name: `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`.trim(),
-                        email: email,
-                        registrationDate: new Date().toISOString().split('T')[0],
-                        status: 'pending'
-                    });
-                    localStorage.setItem('pendingAccounts', JSON.stringify(pendingAccounts));
+                    // Server registration successful - DO NOT add to pending accounts yet
+                    // User will be added to pending accounts only AFTER OTP verification
                     
                     // Store user data for verification page
                     sessionStorage.setItem('pendingUserEmail', email);
@@ -295,16 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     sessionStorage.setItem('lastName', lastName);
                     sessionStorage.setItem('password', password);
                     
-                    // Add to pendingAccounts in localStorage
-                    let pendingAccounts = JSON.parse(localStorage.getItem('pendingAccounts') || '[]');
-                    pendingAccounts.push({
-                        id: Date.now(),
-                        name: `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`.trim(),
-                        email: email,
-                        registrationDate: new Date().toISOString().split('T')[0],
-                        status: 'pending'
-                    });
-                    localStorage.setItem('pendingAccounts', JSON.stringify(pendingAccounts));
+                    // DO NOT add to pendingAccounts yet - wait for OTP verification
                     
                     // Generate verification code (simulating server-side action)
                     const verificationCode = generateVerificationCode();

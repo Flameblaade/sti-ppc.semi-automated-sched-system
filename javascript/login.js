@@ -454,4 +454,129 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.overflow = 'auto';
         }
     }
+    
+    // Function to show incorrect password modal
+    function showIncorrectPasswordModal() {
+        // Remove any existing modal first
+        const existingModal = document.getElementById('incorrectPasswordModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Create modal HTML with improved design
+        const modalHTML = `
+            <div id="incorrectPasswordModal" class="user-not-found-overlay">
+                <div class="user-not-found-container">
+                    <div class="user-not-found-header">
+                        <div class="user-not-found-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <h2>Incorrect Password</h2>
+                        <button class="user-not-found-close" data-action="close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="user-not-found-body">
+                        <div class="user-not-found-content">
+                            <div class="user-not-found-main-icon">
+                                <i class="fas fa-key"></i>
+                            </div>
+                            <h3>Password is incorrect</h3>
+                            <p class="user-not-found-description">
+                                The password you entered does not match your account. Please try again.
+                            </p>
+                            
+                            <div class="user-not-found-info-box">
+                                <h4><i class="fas fa-lightbulb"></i> What you can do:</h4>
+                                <ul class="user-not-found-steps">
+                                    <li>
+                                        <i class="fas fa-redo"></i>
+                                        <span>Double-check that you entered the correct password</span>
+                                    </li>
+                                    <li>
+                                        <i class="fas fa-eye"></i>
+                                        <span>Make sure Caps Lock is not enabled</span>
+                                    </li>
+                                    <li>
+                                        <i class="fas fa-question-circle"></i>
+                                        <span>Contact support if you forgot your password</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="user-not-found-footer">
+                        <button class="user-not-found-btn-primary" data-action="close">
+                            <i class="fas fa-arrow-left"></i>
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Show modal
+        const modal = document.getElementById('incorrectPasswordModal');
+        if (modal) {
+            // Prevent body scroll
+            document.body.style.overflow = 'hidden';
+            
+            // Show modal with animation
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+            
+            // Add event listeners
+            modal.addEventListener('click', (e) => {
+                const target = e.target.closest('button[data-action]');
+                if (!target) return;
+                
+                const action = target.getAttribute('data-action');
+                if (action === 'close') {
+                    closeIncorrectPasswordModal();
+                }
+            });
+            
+            // Click outside to close
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeIncorrectPasswordModal();
+                }
+            });
+            
+            // Escape key to close
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    closeIncorrectPasswordModal();
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+        }
+    }
+    
+    // Function to close incorrect password modal
+    function closeIncorrectPasswordModal() {
+        const modal = document.getElementById('incorrectPasswordModal');
+        if (modal) {
+            // Start fade out animation
+            modal.classList.remove('show');
+            
+            // Wait for animation to complete before removing
+            setTimeout(() => {
+                if (modal && modal.parentNode) {
+                    modal.remove();
+                }
+                
+                // Restore body scroll
+                document.body.style.overflow = 'auto';
+            }, 300);
+        } else {
+            // If modal doesn't exist, just restore body scroll
+            document.body.style.overflow = 'auto';
+        }
+    }
 });

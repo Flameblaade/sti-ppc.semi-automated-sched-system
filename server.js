@@ -744,6 +744,12 @@ app.post('/api/auth/register', async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
+    // Store verification code in memory for quick lookup
+    verificationCodes[email] = {
+      code: verificationCode,
+      expiry: Date.now() + 10 * 60 * 1000 // 10 minutes
+    };
+
     // Add to users array and save to file
     users.push(newUser);
     try {
@@ -825,30 +831,31 @@ app.post('/api/auth/verify', (req, res) => {
     }
 
     // Check if verification code exists and is valid
-    const verification = verificationCodes[email];
-    if (!verification) {
-      // If no verification code in memory, check if user already has a code
-      if (users[userIndex].verificationCode) {
-        // Check if the provided code matches the one in the user record
-        if (users[userIndex].verificationCode !== code) {
-          return res.status(400).json({ message: 'Invalid verification code' });
-        }
-        
-        // Check if code is expired
-        if (users[userIndex].verificationExpires < Date.now()) {
-          return res.status(400).json({ message: 'Verification code has expired' });
-        }
-      } else {
-        return res.status(400).json({ message: 'No verification request found' });
+    // First check user's stored verification code
+    if (users[userIndex].verificationCode) {
+      // Check if the provided code matches the one in the user record
+      if (String(users[userIndex].verificationCode) !== String(code)) {
+        return res.status(400).json({ message: 'Invalid verification code' });
+      }
+      
+      // Check if code is expired
+      if (users[userIndex].verificationExpires && users[userIndex].verificationExpires < Date.now()) {
+        return res.status(400).json({ message: 'Verification code has expired' });
       }
     } else {
+      // Check verificationCodes in memory as fallback
+      const verification = verificationCodes[email];
+      if (!verification) {
+        return res.status(400).json({ message: 'No verification request found. Please request a new code.' });
+      }
+      
       // Verify code from verificationCodes
       if (verification.expiry < Date.now()) {
         delete verificationCodes[email];
         return res.status(400).json({ message: 'Verification code expired' });
       }
 
-      if (verification.code !== code) {
+      if (String(verification.code) !== String(code)) {
         return res.status(400).json({ message: 'Invalid verification code' });
       }
       
@@ -856,11 +863,13 @@ app.post('/api/auth/verify', (req, res) => {
       delete verificationCodes[email];
     }
 
-    // Mark user as verified and update status to 'approved' if it was 'pending'
+    // Mark user as verified - but keep status as 'pending' until superadmin approves
+    // Only change status to 'approved' if superadmin has already approved
     users[userIndex].verified = true;
-    if (users[userIndex].status === 'pending') {
-      users[userIndex].status = 'approved';
-    }
+    users[userIndex].emailVerified = true;
+    
+    // Keep status as 'pending' - superadmin will approve/reject later
+    // Don't auto-approve on verification
     
     // Clear the verification code from user record
     users[userIndex].verificationCode = undefined;
@@ -869,7 +878,7 @@ app.post('/api/auth/verify', (req, res) => {
     // Save the updated user data
     try {
       saveData();
-      console.log('User verified successfully:', { email, status: users[userIndex].status });
+      console.log('User verified successfully:', { email, status: users[userIndex].status, verified: users[userIndex].verified });
     } catch (error) {
       console.error('Error saving user data after verification:', error);
       return res.status(500).json({ message: 'Failed to save user data' });
@@ -929,11 +938,18 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Generate new verification code
     const verificationCode = generateVerificationCode();
     
-    // Store verification code with expiration (10 minutes)
+    // Store verification code in user record AND in memory
+    user.verificationCode = verificationCode;
+    user.verificationExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    
+    // Also store in verificationCodes for backward compatibility
     verificationCodes[email] = {
       code: verificationCode,
       expiry: Date.now() + 10 * 60 * 1000 // 10 minutes
     };
+    
+    // Save user data
+    saveData();
 
     // Send verification email
     const emailSent = await sendVerificationEmail(email, verificationCode);

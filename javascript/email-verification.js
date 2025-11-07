@@ -196,27 +196,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (errorData.message && errorData.message.includes('Email is already in use')) {
                                 console.log('Email already exists in server, treating as success');
                                 
-                                // Add user to local storage for demo mode visibility
-                                try {
-                                    let pendingAccounts = JSON.parse(localStorage.getItem('pendingAccounts') || '[]');
-                                    const userExists = pendingAccounts.some(account => account.email === email);
-                                    
-                                    if (!userExists) {
-                                        // Use a consistent ID based on email hash to ensure same ID across processes
-                                        const userId = 'user_' + btoa(email).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
-                                        pendingAccounts.push({
-                                            id: userId,
-                                            name: `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`.trim(),
-                                            email: email,
-                                            registrationDate: new Date().toISOString().split('T')[0],
-                                            status: 'pending'
-                                        });
-                                        localStorage.setItem('pendingAccounts', JSON.stringify(pendingAccounts));
-                                        console.log('User added to pending accounts for demo mode with ID:', userId);
-                                    }
-                                } catch (localError) {
-                                    console.error('Error updating local storage:', localError);
-                                }
+                        // User is now verified - they will appear in pending accounts on server
+                        // No need to add to localStorage
                                 
                                 // Clear sensitive data from session storage
                                 sessionStorage.removeItem('password');
@@ -231,27 +212,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             throw new Error(errorData.message || 'Failed to register user');
                         }
 
-                        // Add user to local storage for demo mode visibility
-                        try {
-                            let pendingAccounts = JSON.parse(localStorage.getItem('pendingAccounts') || '[]');
-                            const userExists = pendingAccounts.some(account => account.email === email);
-                            
-                            if (!userExists) {
-                                // Use a consistent ID based on email hash to ensure same ID across processes
-                                const userId = 'user_' + btoa(email).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
-                                pendingAccounts.push({
-                                    id: userId,
-                                    name: `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`.trim(),
-                                    email: email,
-                                    registrationDate: new Date().toISOString().split('T')[0],
-                                    status: 'pending'
-                                });
-                                localStorage.setItem('pendingAccounts', JSON.stringify(pendingAccounts));
-                                console.log('User added to pending accounts for demo mode with ID:', userId);
-                            }
-                        } catch (localError) {
-                            console.error('Error updating local storage:', localError);
-                        }
+                        // User is now verified - they will appear in pending accounts on server
+                        // No need to add to localStorage
 
                         // Clear sensitive data from session storage
                         sessionStorage.removeItem('password');
@@ -297,14 +259,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Clear session storage
                 sessionStorage.removeItem('pendingUserEmail');
                 sessionStorage.removeItem('verificationCode');
+                sessionStorage.removeItem('firstName');
+                sessionStorage.removeItem('middleName');
+                sessionStorage.removeItem('lastName');
+                sessionStorage.removeItem('password');
                 
-                // For pending approval, show success modal
+                // User is now verified - show success modal (they need superadmin approval)
                 if (data.user.status === 'pending') {
                     document.getElementById('successModal').style.display = 'flex';
-                } 
-                // For approved users, redirect to timetable
-                // All users go to the timetable page
-                window.location.href = 'index.html';
+                } else {
+                    // If somehow approved, redirect to timetable
+                    window.location.href = 'index.html';
+                }
             } catch (serverError) {
                 console.error('Server error during verification:', serverError);
                 throw new Error('Server error: Unable to verify your code at this time.');
