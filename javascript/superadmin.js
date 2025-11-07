@@ -920,7 +920,12 @@ async function loadPendingAccounts() {
  */
 async function loadUsers() {
     try {
-        const users = await fetchData('/api/users');
+        const allUsers = await fetchData('/api/users');
+        // Filter to only show approved or denied users (not pending)
+        const users = allUsers.filter(user => {
+            const status = (user.status || '').toLowerCase();
+            return status === 'approved' || status === 'denied' || status === 'rejected';
+        });
         const tbody = document.getElementById('approvedUsersTableBody');
         
         if (!users || users.length === 0) {

@@ -99,6 +99,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     loginBtn.textContent = 'Log In';
                     return;
                 }
+                // Handle incorrect password
+                if (response.status === 401 && data.incorrectPassword) {
+                    // Show incorrect password modal
+                    showIncorrectPasswordModal();
+                    // Reset button state
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Log In';
+                    return;
+                }
                 // Handle user not found (invalid credentials)
                 if (response.status === 401 && data.message === 'Invalid credentials') {
                     // Show user not found modal
