@@ -561,17 +561,15 @@ function showNewUserNotification(user) {
             } else if (action === 'view') {
                 closeNewUserNotification();
                 // Switch to pending accounts tab
-                const pendingTab = document.querySelector('[data-tab="pending-accounts"]');
+                const pendingTab = document.querySelector('[data-section="pending-accounts"]');
                 if (pendingTab) {
                     pendingTab.click();
                 } else {
                     // Fallback: try to find by text content
-                    const tabs = document.querySelectorAll('.sidebar-menu-item, .nav-item, [role="tab"]');
-                    tabs.forEach(tab => {
-                        if (tab.textContent.toLowerCase().includes('pending') || tab.textContent.toLowerCase().includes('account')) {
-                            tab.click();
-                        }
-                    });
+                    const navLink = document.querySelector('a[href="#pending-accounts"]');
+                    if (navLink) {
+                        navLink.click();
+                    }
                 }
             }
         });
