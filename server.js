@@ -1341,8 +1341,10 @@ app.get('/api/users/pending', isAuthenticated, isSuperAdmin, (req, res) => {
       firstName: user.firstName,
       middleName: user.middleName,
       lastName: user.lastName,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
       email: user.email,
       role: user.role,
+      department: user.department || 'Pending Assignment',
       status: user.status,
       verified: user.verified,
       createdAt: user.createdAt

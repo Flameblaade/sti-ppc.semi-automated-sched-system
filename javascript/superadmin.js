@@ -1029,13 +1029,14 @@ async function loadAllAcademicData() {
  */
 async function loadPendingAccounts() {
     try {
-        // Debug: Check all users first
-        const allUsers = await fetchData('/api/debug/users');
-        console.log('All users in system:', allUsers);
-        
         const pendingUsers = await fetchData('/api/users/pending');
         console.log('Loaded pending users:', pendingUsers);
         const tbody = document.getElementById('pendingUsersTableBody');
+        
+        if (!tbody) {
+            console.error('Pending users table body not found');
+            return;
+        }
         
         if (!pendingUsers || pendingUsers.length === 0) {
             tbody.innerHTML = `
@@ -1048,10 +1049,10 @@ async function loadPendingAccounts() {
                     </td>
                 </tr>
             `;
+            // Update last known count
+            lastPendingCount = 0;
             return;
         }
-        
-        const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
         
         tbody.innerHTML = pendingUsers.map(user => {
             const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
