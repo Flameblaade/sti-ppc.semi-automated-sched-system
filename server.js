@@ -1018,8 +1018,8 @@ app.post('/api/auth/login', async (req, res) => {
       console.log('Password comparison result:', valid);
       
       if (!valid) {
-        console.log('Password comparison failed - returning 401');
-        return res.status(401).json({ message: 'Invalid credentials' });
+        console.log('Password comparison failed - returning 401 with incorrect password message');
+        return res.status(401).json({ message: 'Incorrect password', incorrectPassword: true });
       }
       console.log('Password comparison successful - continuing...');
     } catch (error) {
