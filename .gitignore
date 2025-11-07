@@ -39,3 +39,4 @@ data/*.txt
 # Documentation and guide files (not needed in repo)
 *.md
 !README.md
+!DEPLOY_INSTRUCTIONS.md
