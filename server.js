@@ -832,36 +832,60 @@ app.post('/api/auth/verify', (req, res) => {
 
     // Check if verification code exists and is valid
     // First check user's stored verification code
-    if (users[userIndex].verificationCode) {
-      // Check if the provided code matches the one in the user record
-      if (String(users[userIndex].verificationCode) !== String(code)) {
-        return res.status(400).json({ message: 'Invalid verification code' });
+    const userCode = users[userIndex].verificationCode;
+    const memoryCode = verificationCodes[email];
+    
+    console.log('=== OTP VERIFICATION DEBUG ===');
+    console.log('Email:', email);
+    console.log('Entered code:', code, '(type:', typeof code, ')');
+    console.log('User stored code:', userCode, '(type:', typeof userCode, ')');
+    console.log('Memory code:', memoryCode ? memoryCode.code : 'none', memoryCode ? '(type: ' + typeof memoryCode.code + ')' : '');
+    
+    let codeMatches = false;
+    
+    // Check user's stored code first
+    if (userCode) {
+      const userCodeStr = String(userCode).trim();
+      const enteredCodeStr = String(code).trim();
+      console.log('Comparing user code:', `"${userCodeStr}"`, '===', `"${enteredCodeStr}"`, 'Result:', userCodeStr === enteredCodeStr);
+      if (userCodeStr === enteredCodeStr) {
+        codeMatches = true;
+        // Check expiration
+        if (users[userIndex].verificationExpires && users[userIndex].verificationExpires < Date.now()) {
+          console.log('❌ User code expired');
+          return res.status(400).json({ message: 'Verification code has expired. Please request a new code.' });
+        }
+        console.log('✅ User code matches!');
       }
-      
-      // Check if code is expired
-      if (users[userIndex].verificationExpires && users[userIndex].verificationExpires < Date.now()) {
-        return res.status(400).json({ message: 'Verification code has expired' });
-      }
-    } else {
-      // Check verificationCodes in memory as fallback
-      const verification = verificationCodes[email];
-      if (!verification) {
-        return res.status(400).json({ message: 'No verification request found. Please request a new code.' });
-      }
-      
-      // Verify code from verificationCodes
-      if (verification.expiry < Date.now()) {
-        delete verificationCodes[email];
-        return res.status(400).json({ message: 'Verification code expired' });
-      }
-
-      if (String(verification.code) !== String(code)) {
-        return res.status(400).json({ message: 'Invalid verification code' });
-      }
-      
-      // Clear the verification code from memory
-      delete verificationCodes[email];
     }
+    
+    // If user code doesn't match, check memory
+    if (!codeMatches && memoryCode) {
+      const memoryCodeStr = String(memoryCode.code).trim();
+      const enteredCodeStr = String(code).trim();
+      console.log('Comparing memory code:', `"${memoryCodeStr}"`, '===', `"${enteredCodeStr}"`, 'Result:', memoryCodeStr === enteredCodeStr);
+      
+      // Check expiration first
+      if (memoryCode.expiry < Date.now()) {
+        console.log('❌ Memory code expired');
+        delete verificationCodes[email];
+        return res.status(400).json({ message: 'Verification code expired. Please request a new code.' });
+      }
+      
+      if (memoryCodeStr === enteredCodeStr) {
+        codeMatches = true;
+        console.log('✅ Memory code matches!');
+        // Clear the verification code from memory
+        delete verificationCodes[email];
+      }
+    }
+    
+    if (!codeMatches) {
+      console.log('❌ Code mismatch - all checks failed');
+      return res.status(400).json({ message: 'Invalid verification code. Please check your email and try again.' });
+    }
+    
+    console.log('✅ Code verified successfully!');
 
     // Mark user as verified - but keep status as 'pending' until superadmin approves
     // Only change status to 'approved' if superadmin has already approved
