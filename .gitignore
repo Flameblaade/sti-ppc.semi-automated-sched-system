@@ -35,3 +35,7 @@ $RECYCLE.BIN/
 # Data files (will be recreated on server)
 data/*.json
 data/*.txt
+
+# Documentation and guide files (not needed in repo)
+*.md
+!README.md
