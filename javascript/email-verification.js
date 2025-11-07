@@ -341,8 +341,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const newVerificationCode = generateVerificationCode();
                 sessionStorage.setItem('verificationCode', newVerificationCode);
                 
-                alert(`Demo mode: New verification code is: ${newVerificationCode}`);
-                
                 // Clear inputs
                 inputs.forEach(input => {
                     input.value = '';
@@ -372,8 +370,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error(data.message || 'Failed to resend verification code');
                 }
                 
-                alert('A new verification code has been sent to your email');
-                
                 // Clear inputs
                 inputs.forEach(input => {
                     input.value = '';
@@ -387,8 +383,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Fallback to demo mode if server is unavailable
                 const newVerificationCode = generateVerificationCode();
                 sessionStorage.setItem('verificationCode', newVerificationCode);
-                
-                alert(`Server unavailable - using demo mode. New verification code: ${newVerificationCode}`);
                 
                 // Clear inputs
                 inputs.forEach(input => {

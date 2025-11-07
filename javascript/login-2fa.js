@@ -137,8 +137,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(data.message || 'Failed to resend code');
             }
             
-            alert('A new verification code has been sent to your email');
-            
             // Clear inputs
             inputs.forEach(input => input.value = '');
             inputs[0].focus();

@@ -112,7 +112,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response.status === 403 && data.requiresVerification) {
                     // Store email for verification page
                     sessionStorage.setItem('pendingUserEmail', email);
-                    alert('Your email is not verified. A new verification code has been sent.');
                     window.location.href = 'email-verification.html';
                     return;
                 }

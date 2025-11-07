@@ -318,9 +318,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log(`${key}: ${value}`);
                     }
                     
-                    // Alert to simulate email being sent
-                    alert('Server not available - using demo mode. Please check your email for the verification code.');
-                    
                     // Redirect to email verification page immediately
                     window.location.href = 'email-verification.html';
                 }
