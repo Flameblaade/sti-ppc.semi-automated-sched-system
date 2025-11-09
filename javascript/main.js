@@ -1321,10 +1321,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Process each class
                 for (const classItem of classesToSchedule) {
                     // Check if this class has both lecture and lab hours - if so, create two separate schedules
-                    const hasLecture = classItem.lectureHours > 0;
-                    const hasLab = classItem.labHours > 0;
+                    const hasLecture = (classItem.lectureHours && parseInt(classItem.lectureHours) > 0) || false;
+                    const hasLab = (classItem.labHours && parseInt(classItem.labHours) > 0) || false;
+                    
+                    console.log('Processing class:', classItem.subject, 'Lecture:', hasLecture, 'Lab:', hasLab, 'lectureHours:', classItem.lectureHours, 'labHours:', classItem.labHours);
                     
                     if (hasLecture && hasLab) {
+                        console.log('Class has both lecture and lab - will create two schedules');
                         // Create two separate class items for scheduling
                         const lectureClass = {
                             ...classItem,
@@ -1359,8 +1362,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         const lectureScheduled = scheduleClass(lectureClass, subjectScheduledTime);
+                        console.log('Lecture scheduled result:', lectureScheduled);
+                        
                         if (lectureScheduled && lectureScheduled !== true && lectureScheduled.success) {
                             scheduledClasses.push(lectureClass);
+                            console.log('Lecture successfully scheduled on', lectureScheduled.day, 'at', lectureScheduled.time);
+                            
                             // Store the scheduled time for the lab to use (same time, different day)
                             subjectScheduledTimes[subjectKey] = { 
                                 day: lectureScheduled.day, 
@@ -1383,15 +1390,21 @@ document.addEventListener('DOMContentLoaded', function() {
                                 excludeDay: lectureScheduled.day // Exclude the day lecture is on
                             });
                             
+                            console.log('Lab scheduled result:', labScheduled);
+                            
                             if (labScheduled && labScheduled !== true && labScheduled.success) {
                                 scheduledClasses.push(labClass);
+                                console.log('Lab successfully scheduled on', labScheduled.day, 'at', labScheduled.time);
                             } else {
+                                console.warn('Lab could not be scheduled');
                                 unscheduledClasses.push(labClass);
                             }
                         } else if (lectureScheduled === true) {
                             // Already scheduled
+                            console.log('Lecture already scheduled');
                             scheduledClasses.push(lectureClass);
                         } else {
+                            console.warn('Lecture could not be scheduled');
                             unscheduledClasses.push(lectureClass);
                             unscheduledClasses.push(labClass);
                         }
