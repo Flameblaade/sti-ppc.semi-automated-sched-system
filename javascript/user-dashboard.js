@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     // Elements
     const userFullNameSpan = document.getElementById('userFullName');
     const userEmailSpan = document.getElementById('userEmail');
@@ -16,6 +16,31 @@ document.addEventListener('DOMContentLoaded', function() {
         // Not logged in, redirect to login
         window.location.href = 'login.html';
         return;
+    }
+
+    // Fetch fresh user data from server to get updated department
+    try {
+        const authToken = localStorage.getItem('authToken');
+        if (authToken && userData.id) {
+            const response = await fetch(`/api/users/${userData.id}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const freshUserData = await response.json();
+                // Update userData with fresh data, especially department
+                userData = { ...userData, ...freshUserData };
+                // Update localStorage with fresh data
+                localStorage.setItem('userData', JSON.stringify(userData));
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching fresh user data:', error);
+        // Continue with localStorage data if fetch fails
     }
 
     // Fallback: try to get names from sessionStorage if missing
@@ -40,7 +65,12 @@ document.addEventListener('DOMContentLoaded', function() {
             userRoleSpan.className = 'role-badge user';
         }
     }
-    if (userDepartmentSpan) userDepartmentSpan.textContent = userData.department || 'None';
+    // Display department - filter out "Pending Assignment" and show actual department or "Not Assigned"
+    let departmentDisplay = 'Not Assigned';
+    if (userData.department && userData.department !== 'Pending Assignment' && userData.department.trim() !== '') {
+        departmentDisplay = userData.department;
+    }
+    if (userDepartmentSpan) userDepartmentSpan.textContent = departmentDisplay;
 
     // Logout
     logoutBtn.addEventListener('click', function() {
