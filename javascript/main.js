@@ -669,57 +669,43 @@ document.addEventListener('DOMContentLoaded', function() {
             const deptOption = departmentSelect.options[departmentSelect.selectedIndex];
             const departmentId = deptOption?.dataset?.deptId || selectedDepartment;
             
-            // For superadmin, get lecture and lab hours from subject data
-            // For others, use default or selected classType
+            // Get subject data to find lecture/lab hours (for ALL users)
             let lectureHours = 0;
             let labHours = 0;
             let classType = 'lecture';
-            
-            if (userRole === 'superadmin') {
-                // Try to get subject data to find lecture/lab hours
-                try {
-                    const subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
-                    const subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
-                    if (subject) {
-                        lectureHours = subject.lectureHours || 0;
-                        labHours = subject.labHours || 0;
-                    }
-                } catch (e) {
-                    console.warn('Could not load subject data for lecture/lab hours');
-                }
-                // Default to lecture if no hours specified
-                if (lectureHours === 0 && labHours === 0) {
-                    lectureHours = 3;
-                }
-            } else {
-                const classTypeRadio = document.querySelector('input[name="classType"]:checked');
-                classType = classTypeRadio ? classTypeRadio.value : 'lecture';
-                const unitLoad = "3"; // Default unit load
-                lectureHours = classType === 'lecture' ? parseFloat(unitLoad) : 0;
-                labHours = classType === 'laboratory' ? parseFloat(unitLoad) : 0;
-            }
-            
-            // Get subject code from subject data
             let subjectCode = '';
             let subjectName = selectedSubjectName;
+            
+            // Try to get subject data to find lecture/lab hours
             try {
                 const subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
                 const subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
                 if (subject) {
                     subjectCode = subject.code || '';
                     subjectName = subject.name || selectedSubjectName;
-                    // Update hours from subject if not already set
-                    if (userRole === 'superadmin') {
-                        lectureHours = subject.lectureHours || 0;
-                        labHours = subject.labHours || 0;
-                    }
+                    lectureHours = subject.lectureHours || 0;
+                    labHours = subject.labHours || 0;
                 }
             } catch (e) {
-                console.warn('Could not load subject data');
+                console.warn('Could not load subject data for lecture/lab hours');
             }
             
-            // For superadmin: create separate classes for lecture and lab if both have hours
-            if (userRole === 'superadmin' && (lectureHours > 0 || labHours > 0)) {
+            // If no hours from subject data, use classType selection (for non-superadmin) or default
+            if (lectureHours === 0 && labHours === 0) {
+                if (userRole !== 'superadmin') {
+                    const classTypeRadio = document.querySelector('input[name="classType"]:checked');
+                    classType = classTypeRadio ? classTypeRadio.value : 'lecture';
+                    const unitLoad = "3"; // Default unit load
+                    lectureHours = classType === 'lecture' ? parseFloat(unitLoad) : 0;
+                    labHours = classType === 'laboratory' ? parseFloat(unitLoad) : 0;
+                } else {
+                    // Default to lecture if no hours specified for superadmin
+                    lectureHours = 3;
+                }
+            }
+            
+            // Create separate classes for lecture and lab if both have hours (for ALL users)
+            if (lectureHours > 0 || labHours > 0) {
                 // Create lecture class if hours > 0
                 if (lectureHours > 0) {
                     const lectureClassData = {
@@ -764,7 +750,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     addClassToList(labClassData);
                 }
             } else {
-                // For non-superadmin or if no hours specified, create single class
+                // If no hours specified, create single class with default
                 const unitLoad = lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3);
                 const classData = {
                     id: 'class-' + Date.now(),

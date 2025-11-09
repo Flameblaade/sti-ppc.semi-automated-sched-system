@@ -1174,6 +1174,64 @@ document.addEventListener('DOMContentLoaded', function() {
         facSel.addEventListener('change', function() {
             // Still load subjects filtered by department (faculty selection doesn't change subject filtering)
             loadSubjects(this.value);
+            // Hide subject details when faculty changes
+            const subjectDetails = document.getElementById('subjectDetails');
+            if (subjectDetails) {
+                subjectDetails.style.display = 'none';
+            }
+        });
+    }
+    
+    // Handle subject change: show subject details (lecture and lab hours)
+    if (subjSel) {
+        subjSel.addEventListener('change', function() {
+            const subjectId = this.value;
+            const subjectDetails = document.getElementById('subjectDetails');
+            const subjectDetailsContent = document.getElementById('subjectDetailsContent');
+            
+            if (!subjectId || !subjectDetails || !subjectDetailsContent) {
+                if (subjectDetails) {
+                    subjectDetails.style.display = 'none';
+                }
+                return;
+            }
+            
+            // Get subject data
+            try {
+                const subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
+                const subject = subjects.find(s => s.id === subjectId || s.code === subjectId);
+                
+                if (subject) {
+                    const lectureHours = subject.lectureHours || 0;
+                    const labHours = subject.labHours || 0;
+                    const units = subject.units || 0;
+                    
+                    let detailsHtml = '';
+                    if (lectureHours > 0 || labHours > 0) {
+                        detailsHtml = '<div style="line-height: 1.6;">';
+                        if (lectureHours > 0) {
+                            detailsHtml += `<div><i class="fas fa-book"></i> <strong>Lecture:</strong> ${lectureHours} hour${lectureHours !== 1 ? 's' : ''}</div>`;
+                        }
+                        if (labHours > 0) {
+                            detailsHtml += `<div><i class="fas fa-flask"></i> <strong>Laboratory:</strong> ${labHours} hour${labHours !== 1 ? 's' : ''}</div>`;
+                        }
+                        if (units > 0) {
+                            detailsHtml += `<div style="margin-top: 5px; font-size: 0.85rem; color: #777;"><i class="fas fa-info"></i> Units: ${units}</div>`;
+                        }
+                        detailsHtml += '</div>';
+                    } else {
+                        detailsHtml = '<div style="color: #777; font-style: italic;">No lecture or laboratory hours specified</div>';
+                    }
+                    
+                    subjectDetailsContent.innerHTML = detailsHtml;
+                    subjectDetails.style.display = 'block';
+                } else {
+                    subjectDetails.style.display = 'none';
+                }
+            } catch (e) {
+                console.warn('Could not load subject details:', e);
+                subjectDetails.style.display = 'none';
+            }
         });
     }
     
