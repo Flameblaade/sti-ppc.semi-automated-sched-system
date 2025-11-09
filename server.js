@@ -2240,6 +2240,23 @@ app.get('/api/subjects', isAuthenticated, (req, res) => {
   }
 });
 
+// Get a single subject by ID
+app.get('/api/subjects/:id', isAuthenticated, (req, res) => {
+  try {
+    const { id } = req.params;
+    const subject = subjects.find(s => s.id === id);
+    
+    if (!subject) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+    
+    res.status(200).json(subject);
+  } catch (error) {
+    console.error('Error fetching subject:', error);
+    res.status(500).json({ error: 'Failed to fetch subject' });
+  }
+});
+
 // Update a subject
 app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   try {

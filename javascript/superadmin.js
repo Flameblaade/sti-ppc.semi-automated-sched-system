@@ -3085,12 +3085,18 @@ function showAddSubjectModal() {
 }
 
 /**
- * Load departments for subject dropdown
+ * Load departments for subject dropdown (handles both add and edit modals)
  */
 async function loadDepartmentsForSubject(modal) {
     try {
         const departments = await fetchData('/api/departments');
-        const departmentSelect = modal.querySelector('#subjectDepartment');
+        // Try both selectors - one for add modal, one for edit modal
+        const departmentSelect = modal.querySelector('#subjectDepartment') || modal.querySelector('#editSubjectDepartment');
+        
+        if (!departmentSelect) {
+            console.error('Department select not found in modal');
+            return Promise.resolve();
+        }
         
         if (departments && departments.length > 0) {
             departmentSelect.innerHTML = '<option value="">Select Department</option>' +
@@ -3098,10 +3104,14 @@ async function loadDepartmentsForSubject(modal) {
         } else {
             departmentSelect.innerHTML = '<option value="">No departments available</option>';
         }
+        return Promise.resolve();
     } catch (error) {
         console.error('Error loading departments for subject:', error);
-        const departmentSelect = modal.querySelector('#subjectDepartment');
-        departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        const departmentSelect = modal.querySelector('#subjectDepartment') || modal.querySelector('#editSubjectDepartment');
+        if (departmentSelect) {
+            departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        }
+        return Promise.resolve();
     }
 }
 
@@ -3318,16 +3328,26 @@ function showEditSubjectModal(subject) {
     
     document.body.appendChild(modal);
     
-    // Load departments into the dropdown
-    loadDepartmentsForSubject(modal);
-    
-    // Set the selected department
-    setTimeout(() => {
-        const departmentSelect = modal.querySelector('#editSubjectDepartment');
-        if (subject.departmentId) {
-            departmentSelect.value = subject.departmentId;
-        }
-    }, 100);
+    // Load departments into the dropdown, then set the selected department
+    loadDepartmentsForSubject(modal).then(() => {
+        // Wait a bit longer to ensure departments are loaded
+        setTimeout(() => {
+            const departmentSelect = modal.querySelector('#editSubjectDepartment');
+            if (departmentSelect && subject.departmentId) {
+                departmentSelect.value = subject.departmentId;
+                // If value didn't set, try to find by matching ID or code
+                if (!departmentSelect.value && subject.departmentId) {
+                    const options = departmentSelect.querySelectorAll('option');
+                    for (const option of options) {
+                        if (option.value === subject.departmentId) {
+                            option.selected = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }, 300);
+    });
     
     // Handle save button
     document.getElementById('saveSubjectChanges').addEventListener('click', async () => {

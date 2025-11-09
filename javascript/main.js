@@ -706,10 +706,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Create separate classes for lecture and lab if both have hours (for ALL users)
             if (lectureHours > 0 || labHours > 0) {
+                const baseTimestamp = Date.now();
+                let classCounter = 0;
+                
                 // Create lecture class if hours > 0
                 if (lectureHours > 0) {
                     const lectureClassData = {
-                        id: 'class-' + Date.now() + '-lec',
+                        id: 'class-' + baseTimestamp + '-' + (classCounter++) + '-lec',
                         subject: subjectName,
                         subjectCode: subjectCode,
                         subjectId: selectedSubjectId,
@@ -731,7 +734,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Create lab class if hours > 0
                 if (labHours > 0) {
                     const labClassData = {
-                        id: 'class-' + Date.now() + '-lab',
+                        id: 'class-' + baseTimestamp + '-' + (classCounter++) + '-lab',
                         subject: subjectName,
                         subjectCode: subjectCode,
                         subjectId: selectedSubjectId,
