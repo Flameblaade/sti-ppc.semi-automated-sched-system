@@ -306,72 +306,55 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const resendLink = document.getElementById('resend-link');
         
+        // Check if cooldown is active
+        if (resendLink.style.pointerEvents === 'none' && resendLink.textContent.includes('(')) {
+            return; // Cooldown is active, don't allow resend
+        }
+        
         // Disable the resend link temporarily
         resendLink.textContent = 'Sending...';
         resendLink.style.pointerEvents = 'none';
         
         try {
-            // Check if we're in demo mode (no server available)
-            if (sessionStorage.getItem('verificationCode')) {
-                // Generate a new verification code for demo mode
-                const newVerificationCode = generateVerificationCode();
-                sessionStorage.setItem('verificationCode', newVerificationCode);
-                
-                // Clear inputs
-                inputs.forEach(input => {
-                    input.value = '';
-                });
-                
-                // Focus the first input
-                inputs[0].focus();
-                return;
+            // Always try to call the server first to resend the verification email
+            const response = await fetch('/api/auth/resend-verification', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: pendingUserEmail
+                })
+            });
+            
+            let data;
+            try {
+                const text = await response.text();
+                data = text ? JSON.parse(text) : {};
+            } catch (parseError) {
+                console.error('Failed to parse response:', parseError);
+                throw new Error('Server returned invalid response. Please try again.');
             }
             
-            // If not in demo mode, try sending request to server
-            try {
-                // Send resend verification request
-                const response = await fetch('/api/auth/resend-verification', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        email: pendingUserEmail
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.message || 'Failed to resend verification code');
-                }
-                
-                // Clear inputs
-                inputs.forEach(input => {
-                    input.value = '';
-                });
-                
-                // Focus the first input
-                inputs[0].focus();
-            } catch (serverError) {
-                console.error('Server error during resend:', serverError);
-                
-                // Fallback to demo mode if server is unavailable
-                const newVerificationCode = generateVerificationCode();
-                sessionStorage.setItem('verificationCode', newVerificationCode);
-                
-                // Clear inputs
-                inputs.forEach(input => {
-                    input.value = '';
-                });
-                
-                // Focus the first input
-                inputs[0].focus();
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to resend verification code');
             }
+            
+            // Success - show success message
+            alert('Verification code has been resent to your email. Please check your inbox.');
+            
+            // Clear inputs
+            inputs.forEach(input => {
+                input.value = '';
+            });
+            
+            // Focus the first input
+            inputs[0].focus();
         } catch (error) {
-            alert(error.message);
+            console.error('Error resending verification code:', error);
+            alert(error.message || 'Failed to resend verification code. Please try again later.');
         } finally {
-            // Set a cooldown timer for resending (1 minute)
+            // Set a cooldown timer for resending (60 seconds)
             resendLink.textContent = 'Resend code (60s)';
             resendLink.style.pointerEvents = 'none';
             

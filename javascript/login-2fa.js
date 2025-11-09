@@ -119,6 +119,16 @@ document.addEventListener('DOMContentLoaded', function() {
     resendLink.addEventListener('click', async function(e) {
         e.preventDefault();
         
+        // Check if cooldown is active
+        if (resendLink.style.pointerEvents === 'none' && resendLink.textContent.includes('(')) {
+            return; // Cooldown is active, don't allow resend
+        }
+        
+        // Disable the resend link temporarily
+        const originalText = resendLink.textContent;
+        resendLink.textContent = 'Sending...';
+        resendLink.style.pointerEvents = 'none';
+        
         try {
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
@@ -127,22 +137,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     email: userEmail,
-                    password: sessionStorage.getItem('loginUserPassword') // This would need to be stored during login
+                    password: sessionStorage.getItem('loginUserPassword')
                 })
             });
             
-            const data = await response.json();
+            let data;
+            try {
+                const text = await response.text();
+                data = text ? JSON.parse(text) : {};
+            } catch (parseError) {
+                console.error('Failed to parse response:', parseError);
+                throw new Error('Server returned invalid response. Please try again.');
+            }
             
             if (!response.ok) {
                 throw new Error(data.message || 'Failed to resend code');
             }
+            
+            // Success - show success message
+            alert('Verification code has been resent to your email. Please check your inbox.');
             
             // Clear inputs
             inputs.forEach(input => input.value = '');
             inputs[0].focus();
             
         } catch (error) {
-            alert(error.message);
+            console.error('Error resending code:', error);
+            alert(error.message || 'Failed to resend code. Please try again later.');
+        } finally {
+            // Set a cooldown timer for resending (60 seconds)
+            resendLink.textContent = 'Resend code (60s)';
+            resendLink.style.pointerEvents = 'none';
+            
+            let cooldown = 60;
+            const cooldownTimer = setInterval(() => {
+                cooldown--;
+                resendLink.textContent = `Resend code (${cooldown}s)`;
+                
+                if (cooldown <= 0) {
+                    clearInterval(cooldownTimer);
+                    resendLink.textContent = 'Resend code';
+                    resendLink.style.pointerEvents = 'auto';
+                }
+            }, 1000);
         }
     });
 }); 
