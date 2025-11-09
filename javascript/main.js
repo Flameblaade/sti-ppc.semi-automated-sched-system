@@ -618,6 +618,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Hide classtype field for superadmin
+    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    const userRole = userData.role || 'user';
+    const classTypeGroup = document.getElementById('classTypeGroup');
+    if (classTypeGroup && userRole === 'superadmin') {
+        classTypeGroup.style.display = 'none';
+    }
+    
     // Prevent form submission
     const scheduleForm = document.getElementById('scheduleForm');
     if (scheduleForm) {
@@ -661,38 +669,104 @@ document.addEventListener('DOMContentLoaded', function() {
             const deptOption = departmentSelect.options[departmentSelect.selectedIndex];
             const departmentId = deptOption?.dataset?.deptId || selectedDepartment;
             
-            const unitLoad = "3"; // Default unit load - can be retrieved from subject data if available
-            const classTypeRadio = document.querySelector('input[name="classType"]:checked');
-            const classType = classTypeRadio ? classTypeRadio.value : 'lecture';
+            // For superadmin, get lecture and lab hours from subject data
+            // For others, use default or selected classType
+            let lectureHours = 0;
+            let labHours = 0;
+            let classType = 'lecture';
             
-            // Create class data object
-            const classData = {
-                id: 'class-' + Date.now(),
-                subject: selectedSubjectName,
-                subjectId: selectedSubjectId,
-                unitLoad: parseFloat(unitLoad),
-                classType: classType,
-                course: selectedProgram || selectedDepartment,
-                courseId: programSelect?.value || selectedDepartment,
-                faculty: selectedFacultyName,
-                facultyId: selectedFacultyId,
-                department: selectedDepartment, // Department code
-                departmentId: departmentId // Department ID for exact matching
-            };
+            if (userRole === 'superadmin') {
+                // Try to get subject data to find lecture/lab hours
+                try {
+                    const subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
+                    const subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
+                    if (subject) {
+                        lectureHours = subject.lectureHours || 0;
+                        labHours = subject.labHours || 0;
+                    }
+                } catch (e) {
+                    console.warn('Could not load subject data for lecture/lab hours');
+                }
+                // Default to lecture if no hours specified
+                if (lectureHours === 0 && labHours === 0) {
+                    lectureHours = 3;
+                }
+            } else {
+                const classTypeRadio = document.querySelector('input[name="classType"]:checked');
+                classType = classTypeRadio ? classTypeRadio.value : 'lecture';
+                const unitLoad = "3"; // Default unit load
+                lectureHours = classType === 'lecture' ? parseFloat(unitLoad) : 0;
+                labHours = classType === 'laboratory' ? parseFloat(unitLoad) : 0;
+            }
             
-            // Add to our classes collection
-            allClasses.push(classData);
+            // For superadmin: create separate classes for lecture and lab if both have hours
+            if (userRole === 'superadmin' && (lectureHours > 0 || labHours > 0)) {
+                // Create lecture class if hours > 0
+                if (lectureHours > 0) {
+                    const lectureClassData = {
+                        id: 'class-' + Date.now() + '-lec',
+                        subject: selectedSubjectName,
+                        subjectId: selectedSubjectId,
+                        unitLoad: lectureHours,
+                        classType: 'lecture',
+                        lectureHours: lectureHours,
+                        labHours: 0,
+                        course: selectedProgram || selectedDepartment,
+                        courseId: programSelect?.value || selectedDepartment,
+                        faculty: selectedFacultyName,
+                        facultyId: selectedFacultyId,
+                        department: selectedDepartment,
+                        departmentId: departmentId
+                    };
+                    allClasses.push(lectureClassData);
+                    addClassToList(lectureClassData);
+                }
+                
+                // Create lab class if hours > 0
+                if (labHours > 0) {
+                    const labClassData = {
+                        id: 'class-' + Date.now() + '-lab',
+                        subject: selectedSubjectName,
+                        subjectId: selectedSubjectId,
+                        unitLoad: labHours,
+                        classType: 'laboratory',
+                        lectureHours: 0,
+                        labHours: labHours,
+                        course: selectedProgram || selectedDepartment,
+                        courseId: programSelect?.value || selectedDepartment,
+                        faculty: selectedFacultyName,
+                        facultyId: selectedFacultyId,
+                        department: selectedDepartment,
+                        departmentId: departmentId
+                    };
+                    allClasses.push(labClassData);
+                    addClassToList(labClassData);
+                }
+            } else {
+                // For non-superadmin or if no hours specified, create single class
+                const unitLoad = lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3);
+                const classData = {
+                    id: 'class-' + Date.now(),
+                    subject: selectedSubjectName,
+                    subjectId: selectedSubjectId,
+                    unitLoad: unitLoad,
+                    classType: classType,
+                    course: selectedProgram || selectedDepartment,
+                    courseId: programSelect?.value || selectedDepartment,
+                    faculty: selectedFacultyName,
+                    facultyId: selectedFacultyId,
+                    department: selectedDepartment,
+                    departmentId: departmentId
+                };
+                allClasses.push(classData);
+                addClassToList(classData);
+            }
+            
             window.allClasses = allClasses;
-            console.log('Class added to allClasses array:', classData);
-            console.log('Total classes now:', allClasses.length);
-            
-            // Add to UI list
-            addClassToList(classData);
-            console.log('Class added to UI list');
+            console.log('Classes added to allClasses array. Total:', allClasses.length);
             
             // Update classes count badge
             updateClassesCountBadge();
-            console.log('Classes count badge updated');
             
             // Reset form fields but keep department selection
             resetFormFieldsPartial();
@@ -1202,6 +1276,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Create a deep copy of classes to schedule
                 const classesToSchedule = JSON.parse(JSON.stringify(allClasses));
                 
+                // Group classes by subject for same-time scheduling
+                const classesBySubject = {};
+                classesToSchedule.forEach(classItem => {
+                    const subjectKey = classItem.subjectId || classItem.subject;
+                    if (!classesBySubject[subjectKey]) {
+                        classesBySubject[subjectKey] = [];
+                    }
+                    classesBySubject[subjectKey].push(classItem);
+                });
+                
+                // Track scheduled times by subject
+                const subjectScheduledTimes = {}; // subjectKey -> { day, time }
+                
                 // Shuffle to randomize placement order
                 shuffleArray(classesToSchedule);
                 
@@ -1221,9 +1308,38 @@ document.addEventListener('DOMContentLoaded', function() {
                         statusElement.textContent = `Scheduling class ${classesProcessed} of ${totalClasses}: ${classItem.subject}`;
                     }
                     
+                    // Get subject key for same-time scheduling
+                    const subjectKey = classItem.subjectId || classItem.subject;
+                    const subjectScheduledTime = subjectScheduledTimes[subjectKey];
+                    
                     // Try to schedule this class
-                    if (scheduleClass(classItem)) {
+                    const scheduled = scheduleClass(classItem, subjectScheduledTime);
+                    if (scheduled) {
                         scheduledClasses.push(classItem);
+                        
+                        // If this is the first class for this subject, store the scheduled time
+                        if (!subjectScheduledTimes[subjectKey] && scheduled !== true && scheduled.success) {
+                            subjectScheduledTimes[subjectKey] = { 
+                                day: scheduled.day, 
+                                time: scheduled.time 
+                            };
+                        } else if (scheduled === true && !subjectScheduledTimes[subjectKey]) {
+                            // Class was already scheduled, try to get its time from calendar
+                            const calendar = window.calendar;
+                            if (calendar) {
+                                const events = calendar.getEvents();
+                                const scheduledEvent = events.find(e => 
+                                    e.extendedProps?.originalClassId === classItem.id
+                                );
+                                if (scheduledEvent && scheduledEvent.start) {
+                                    const eventDate = new Date(scheduledEvent.start);
+                                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                    const dayName = dayNames[eventDate.getDay()];
+                                    const timeStr = eventDate.toTimeString().substring(0, 5);
+                                    subjectScheduledTimes[subjectKey] = { day: dayName, time: timeStr };
+                                }
+                            }
+                        }
                     } else {
                         unscheduledClasses.push(classItem);
                     }
@@ -1513,7 +1629,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Schedule a single class
-    function scheduleClass(classItem) {
+    function scheduleClass(classItem, subjectScheduledTime = null) {
         const calendar = window.calendar;
         if (!calendar) return false;
         
@@ -1529,11 +1645,61 @@ document.addEventListener('DOMContentLoaded', function() {
             return true; // Return true since class is already scheduled
         }
         
-        // Get all possible days and time slots and shuffle them both for better distribution
-        const possibleDays = [...days];
-        shuffleArray(possibleDays); // Shuffle the days array so we don't always start with Monday
-        const possibleTimes = timeSlots.slice();
-        shuffleArray(possibleTimes); // Use our proper shuffle function instead of sort
+        // Check if this is a strand - limit to 4 days per week (excluding Saturday)
+        const isStrand = classItem.courseId && (() => {
+            try {
+                const courses = JSON.parse(localStorage.getItem('courses') || '[]');
+                const strands = JSON.parse(localStorage.getItem('strands') || '[]');
+                const allPrograms = [...courses, ...strands];
+                const program = allPrograms.find(p => p.id === classItem.courseId || p.code === classItem.courseId);
+                return program && program.type === 'strand';
+            } catch (e) {
+                return false;
+            }
+        })();
+        
+        // Get possible days - limit strands to 4 days (Mon-Fri, excluding Saturday)
+        let possibleDays = [...days];
+        if (isStrand) {
+            // For strands, only use Monday-Friday (exclude Saturday)
+            possibleDays = possibleDays.filter(d => d.id !== 'Saturday');
+            // Randomly select 4 days from Mon-Fri
+            shuffleArray(possibleDays);
+            possibleDays = possibleDays.slice(0, 4);
+        } else {
+            // For programs, use all days
+            shuffleArray(possibleDays);
+        }
+        
+        // Get time slots - if subject already has a scheduled time, prioritize that time and day
+        let possibleTimes = timeSlots.slice();
+        let targetDay = null;
+        let targetTime = null;
+        let hasScheduledTime = false;
+        
+        if (subjectScheduledTime && subjectScheduledTime.day && subjectScheduledTime.time) {
+            // Use the same day and time as the first scheduled class for this subject
+            targetDay = possibleDays.find(d => d.id === subjectScheduledTime.day);
+            targetTime = subjectScheduledTime.time;
+            hasScheduledTime = true;
+            // Prioritize the scheduled day and time, but keep other options as fallback
+            if (targetDay) {
+                // Move target day to front
+                const dayIndex = possibleDays.indexOf(targetDay);
+                if (dayIndex > -1) {
+                    possibleDays.splice(dayIndex, 1);
+                    possibleDays.unshift(targetDay);
+                }
+                // Move target time to front
+                const timeIndex = possibleTimes.indexOf(targetTime);
+                if (timeIndex > -1) {
+                    possibleTimes.splice(timeIndex, 1);
+                    possibleTimes.unshift(targetTime);
+                }
+            }
+        } else {
+            shuffleArray(possibleTimes);
+        }
         
         // Try each combination until we find a valid placement
         for (const day of possibleDays) {
@@ -1543,8 +1709,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const durationMinutes = durationHours * 60;
                 const endTime = addMinutes(startTime, durationMinutes);
                 
-                // Skip if end time would be after 9:00 PM
-                if (endTime > '21:00') {
+                // Skip if end time would be after 7:30 PM (19:30)
+                const [endHour, endMin] = endTime.split(':').map(Number);
+                if (endHour > 19 || (endHour === 19 && endMin > 30)) {
                     continue;
                 }
                 
@@ -1756,9 +1923,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         }, 100);
                         roomUsageCount[room.id] += 1;  // Track room usage
                         
-                        // Return immediately after successfully adding event
-                        // Don't auto-save here - save once at the end of generation
-                        return true;
+                        // Return success with scheduled time info for same-subject scheduling
+                        return { 
+                            success: true, 
+                            day: day.id, 
+                            time: startTime
+                        };
                     }
                 }
             }
@@ -2078,13 +2248,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let currentHour = 7;
         let currentMinute = 0;
         
-        while (currentHour < 22) {
+        // Generate slots from 7:00 AM to 7:30 PM (19:30) in 15-minute increments
+        while (currentHour < 19 || (currentHour === 19 && currentMinute <= 30)) {
             const hourString = currentHour.toString().padStart(2, '0');
             const minuteString = currentMinute.toString().padStart(2, '0');
             slots.push(`${hourString}:${minuteString}`);
             
-            // Advance by 30 minutes
-            currentMinute += 30;
+            // Advance by 15 minutes
+            currentMinute += 15;
             if (currentMinute >= 60) {
                 currentHour++;
                 currentMinute = 0;

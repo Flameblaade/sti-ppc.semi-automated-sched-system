@@ -2240,6 +2240,65 @@ app.get('/api/subjects', isAuthenticated, (req, res) => {
   }
 });
 
+// Update a subject
+app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, code, departmentId, units, lectureHours, labHours } = req.body;
+    
+    // Find the subject
+    const subjectIndex = subjects.findIndex(subject => subject.id === id);
+    if (subjectIndex === -1) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+    
+    // Validate input
+    if (!name || !code || !departmentId) {
+      return res.status(400).json({ error: 'Subject name, code, and department are required' });
+    }
+    
+    // Check if department exists
+    const department = departments.find(dept => dept.id === departmentId);
+    if (!department) {
+      return res.status(400).json({ error: 'Department not found' });
+    }
+    
+    // Check if another subject with same code exists
+    const existingSubject = subjects.find((subj, index) => 
+      index !== subjectIndex && subj.code.toLowerCase() === code.toLowerCase()
+    );
+    
+    if (existingSubject) {
+      return res.status(409).json({ error: 'A subject with this code already exists' });
+    }
+    
+    // Update subject
+    subjects[subjectIndex] = {
+      ...subjects[subjectIndex],
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      departmentId: departmentId,
+      department: department.name,
+      units: parseInt(units) || subjects[subjectIndex].units || 1,
+      lectureHours: parseInt(lectureHours) || 0,
+      labHours: parseInt(labHours) || 0,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save the changes to file
+    saveData();
+    
+    res.status(200).json({
+      message: 'Subject updated successfully',
+      subject: subjects[subjectIndex]
+    });
+    
+  } catch (error) {
+    console.error('Error updating subject:', error);
+    res.status(500).json({ error: 'Failed to update subject' });
+  }
+});
+
 // Delete a subject
 app.delete('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   try {
@@ -2275,8 +2334,8 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   console.log('POST /api/subjects endpoint called');
   console.log('Request body:', req.body);
   try {
-    const { name, code, departmentId, units = 1 } = req.body;
-    console.log('Extracted data:', { name, code, departmentId, units });
+    const { name, code, departmentId, units = 1, lectureHours = 0, labHours = 0 } = req.body;
+    console.log('Extracted data:', { name, code, departmentId, units, lectureHours, labHours });
     
     // Validate input
     if (!name || !code || !departmentId) {
@@ -2306,6 +2365,8 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
       departmentId: departmentId,
       department: department.name,
       units: parseInt(units) || 1,
+      lectureHours: parseInt(lectureHours) || 0,
+      labHours: parseInt(labHours) || 0,
       createdAt: new Date().toISOString(),
       createdBy: req.user.id
     };

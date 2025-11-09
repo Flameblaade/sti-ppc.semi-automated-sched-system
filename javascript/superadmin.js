@@ -3005,6 +3005,28 @@ function showAddSubjectModal() {
                             ">
                         </div>
                     </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div>
+                            <label for="subjectLectureHours" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Lecture Hours</label>
+                            <input type="number" id="subjectLectureHours" min="0" max="10" value="0" style="
+                                width: 100%;
+                                padding: 8px 12px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                font-size: 14px;
+                            " placeholder="e.g., 2">
+                        </div>
+                        <div>
+                            <label for="subjectLabHours" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Laboratory Hours</label>
+                            <input type="number" id="subjectLabHours" min="0" max="10" value="0" style="
+                                width: 100%;
+                                padding: 8px 12px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                font-size: 14px;
+                            " placeholder="e.g., 3">
+                        </div>
+                    </div>
                 </form>
             </div>
             <div style="
@@ -3093,6 +3115,8 @@ async function saveSubject(modal) {
         const nameInput = modal.querySelector('#subjectName');
         const departmentInput = modal.querySelector('#subjectDepartment');
         const unitsInput = modal.querySelector('#subjectUnits');
+        const lectureHoursInput = modal.querySelector('#subjectLectureHours');
+        const labHoursInput = modal.querySelector('#subjectLabHours');
         
         if (!codeInput || !nameInput || !departmentInput || !unitsInput) {
             showNotification('Form elements not found', 'error');
@@ -3103,6 +3127,8 @@ async function saveSubject(modal) {
         const name = nameInput.value.trim();
         const departmentId = departmentInput.value;
         const units = parseInt(unitsInput.value);
+        const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
+        const labHours = labHoursInput ? parseInt(labHoursInput.value) || 0 : 0;
         
         if (!code || !name || !departmentId || !units) {
             showNotification('Please fill in all required fields', 'error');
@@ -3119,7 +3145,9 @@ async function saveSubject(modal) {
                 code,
                 name,
                 departmentId,
-                units
+                units,
+                lectureHours,
+                labHours
             })
         });
         
@@ -3237,6 +3265,28 @@ function showEditSubjectModal(subject) {
                             ">
                         </div>
                     </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div>
+                            <label for="editSubjectLectureHours" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Lecture Hours</label>
+                            <input type="number" id="editSubjectLectureHours" min="0" max="10" value="${subject.lectureHours || 0}" style="
+                                width: 100%;
+                                padding: 8px 12px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                font-size: 14px;
+                            " placeholder="e.g., 2">
+                        </div>
+                        <div>
+                            <label for="editSubjectLabHours" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Laboratory Hours</label>
+                            <input type="number" id="editSubjectLabHours" min="0" max="10" value="${subject.labHours || 0}" style="
+                                width: 100%;
+                                padding: 8px 12px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                font-size: 14px;
+                            " placeholder="e.g., 3">
+                        </div>
+                    </div>
                 </form>
             </div>
             <div style="
@@ -3312,6 +3362,8 @@ async function saveSubjectChanges(subjectId, modal) {
         const nameInput = modal.querySelector('#editSubjectName');
         const departmentInput = modal.querySelector('#editSubjectDepartment');
         const unitsInput = modal.querySelector('#editSubjectUnits');
+        const lectureHoursInput = modal.querySelector('#editSubjectLectureHours');
+        const labHoursInput = modal.querySelector('#editSubjectLabHours');
         
         if (!codeInput || !nameInput || !departmentInput || !unitsInput) {
             showNotification('Form elements not found', 'error');
@@ -3322,6 +3374,8 @@ async function saveSubjectChanges(subjectId, modal) {
         const name = nameInput.value.trim();
         const departmentId = departmentInput.value;
         const units = parseInt(unitsInput.value);
+        const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
+        const labHours = labHoursInput ? parseInt(labHoursInput.value) || 0 : 0;
         
         if (!code || !name || !departmentId || !units) {
             showNotification('Please fill in all required fields', 'error');
@@ -3338,7 +3392,9 @@ async function saveSubjectChanges(subjectId, modal) {
                 code,
                 name,
                 departmentId,
-                units
+                units,
+                lectureHours,
+                labHours
             })
         });
         
