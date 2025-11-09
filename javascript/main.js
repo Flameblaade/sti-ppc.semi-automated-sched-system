@@ -699,13 +699,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 labHours = classType === 'laboratory' ? parseFloat(unitLoad) : 0;
             }
             
+            // Get subject code from subject data
+            let subjectCode = '';
+            let subjectName = selectedSubjectName;
+            try {
+                const subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
+                const subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
+                if (subject) {
+                    subjectCode = subject.code || '';
+                    subjectName = subject.name || selectedSubjectName;
+                    // Update hours from subject if not already set
+                    if (userRole === 'superadmin') {
+                        lectureHours = subject.lectureHours || 0;
+                        labHours = subject.labHours || 0;
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not load subject data');
+            }
+            
             // For superadmin: create separate classes for lecture and lab if both have hours
             if (userRole === 'superadmin' && (lectureHours > 0 || labHours > 0)) {
                 // Create lecture class if hours > 0
                 if (lectureHours > 0) {
                     const lectureClassData = {
                         id: 'class-' + Date.now() + '-lec',
-                        subject: selectedSubjectName,
+                        subject: subjectName,
+                        subjectCode: subjectCode,
                         subjectId: selectedSubjectId,
                         unitLoad: lectureHours,
                         classType: 'lecture',
@@ -726,7 +746,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (labHours > 0) {
                     const labClassData = {
                         id: 'class-' + Date.now() + '-lab',
-                        subject: selectedSubjectName,
+                        subject: subjectName,
+                        subjectCode: subjectCode,
                         subjectId: selectedSubjectId,
                         unitLoad: labHours,
                         classType: 'laboratory',
@@ -747,10 +768,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const unitLoad = lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3);
                 const classData = {
                     id: 'class-' + Date.now(),
-                    subject: selectedSubjectName,
+                    subject: subjectName,
+                    subjectCode: subjectCode,
                     subjectId: selectedSubjectId,
                     unitLoad: unitLoad,
                     classType: classType,
+                    lectureHours: lectureHours,
+                    labHours: labHours,
                     course: selectedProgram || selectedDepartment,
                     courseId: programSelect?.value || selectedDepartment,
                     faculty: selectedFacultyName,
@@ -1015,11 +1039,28 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn('Could not compute department color for class item', e);
         }
         
+        // Format subject display: code and name
+        const subjectDisplay = classData.subjectCode 
+            ? `${classData.subjectCode} - ${classData.subject}`
+            : classData.subject;
+        
+        // Format type display with hours
+        let typeDisplay = '';
+        if (classData.lectureHours > 0 && classData.labHours > 0) {
+            typeDisplay = `Lecture (${classData.lectureHours}h) & Lab (${classData.labHours}h)`;
+        } else if (classData.lectureHours > 0) {
+            typeDisplay = `Lecture (${classData.lectureHours}h)`;
+        } else if (classData.labHours > 0) {
+            typeDisplay = `Laboratory (${classData.labHours}h)`;
+        } else {
+            typeDisplay = `${classData.classType} (${classData.unitLoad}h)`;
+        }
+        
         classItem.innerHTML = `
-            <h3>${classData.subject}</h3>
-            <div class="class-info"><i class="fas fa-graduation-cap"></i> ${classData.course}</div>
+            <h3>${subjectDisplay}</h3>
+            <div class="class-info"><i class="fas fa-building"></i> ${classData.department || classData.course}</div>
             <div class="class-info"><i class="fas fa-chalkboard-teacher"></i> ${classData.faculty}</div>
-            <div class="class-info"><i class="fas fa-clock"></i> ${classData.unitLoad} hours (${classData.classType})</div>
+            <div class="class-info"><i class="fas fa-book"></i> ${typeDisplay}</div>
             <div class="class-actions">
                 <button class="remove-class-btn" data-id="${classData.id}"><i class="fas fa-trash-alt"></i> Remove</button>
             </div>
