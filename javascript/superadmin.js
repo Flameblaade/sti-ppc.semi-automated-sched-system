@@ -992,8 +992,11 @@ async function loadDashboardData() {
         const courses = await fetchData('/api/courses');
         const rooms = await fetchData('/api/rooms');
         
+        // Filter out hardcoded superadmin account from count
+        const filteredUsers = users.filter(user => user.email !== 'superadmin@school.edu');
+        
         // Update count displays
-        document.getElementById('totalUsersCount').textContent = users.length || 0;
+        document.getElementById('totalUsersCount').textContent = filteredUsers.length || 0;
         document.getElementById('totalDepartmentsCount').textContent = departments.length || 0;
         document.getElementById('totalFacultyCount').textContent = faculty.length || 0;
         document.getElementById('totalSubjectsCount').textContent = subjects.length || 0;
@@ -1031,6 +1034,10 @@ async function loadPendingAccounts() {
     try {
         const pendingUsers = await fetchData('/api/users/pending');
         console.log('Loaded pending users:', pendingUsers);
+        
+        // Filter out hardcoded superadmin account
+        const filteredPendingUsers = pendingUsers.filter(user => user.email !== 'superadmin@school.edu');
+        
         const tbody = document.getElementById('pendingUsersTableBody');
         
         if (!tbody) {
@@ -1038,7 +1045,7 @@ async function loadPendingAccounts() {
             return;
         }
         
-        if (!pendingUsers || pendingUsers.length === 0) {
+        if (!filteredPendingUsers || filteredPendingUsers.length === 0) {
             tbody.innerHTML = `
                 <tr class="empty-row">
                     <td colspan="6">
@@ -1054,7 +1061,7 @@ async function loadPendingAccounts() {
             return;
         }
         
-        tbody.innerHTML = pendingUsers.map(user => {
+        tbody.innerHTML = filteredPendingUsers.map(user => {
             const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
             return `
             <tr>
@@ -1076,7 +1083,7 @@ async function loadPendingAccounts() {
         }).join('');
         
         // Update last known count
-        lastPendingCount = pendingUsers.length;
+        lastPendingCount = filteredPendingUsers.length;
     } catch (error) {
         console.error('Error loading pending accounts:', error);
         showNotification('Failed to load pending accounts', 'error');
@@ -1089,8 +1096,12 @@ async function loadPendingAccounts() {
 async function loadUsers() {
     try {
         const allUsers = await fetchData('/api/users');
-        // Filter to only show approved or denied users (not pending)
+        // Filter to only show approved or denied users (not pending) and exclude hardcoded superadmin
         const users = allUsers.filter(user => {
+            // Exclude hardcoded superadmin account
+            if (user.email === 'superadmin@school.edu') {
+                return false;
+            }
             const status = (user.status || '').toLowerCase();
             return status === 'approved' || status === 'denied' || status === 'rejected';
         });

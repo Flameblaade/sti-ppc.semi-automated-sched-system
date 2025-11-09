@@ -19,7 +19,6 @@ const STATIC_ASSETS = [
   '/css/modals.css',
   // JavaScript files are NOT pre-cached - they use network-first strategy
   // This ensures code changes work immediately without hard refresh
-  '/assets/sti.png',
   '/manifest.json'
   // External resources (CDN) will be handled by browser cache, not service worker cache
 ];

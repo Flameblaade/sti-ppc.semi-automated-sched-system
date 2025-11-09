@@ -1332,7 +1332,12 @@ app.get('/api/users/pending', isAuthenticated, isSuperAdmin, (req, res) => {
     
     // Filter users with 'pending' status AND verified (OTP confirmed)
     // Only show users who have completed OTP verification
+    // Exclude hardcoded superadmin account
     const pendingUsers = users.filter(user => {
+      // Exclude hardcoded superadmin account
+      if (user.email === 'superadmin@school.edu') {
+        return false;
+      }
       const isPending = user.status === 'pending';
       const isVerified = user.verified === true || user.emailVerified === true;
       const shouldShow = isPending && isVerified;
@@ -1370,18 +1375,20 @@ app.get('/api/users', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   let usersList;
   
   if (req.user.role === 'superadmin') {
-    // Superadmin sees all users with their status
-    usersList = users.map(user => ({
-      id: user.id,
-      firstName: user.firstName,
-      middleName: user.middleName,
-      lastName: user.lastName,
-      email: user.email,
-      role: user.role,
-      department: user.department,
-      status: user.status,
-      createdAt: user.createdAt
-    }));
+    // Superadmin sees all users with their status, but exclude hardcoded superadmin account
+    usersList = users
+      .filter(user => user.email !== 'superadmin@school.edu')
+      .map(user => ({
+        id: user.id,
+        firstName: user.firstName,
+        middleName: user.middleName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        status: user.status,
+        createdAt: user.createdAt
+      }));
   } else {
     // Admin sees only approved users in their department
     usersList = users
