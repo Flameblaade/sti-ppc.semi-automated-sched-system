@@ -745,84 +745,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Debug logging
-            console.log('Class creation - Lecture Hours:', lectureHours, 'Lab Hours:', labHours);
-            
-            // Create separate classes for lecture and lab if both have hours (for ALL users)
-            if (lectureHours > 0 || labHours > 0) {
-                const baseTimestamp = Date.now();
-                let classCounter = 0;
-                
-                console.log('Creating separate classes - Lecture:', lectureHours > 0, 'Lab:', labHours > 0);
-                
-                // Create lecture class if hours > 0
-                if (lectureHours > 0) {
-                    const lectureClassData = {
-                        id: 'class-' + baseTimestamp + '-' + (classCounter++) + '-lec',
-                        subject: subjectName,
-                        subjectCode: subjectCode,
-                        subjectId: selectedSubjectId,
-                        unitLoad: lectureHours,
-                        classType: 'lecture',
-                        lectureHours: lectureHours,
-                        labHours: 0,
-                        course: selectedProgram || selectedDepartment,
-                        courseId: programSelect?.value || selectedDepartment,
-                        faculty: selectedFacultyName,
-                        facultyId: selectedFacultyId,
-                        department: selectedDepartment,
-                        departmentId: departmentId
-                    };
-                    allClasses.push(lectureClassData);
-                    addClassToList(lectureClassData);
-                    console.log('Lecture class created and added:', lectureClassData.id);
-                }
-                
-                // Create lab class if hours > 0
-                if (labHours > 0) {
-                    const labClassData = {
-                        id: 'class-' + baseTimestamp + '-' + (classCounter++) + '-lab',
-                        subject: subjectName,
-                        subjectCode: subjectCode,
-                        subjectId: selectedSubjectId,
-                        unitLoad: labHours,
-                        classType: 'laboratory',
-                        lectureHours: 0,
-                        labHours: labHours,
-                        course: selectedProgram || selectedDepartment,
-                        courseId: programSelect?.value || selectedDepartment,
-                        faculty: selectedFacultyName,
-                        facultyId: selectedFacultyId,
-                        department: selectedDepartment,
-                        departmentId: departmentId
-                    };
-                    allClasses.push(labClassData);
-                    addClassToList(labClassData);
-                    console.log('Lab class created and added:', labClassData.id);
-                }
-            } else {
-                console.log('No lecture or lab hours found, creating single class');
-                // If no hours specified, create single class with default
-                const unitLoad = lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3);
-                const classData = {
-                    id: 'class-' + Date.now(),
-                    subject: subjectName,
-                    subjectCode: subjectCode,
-                    subjectId: selectedSubjectId,
-                    unitLoad: unitLoad,
-                    classType: classType,
-                    lectureHours: lectureHours,
-                    labHours: labHours,
-                    course: selectedProgram || selectedDepartment,
-                    courseId: programSelect?.value || selectedDepartment,
-                    faculty: selectedFacultyName,
-                    facultyId: selectedFacultyId,
-                    department: selectedDepartment,
-                    departmentId: departmentId
-                };
-                allClasses.push(classData);
-                addClassToList(classData);
-            }
+            // Create ONE class with both lecture and lab hours (if any)
+            // The generation logic will split it into separate schedules if both hours exist
+            const unitLoad = lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3);
+            const classData = {
+                id: 'class-' + Date.now(),
+                subject: subjectName,
+                subjectCode: subjectCode,
+                subjectId: selectedSubjectId,
+                unitLoad: unitLoad, // Default unit load (will be overridden during generation if both hours exist)
+                classType: lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : (labHours > 0 ? 'laboratory' : classType)),
+                lectureHours: lectureHours,
+                labHours: labHours,
+                course: selectedProgram || selectedDepartment,
+                courseId: programSelect?.value || selectedDepartment,
+                faculty: selectedFacultyName,
+                facultyId: selectedFacultyId,
+                department: selectedDepartment,
+                departmentId: departmentId
+            };
+            allClasses.push(classData);
+            addClassToList(classData);
+            console.log('Class created with lecture hours:', lectureHours, 'lab hours:', labHours);
             
             window.allClasses = allClasses;
             console.log('Classes added to allClasses array. Total:', allClasses.length);
@@ -1376,51 +1320,128 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Process each class
                 for (const classItem of classesToSchedule) {
-                    // Update progress
-                    classesProcessed++;
-                    let progressPct = Math.floor((classesProcessed / totalClasses) * 100);
-                    if (progressBar) {
-                        progressBar.style.width = progressPct + '%';
-                    }
+                    // Check if this class has both lecture and lab hours - if so, create two separate schedules
+                    const hasLecture = classItem.lectureHours > 0;
+                    const hasLab = classItem.labHours > 0;
                     
-                    if (statusElement) {
-                        statusElement.textContent = `Scheduling class ${classesProcessed} of ${totalClasses}: ${classItem.subject}`;
-                    }
-                    
-                    // Get subject key for same-time scheduling
-                    const subjectKey = classItem.subjectId || classItem.subject;
-                    const subjectScheduledTime = subjectScheduledTimes[subjectKey];
-                    
-                    // Try to schedule this class
-                    const scheduled = scheduleClass(classItem, subjectScheduledTime);
-                    if (scheduled) {
-                        scheduledClasses.push(classItem);
+                    if (hasLecture && hasLab) {
+                        // Create two separate class items for scheduling
+                        const lectureClass = {
+                            ...classItem,
+                            id: classItem.id + '-lec',
+                            unitLoad: classItem.lectureHours,
+                            classType: 'lecture',
+                            lectureHours: classItem.lectureHours,
+                            labHours: 0
+                        };
                         
-                        // If this is the first class for this subject, store the scheduled time
-                        if (!subjectScheduledTimes[subjectKey] && scheduled !== true && scheduled.success) {
+                        const labClass = {
+                            ...classItem,
+                            id: classItem.id + '-lab',
+                            unitLoad: classItem.labHours,
+                            classType: 'laboratory',
+                            lectureHours: 0,
+                            labHours: classItem.labHours
+                        };
+                        
+                        // Get subject key for same-time scheduling
+                        const subjectKey = classItem.subjectId || classItem.subject;
+                        const subjectScheduledTime = subjectScheduledTimes[subjectKey];
+                        
+                        // Schedule lecture first
+                        classesProcessed++;
+                        let progressPct = Math.floor((classesProcessed / totalClasses) * 100);
+                        if (progressBar) {
+                            progressBar.style.width = progressPct + '%';
+                        }
+                        if (statusElement) {
+                            statusElement.textContent = `Scheduling lecture for ${classItem.subject} (${classesProcessed} of ${totalClasses})`;
+                        }
+                        
+                        const lectureScheduled = scheduleClass(lectureClass, subjectScheduledTime);
+                        if (lectureScheduled && lectureScheduled !== true && lectureScheduled.success) {
+                            scheduledClasses.push(lectureClass);
+                            // Store the scheduled time for the lab to use (same time, different day)
                             subjectScheduledTimes[subjectKey] = { 
-                                day: scheduled.day, 
-                                time: scheduled.time 
+                                day: lectureScheduled.day, 
+                                time: lectureScheduled.time 
                             };
-                        } else if (scheduled === true && !subjectScheduledTimes[subjectKey]) {
-                            // Class was already scheduled, try to get its time from calendar
-                            const calendar = window.calendar;
-                            if (calendar) {
-                                const events = calendar.getEvents();
-                                const scheduledEvent = events.find(e => 
-                                    e.extendedProps?.originalClassId === classItem.id
-                                );
-                                if (scheduledEvent && scheduledEvent.start) {
-                                    const eventDate = new Date(scheduledEvent.start);
-                                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                                    const dayName = dayNames[eventDate.getDay()];
-                                    const timeStr = eventDate.toTimeString().substring(0, 5);
-                                    subjectScheduledTimes[subjectKey] = { day: dayName, time: timeStr };
-                                }
+                            
+                            // Schedule lab on a different day but same time
+                            classesProcessed++;
+                            progressPct = Math.floor((classesProcessed / totalClasses) * 100);
+                            if (progressBar) {
+                                progressBar.style.width = progressPct + '%';
                             }
+                            if (statusElement) {
+                                statusElement.textContent = `Scheduling lab for ${classItem.subject} (${classesProcessed} of ${totalClasses})`;
+                            }
+                            
+                            // Schedule lab on a different day but same time
+                            const labScheduled = scheduleClass(labClass, { 
+                                time: lectureScheduled.time, 
+                                excludeDay: lectureScheduled.day // Exclude the day lecture is on
+                            });
+                            
+                            if (labScheduled && labScheduled !== true && labScheduled.success) {
+                                scheduledClasses.push(labClass);
+                            } else {
+                                unscheduledClasses.push(labClass);
+                            }
+                        } else if (lectureScheduled === true) {
+                            // Already scheduled
+                            scheduledClasses.push(lectureClass);
+                        } else {
+                            unscheduledClasses.push(lectureClass);
+                            unscheduledClasses.push(labClass);
                         }
                     } else {
-                        unscheduledClasses.push(classItem);
+                        // Regular class scheduling (only lecture OR only lab)
+                        classesProcessed++;
+                        let progressPct = Math.floor((classesProcessed / totalClasses) * 100);
+                        if (progressBar) {
+                            progressBar.style.width = progressPct + '%';
+                        }
+                        
+                        if (statusElement) {
+                            statusElement.textContent = `Scheduling class ${classesProcessed} of ${totalClasses}: ${classItem.subject}`;
+                        }
+                        
+                        // Get subject key for same-time scheduling
+                        const subjectKey = classItem.subjectId || classItem.subject;
+                        const subjectScheduledTime = subjectScheduledTimes[subjectKey];
+                        
+                        // Try to schedule this class
+                        const scheduled = scheduleClass(classItem, subjectScheduledTime);
+                        if (scheduled) {
+                            scheduledClasses.push(classItem);
+                            
+                            // If this is the first class for this subject, store the scheduled time
+                            if (!subjectScheduledTimes[subjectKey] && scheduled !== true && scheduled.success) {
+                                subjectScheduledTimes[subjectKey] = { 
+                                    day: scheduled.day, 
+                                    time: scheduled.time 
+                                };
+                            } else if (scheduled === true && !subjectScheduledTimes[subjectKey]) {
+                                // Class was already scheduled, try to get its time from calendar
+                                const calendar = window.calendar;
+                                if (calendar) {
+                                    const events = calendar.getEvents();
+                                    const scheduledEvent = events.find(e => 
+                                        e.extendedProps?.originalClassId === classItem.id
+                                    );
+                                    if (scheduledEvent && scheduledEvent.start) {
+                                        const eventDate = new Date(scheduledEvent.start);
+                                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                        const dayName = dayNames[eventDate.getDay()];
+                                        const timeStr = eventDate.toTimeString().substring(0, 5);
+                                        subjectScheduledTimes[subjectKey] = { day: dayName, time: timeStr };
+                                    }
+                                }
+                            }
+                        } else {
+                            unscheduledClasses.push(classItem);
+                        }
                     }
                 }
                 
@@ -1750,31 +1771,40 @@ document.addEventListener('DOMContentLoaded', function() {
             shuffleArray(possibleDays);
         }
         
+        // Exclude a specific day if provided (for lab scheduling on different day)
+        if (subjectScheduledTime && subjectScheduledTime.excludeDay) {
+            possibleDays = possibleDays.filter(d => d.id !== subjectScheduledTime.excludeDay);
+        }
+        
         // Get time slots - if subject already has a scheduled time, prioritize that time and day
         let possibleTimes = timeSlots.slice();
         let targetDay = null;
         let targetTime = null;
         let hasScheduledTime = false;
         
-        if (subjectScheduledTime && subjectScheduledTime.day && subjectScheduledTime.time) {
-            // Use the same day and time as the first scheduled class for this subject
-            targetDay = possibleDays.find(d => d.id === subjectScheduledTime.day);
+        if (subjectScheduledTime && subjectScheduledTime.time) {
+            // Use the same time as the first scheduled class for this subject
             targetTime = subjectScheduledTime.time;
             hasScheduledTime = true;
-            // Prioritize the scheduled day and time, but keep other options as fallback
-            if (targetDay) {
-                // Move target day to front
-                const dayIndex = possibleDays.indexOf(targetDay);
-                if (dayIndex > -1) {
-                    possibleDays.splice(dayIndex, 1);
-                    possibleDays.unshift(targetDay);
+            
+            // If a specific day is provided and not excluded, prioritize it
+            if (subjectScheduledTime.day && !subjectScheduledTime.excludeDay) {
+                targetDay = possibleDays.find(d => d.id === subjectScheduledTime.day);
+                if (targetDay) {
+                    // Move target day to front
+                    const dayIndex = possibleDays.indexOf(targetDay);
+                    if (dayIndex > -1) {
+                        possibleDays.splice(dayIndex, 1);
+                        possibleDays.unshift(targetDay);
+                    }
                 }
-                // Move target time to front
-                const timeIndex = possibleTimes.indexOf(targetTime);
-                if (timeIndex > -1) {
-                    possibleTimes.splice(timeIndex, 1);
-                    possibleTimes.unshift(targetTime);
-                }
+            }
+            
+            // Move target time to front
+            const timeIndex = possibleTimes.indexOf(targetTime);
+            if (timeIndex > -1) {
+                possibleTimes.splice(timeIndex, 1);
+                possibleTimes.unshift(targetTime);
             }
         } else {
             shuffleArray(possibleTimes);
