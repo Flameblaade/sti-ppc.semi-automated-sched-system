@@ -637,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Submit button handler - creates a class based on form selections
     if (submitScheduleBtn) {
-        submitScheduleBtn.addEventListener('click', function(e) {
+        submitScheduleBtn.addEventListener('click', async function(e) {
             e.preventDefault(); // Prevent form submission
             console.log('Submit button clicked');
             
@@ -678,16 +678,57 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Try to get subject data to find lecture/lab hours
             try {
-                const subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
-                const subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
+                let subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
+                
+                // If no subjects in localStorage, try to fetch from API
+                if (!subjects || subjects.length === 0) {
+                    try {
+                        // Use fetchWithAuth if available, otherwise use regular fetch
+                        const fetchFn = typeof fetchWithAuth !== 'undefined' ? fetchWithAuth : fetch;
+                        const authToken = localStorage.getItem('authToken');
+                        const response = await fetchFn('/api/subjects', {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        if (response && response.ok) {
+                            subjects = await response.json();
+                            if (subjects && subjects.length > 0) {
+                                localStorage.setItem('subjects', JSON.stringify(subjects));
+                            }
+                        }
+                    } catch (apiError) {
+                        console.warn('Could not fetch subjects from API:', apiError);
+                    }
+                }
+                
+                // Try multiple ways to find the subject
+                let subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
+                
+                // If not found by ID/code, try by name
+                if (!subject) {
+                    subject = subjects.find(s => s.name === selectedSubjectName);
+                }
+                
                 if (subject) {
                     subjectCode = subject.code || '';
                     subjectName = subject.name || selectedSubjectName;
-                    lectureHours = subject.lectureHours || 0;
-                    labHours = subject.labHours || 0;
+                    lectureHours = parseInt(subject.lectureHours) || 0;
+                    labHours = parseInt(subject.labHours) || 0;
+                    
+                    console.log('Subject data loaded:', {
+                        code: subjectCode,
+                        name: subjectName,
+                        lectureHours: lectureHours,
+                        labHours: labHours
+                    });
+                } else {
+                    console.warn('Subject not found in data. Selected ID:', selectedSubjectId, 'Selected Name:', selectedSubjectName);
                 }
             } catch (e) {
-                console.warn('Could not load subject data for lecture/lab hours');
+                console.warn('Could not load subject data for lecture/lab hours:', e);
             }
             
             // If no hours from subject data, use classType selection (for non-superadmin) or default
@@ -704,10 +745,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            // Debug logging
+            console.log('Class creation - Lecture Hours:', lectureHours, 'Lab Hours:', labHours);
+            
             // Create separate classes for lecture and lab if both have hours (for ALL users)
             if (lectureHours > 0 || labHours > 0) {
                 const baseTimestamp = Date.now();
                 let classCounter = 0;
+                
+                console.log('Creating separate classes - Lecture:', lectureHours > 0, 'Lab:', labHours > 0);
                 
                 // Create lecture class if hours > 0
                 if (lectureHours > 0) {
@@ -729,6 +775,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     };
                     allClasses.push(lectureClassData);
                     addClassToList(lectureClassData);
+                    console.log('Lecture class created and added:', lectureClassData.id);
                 }
                 
                 // Create lab class if hours > 0
@@ -751,8 +798,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     };
                     allClasses.push(labClassData);
                     addClassToList(labClassData);
+                    console.log('Lab class created and added:', labClassData.id);
                 }
             } else {
+                console.log('No lecture or lab hours found, creating single class');
                 // If no hours specified, create single class with default
                 const unitLoad = lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3);
                 const classData = {
