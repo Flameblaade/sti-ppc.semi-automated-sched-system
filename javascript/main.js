@@ -1813,10 +1813,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Move target time to front
+            // ALWAYS prioritize the target time (for same-time scheduling on different days)
             const timeIndex = possibleTimes.indexOf(targetTime);
             if (timeIndex > -1) {
                 possibleTimes.splice(timeIndex, 1);
+                possibleTimes.unshift(targetTime);
+            } else {
+                // If time not found in slots, add it at the beginning
                 possibleTimes.unshift(targetTime);
             }
         } else {
@@ -1961,10 +1964,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     const departmentColor = getDepartmentColorForClass(classItem);
                     console.log(`Generated department color: ${departmentColor} for class: ${classItem.subject} (${classItem.course})`);
                     
+                    // Create event title with class type
+                    let eventTitle = classItem.subject;
+                    if (classItem.classType === 'lecture' || classItem.classType === 'laboratory') {
+                        eventTitle = `${classItem.subject} (${classItem.classType === 'lecture' ? 'Lecture' : 'Lab'})`;
+                    }
+                    
                     // Create event data - for timeGridWeek, we use the actual date, not resourceId
                     const eventData = {
                         id: classItem.id + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9), // Unique ID per instance
-                        title: classItem.subject,
+                        title: eventTitle,
                         start: `${dateStr}T${startTime}:00`,
                         end: `${dateStr}T${endTime}:00`,
                         backgroundColor: departmentColor,
@@ -1981,6 +1990,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             faculty: classItem.faculty,
                             unitLoad: classItem.unitLoad,
                             classType: classItem.classType,
+                            lectureHours: classItem.lectureHours || 0,
+                            labHours: classItem.labHours || 0,
                             room: room.name || room.title || room.id,
                             roomId: room.id,
                                 department: classItem.department,
