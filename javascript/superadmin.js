@@ -1773,12 +1773,16 @@ function showEditUserModal(user) {
         justify-content: center;
     `;
     
+    const displayName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.middleName ? user.middleName.charAt(0) + '. ' : ''}${user.lastName}`.trim()
+        : user.name || user.email || 'User';
+    
     modal.innerHTML = `
         <div style="
             background: white;
             border-radius: 8px;
             padding: 0;
-            max-width: 600px;
+            max-width: 500px;
             width: 90%;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         ">
@@ -1789,7 +1793,7 @@ function showEditUserModal(user) {
                 justify-content: space-between;
                 align-items: center;
             ">
-                <h5 style="margin: 0; color: #1e293b;">Edit User</h5>
+                <h5 style="margin: 0; color: #1e293b;">User Details</h5>
                 <button type="button" class="close-btn" style="
                     background: none;
                     border: none;
@@ -1798,72 +1802,53 @@ function showEditUserModal(user) {
                     color: #64748b;
                 ">&times;</button>
             </div>
-            <div style="padding: 20px;">
-                <form id="editUserForm">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                        <div>
-                            <label for="editUserEmail" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Email</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <input type="email" id="editUserEmail" value="${user.email || ''}" readonly style="
-                                    flex: 1;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                                    background-color: #f9fafb;
-                                    color: #6b7280;
-                                ">
-                                <button type="button" id="editEmailBtn" style="
-                                padding: 8px 12px;
-                                    background: #3b82f6;
-                                    color: white;
-                                    border: none;
-                                border-radius: 4px;
-                                    cursor: pointer;
-                                    font-size: 12px;
-                                ">Edit</button>
-                        </div>
-                    </div>
-                        <div>
-                            <label for="editUserDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <input type="text" id="editUserDepartment" value="${user.department === 'Pending Assignment' || !user.department ? 'Department not assigned yet' : user.department}" readonly style="
-                                    flex: 1;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                                    background-color: #f9fafb;
-                                    color: #6b7280;
-                                ">
-                                <button type="button" id="editDepartmentBtn" style="
-                                    padding: 8px 12px;
-                                    background: #3b82f6;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 4px;
-                                    cursor: pointer;
-                                    font-size: 12px;
-                                ">Edit</button>
-                        </div>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
-                        <div>
-                            <label for="editUserRole" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Role</label>
-                            <select id="editUserRole" required style="
-                                width: 100%;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                            ">
-                                <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
-                                <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>Superadmin</option>
-                            </select>
-                        </div>
-                    </div>
-                </form>
+            <div style="padding: 24px;">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Name</label>
+                    <div style="
+                        padding: 12px;
+                        background: #f8fafc;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 6px;
+                        font-size: 15px;
+                        color: #1e293b;
+                        font-weight: 500;
+                    ">${displayName}</div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Email</label>
+                    <div style="
+                        padding: 12px;
+                        background: #f8fafc;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 6px;
+                        font-size: 15px;
+                        color: #1e293b;
+                    ">${user.email || 'N/A'}</div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Department</label>
+                    <div style="
+                        padding: 12px;
+                        background: #f8fafc;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 6px;
+                        font-size: 15px;
+                        color: #1e293b;
+                    ">${user.department === 'Pending Assignment' || !user.department ? 'Not assigned' : user.department}</div>
+                </div>
+                <div style="margin-bottom: 0;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Role</label>
+                    <div style="
+                        padding: 12px;
+                        background: #f8fafc;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 6px;
+                        font-size: 15px;
+                        color: #1e293b;
+                        text-transform: capitalize;
+                    ">${user.role || 'user'}</div>
+                </div>
             </div>
             <div style="
                 padding: 20px;
@@ -1876,57 +1861,24 @@ function showEditUserModal(user) {
                     background: #6b7280;
                     color: white;
                     border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
+                    padding: 10px 20px;
+                    border-radius: 6px;
                     cursor: pointer;
-                ">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveUserChanges" style="
-                    background: #3b82f6;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                ">Save Changes</button>
+                    font-weight: 500;
+                ">Close</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
     
-    // Store user data in modal for later use
-    modal.userData = user;
-    
-    // Handle edit email button
-    document.getElementById('editEmailBtn').addEventListener('click', () => {
-        const emailInput = document.getElementById('editUserEmail');
-        emailInput.readOnly = false;
-        emailInput.style.backgroundColor = 'white';
-        emailInput.style.color = '#374151';
-        emailInput.focus();
-    });
-    
-    // Handle edit department button
-    document.getElementById('editDepartmentBtn').addEventListener('click', () => {
-        const deptInput = document.getElementById('editUserDepartment');
-        deptInput.readOnly = false;
-        deptInput.style.backgroundColor = 'white';
-        deptInput.style.color = '#374151';
-        deptInput.focus();
-    });
-    
-    // Handle save button
-    document.getElementById('saveUserChanges').addEventListener('click', async () => {
-        await saveUserChanges(user.id, modal);
-    });
-    
-    // Handle cancel button
-    modal.querySelector('.btn-secondary').addEventListener('click', () => {
+    // Handle close button
+    modal.querySelector('.close-btn').addEventListener('click', () => {
         document.body.removeChild(modal);
     });
     
-    // Handle close button
-    modal.querySelector('.close-btn').addEventListener('click', () => {
+    // Handle cancel/close button
+    modal.querySelector('.btn-secondary').addEventListener('click', () => {
         document.body.removeChild(modal);
     });
     
@@ -2711,7 +2663,13 @@ async function loadUsersForFaculty(modal) {
 async function loadDepartmentsForFaculty(modal) {
     try {
         const departments = await fetchData('/api/departments');
-        const departmentSelect = modal.querySelector('#facultyDepartment');
+        // Try both selectors - for add faculty and edit faculty modals
+        const departmentSelect = modal.querySelector('#editFacultyDepartment') || modal.querySelector('#facultyDepartment');
+        
+        if (!departmentSelect) {
+            console.error('Department select not found in modal');
+            return;
+        }
         
         if (departments && departments.length > 0) {
             departmentSelect.innerHTML = '<option value="">Select Department</option>' +
@@ -2721,8 +2679,10 @@ async function loadDepartmentsForFaculty(modal) {
         }
     } catch (error) {
         console.error('Error loading departments for faculty:', error);
-        const departmentSelect = modal.querySelector('#facultyDepartment');
-        departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        const departmentSelect = modal.querySelector('#editFacultyDepartment') || modal.querySelector('#facultyDepartment');
+        if (departmentSelect) {
+            departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        }
     }
 }
 
