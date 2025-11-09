@@ -1040,6 +1040,13 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
+    if (user.status === 'rejected') {
+      return res.status(403).json({ 
+        message: 'Your account has been rejected. If this is a mistake, please contact a superadmin for further action.',
+        accountRejected: true
+      });
+    }
+    
     if (user.status === 'denied') {
       return res.status(403).json({ 
         message: 'Your account has been denied. Please contact the administrator for more information.'

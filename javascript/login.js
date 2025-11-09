@@ -117,6 +117,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     loginBtn.textContent = 'Log In';
                     return;
                 }
+                // Handle account rejected status
+                if (response.status === 403 && data.accountRejected) {
+                    // Show account rejected modal
+                    showAccountRejectedModal();
+                    // Reset button state
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Log In';
+                    return;
+                }
                 // Handle unverified email (legacy case)
                 if (response.status === 403 && data.requiresVerification) {
                     // Store email for verification page
@@ -561,6 +570,120 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to close incorrect password modal
     function closeIncorrectPasswordModal() {
         const modal = document.getElementById('incorrectPasswordModal');
+        if (modal) {
+            // Start fade out animation
+            modal.classList.remove('show');
+            
+            // Wait for animation to complete before removing
+            setTimeout(() => {
+                if (modal && modal.parentNode) {
+                    modal.remove();
+                }
+                
+                // Restore body scroll
+                document.body.style.overflow = 'auto';
+            }, 300);
+        } else {
+            // If modal doesn't exist, just restore body scroll
+            document.body.style.overflow = 'auto';
+        }
+    }
+    
+    // Function to show account rejected modal
+    function showAccountRejectedModal() {
+        // Remove any existing modal first
+        const existingModal = document.getElementById('accountRejectedModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Create modal HTML with improved design
+        const modalHTML = `
+            <div id="accountRejectedModal" class="pending-approval-overlay">
+                <div class="pending-approval-container">
+                    <div class="pending-approval-header">
+                        <div class="pending-approval-icon" style="background-color: #ef4444;">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                        <h2>Account Rejected</h2>
+                        <button class="pending-approval-close" data-action="close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pending-approval-body">
+                        <div class="pending-approval-content">
+                            <div class="pending-approval-main-icon" style="color: #ef4444;">
+                                <i class="fas fa-user-times"></i>
+                            </div>
+                            <h3>Your account has been rejected</h3>
+                            <p class="pending-approval-description">
+                                Unfortunately, your account registration has been rejected by an administrator.
+                            </p>
+                            
+                            <div class="pending-approval-info-box" style="background-color: #fef2f2; border-color: #fecaca;">
+                                <h4><i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> If this is a mistake</h4>
+                                <p style="margin-top: 10px; color: #7f1d1d;">
+                                    Please contact a superadmin for further action. They can review your account and assist you with the registration process.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pending-approval-footer">
+                        <button class="pending-approval-btn" data-action="close">
+                            <i class="fas fa-check"></i>
+                            Understood
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Show modal
+        const modal = document.getElementById('accountRejectedModal');
+        if (modal) {
+            // Prevent body scroll
+            document.body.style.overflow = 'hidden';
+            
+            // Show modal with animation
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+            
+            // Add event listeners
+            modal.addEventListener('click', (e) => {
+                const target = e.target.closest('button[data-action]');
+                if (!target) return;
+                
+                const action = target.getAttribute('data-action');
+                if (action === 'close') {
+                    closeAccountRejectedModal();
+                }
+            });
+            
+            // Click outside to close
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeAccountRejectedModal();
+                }
+            });
+            
+            // Escape key to close
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    closeAccountRejectedModal();
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+        }
+    }
+    
+    // Function to close account rejected modal
+    function closeAccountRejectedModal() {
+        const modal = document.getElementById('accountRejectedModal');
         if (modal) {
             // Start fade out animation
             modal.classList.remove('show');
