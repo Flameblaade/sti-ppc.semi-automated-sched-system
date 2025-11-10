@@ -4258,20 +4258,56 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Load fixed schedules for all users (they should be visible to everyone)
-                        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                            window.fixedSchedules.loadToCalendar();
-                            console.log('Fixed schedules loaded for user view');
-                        }
+                        // Use a small delay to ensure fixed schedules module is initialized
+                        setTimeout(() => {
+                            if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                                // First ensure fixed schedules are loaded from localStorage
+                                if (window.fixedSchedules.load) {
+                                    window.fixedSchedules.load();
+                                }
+                                window.fixedSchedules.loadToCalendar();
+                                console.log('Fixed schedules loaded for user view');
+                            } else {
+                                console.warn('Fixed schedules module not available yet, retrying...');
+                                // Retry after a longer delay
+                                setTimeout(() => {
+                                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                                        if (window.fixedSchedules.load) {
+                                            window.fixedSchedules.load();
+                                        }
+                                        window.fixedSchedules.loadToCalendar();
+                                        console.log('Fixed schedules loaded for user view (retry)');
+                                    }
+                                }, 1000);
+                            }
+                        }, 200);
                     } else {
                         // No events found for this faculty member
                         console.log('No events found for faculty:', userName);
                         calendar.removeAllEvents();
                         
                         // Still load fixed schedules even if no classes assigned
-                        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                            window.fixedSchedules.loadToCalendar();
-                            console.log('Fixed schedules loaded (no classes assigned)');
-                        }
+                        setTimeout(() => {
+                            if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                                // First ensure fixed schedules are loaded from localStorage
+                                if (window.fixedSchedules.load) {
+                                    window.fixedSchedules.load();
+                                }
+                                window.fixedSchedules.loadToCalendar();
+                                console.log('Fixed schedules loaded (no classes assigned)');
+                            } else {
+                                console.warn('Fixed schedules module not available yet, retrying...');
+                                setTimeout(() => {
+                                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                                        if (window.fixedSchedules.load) {
+                                            window.fixedSchedules.load();
+                                        }
+                                        window.fixedSchedules.loadToCalendar();
+                                        console.log('Fixed schedules loaded (no classes assigned, retry)');
+                                    }
+                                }, 1000);
+                            }
+                        }, 200);
                         
                         // Show a message to the user
                         if (userRole === 'user' || userRole === 'faculty') {
@@ -4305,10 +4341,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     calendar.removeAllEvents();
                     
                     // Still load fixed schedules even if no events from server
-                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                        window.fixedSchedules.loadToCalendar();
-                        console.log('Fixed schedules loaded (no server events)');
-                    }
+                    setTimeout(() => {
+                        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                            // First ensure fixed schedules are loaded from localStorage
+                            if (window.fixedSchedules.load) {
+                                window.fixedSchedules.load();
+                            }
+                            window.fixedSchedules.loadToCalendar();
+                            console.log('Fixed schedules loaded (no server events)');
+                        } else {
+                            console.warn('Fixed schedules module not available yet, retrying...');
+                            setTimeout(() => {
+                                if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                                    if (window.fixedSchedules.load) {
+                                        window.fixedSchedules.load();
+                                    }
+                                    window.fixedSchedules.loadToCalendar();
+                                    console.log('Fixed schedules loaded (no server events, retry)');
+                                }
+                            }, 1000);
+                        }
+                    }, 200);
                     
                     if (userRole === 'user' || userRole === 'faculty') {
                         showNotification('No classes assigned to you yet. Please contact your administrator.', 'info');
@@ -4323,6 +4376,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else {
                 console.error('Failed to load schedule from server:', response.status);
+                
+                // Still load fixed schedules even if server request fails
+                setTimeout(() => {
+                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                        // First ensure fixed schedules are loaded from localStorage
+                        if (window.fixedSchedules.load) {
+                            window.fixedSchedules.load();
+                        }
+                        window.fixedSchedules.loadToCalendar();
+                        console.log('Fixed schedules loaded (server request failed)');
+                    } else {
+                        console.warn('Fixed schedules module not available yet, retrying...');
+                        setTimeout(() => {
+                            if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                                if (window.fixedSchedules.load) {
+                                    window.fixedSchedules.load();
+                                }
+                                window.fixedSchedules.loadToCalendar();
+                                console.log('Fixed schedules loaded (server request failed, retry)');
+                            }
+                        }, 1000);
+                    }
+                }, 200);
+                
                 if (userRole === 'user' || userRole === 'faculty') {
                     showNotification('Failed to load schedule', 'error');
                 }
