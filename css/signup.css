@@ -1,0 +1,235 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Montserrat';
+}
+
+body {
+    background-color: #D9D9D9;
+}
+
+nav {
+    background-color: #1A609B;
+    height: 60px;
+    width: 100%; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative; /* Add this to contain the logo */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.nav-title {
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.sti_logo {
+    height: 90px;
+    width: auto;
+    background-color: transparent;
+    position: absolute;
+    margin: 15px;
+    margin-left: 30px;
+    left: 0; /* Add this to explicitly set the position */
+    transform: none; /* Will be used later in media queries */
+    transition: all 0.3s ease; /* Add smooth transition when repositioning */
+}
+
+.blue_box {
+    padding: min(3em, 6%);
+    background-color: #457B9D;
+    height: auto; /* Auto height to prevent scrolling */
+    width: 500px;
+    position: relative;
+    margin-left: 480px;
+    margin-top: 70px; /* Reduced top margin */
+    z-index: 1;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.white_box {
+    background-color: #ffffff;
+    height: auto; /* Auto height to prevent scrolling */
+    width: 500px;
+    position: absolute;
+    top: 30px;
+    left: 45px;
+    z-index: 2;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    overflow-y: visible; /* No scrolling needed */
+    padding-bottom: 20px; /* Add padding at bottom */
+}
+
+#lbl-signup {
+    background-color: transparent;
+    font-family: 'Montserrat';
+    font-size: 26px; /* Smaller font size */
+    text-align: left;
+    margin-left: 30px;
+    margin-top: 20px; /* Less top margin */
+    margin-bottom: 15px; /* Less bottom margin */
+    padding: 5px 10px; /* Smaller padding */
+    font-weight: 400;
+    letter-spacing: 1px; 
+}
+
+form {
+    padding: 0 30px;
+    background-color: transparent;
+    font-family: "Montserrat";
+    font-weight: 700;   
+}
+
+.form-username, .form-name {
+    margin-bottom: 10px; /* Reduced margin */
+    background-color: transparent;
+}
+
+.form-email {
+    margin-bottom: 10px; /* Reduced margin */
+    background-color: transparent;
+}
+
+.form-password, .form-repassword {
+    margin-bottom: 10px; /* Reduced margin */
+    position: relative;
+}
+
+label {
+    color: #1A609B;
+    font-weight: bold;
+    font-size: 12px; /* Smaller font size */
+    display: block;
+    margin-bottom: 3px; /* Less margin */
+}
+
+#username, #firstname, #middlename, #lastname, #email, #password, #repassword {
+    width: 100%;
+    margin: 3px 0;
+    padding: 8px 15px; /* Reduced padding */
+    font-size: 14px; /* Smaller font size */
+    border: 1px solid #D9D9D9;
+    background-color: #D9D9D9;
+    font-weight: 600;
+    border-radius: 20px;
+}
+
+.password-container {
+    position: relative;
+}
+
+.password-container .fa-eye,
+.password-container .fa-solid {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: transparent;
+    cursor: pointer;
+    color: #333;
+    z-index: 10;
+}
+
+.sign-up-btn {
+    width: 100%;
+    margin-top: 10px; /* Less margin */
+    padding: 8px; /* Less padding */
+    background-color: #457B9D;
+    color: white;
+    font-size: 14px; /* Smaller font */
+    font-weight: 700;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.sign-up-btn:hover {
+    background-color: #1A609B;
+}
+
+.login-link {
+    width: 100%;
+    text-align: center;
+    margin-top: 10px; /* Less margin */
+    margin-bottom: 5px; /* Less margin */
+    font-weight: 500;
+    font-size: 12px; /* Smaller font */
+}
+
+.login-link a {
+    color: #457B9D;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.login-link a:hover {
+    color: #1A609B;
+    text-decoration: underline;
+}
+
+/* Media queries to make the design responsive only when screen gets smaller */
+@media screen and (max-width: 1200px) {
+    .blue_box {
+        margin-left: auto;
+        margin-right: auto;
+        left: 0;
+        right: 0;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    /* Center the logo at this breakpoint */
+    .sti_logo {
+        left: 50%; /* Position at 50% from the left of the screen */
+        transform: translateX(-50%); /* Pull back by half its width to center it */
+        margin-left: 0; /* Reset the left margin */
+        height: 70px; /* Make logo smaller on mobile */
+    }
+    
+    /* Adjust the blue box position as needed */
+    .blue_box {
+        margin-top: 100px; /* Adjust top margin for centered logo */
+        width: 90%; /* Make it responsive to screen width */
+        max-width: 500px;
+    }
+    
+    .white_box {
+        width: calc(100% - 30px); /* Make it responsive to screen width */
+        left: 15px; /* Adjust positioning */
+    }
+    
+    #lbl-signup {
+        font-size: 22px; /* Smaller font size on mobile */
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
+    
+    form {
+        padding: 0 20px; /* Less padding on mobile */
+    }
+}
+
+/* Additional breakpoint for very small screens */
+@media screen and (max-width: 400px) {
+    .form-row {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    #username, #firstname, #middlename, #lastname, #email, #password, #repassword {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    
+    .sign-up-btn {
+        padding: 7px;
+    }
+}
+
