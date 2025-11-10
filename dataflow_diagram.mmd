@@ -1,0 +1,138 @@
+flowchart TD
+    %% External Entities
+    SuperAdmin[Superadmin]
+    User[Regular User]
+    Email[Email Service]
+    
+    %% Authentication Processes
+    Login[Login Process]
+    Register[Registration Process]
+    VerifyEmail[Email Verification]
+    Verify2FA[2FA Verification]
+    
+    %% Authentication Data Store
+    AuthDB[(Authentication<br/>Database)]
+    
+    %% Superadmin Processes
+    ViewPendingUsers[View Pending Users]
+    ApproveUser[Approve/Reject Users]
+    AssignRoleDept[Assign Role & Department]
+    ManageUsers[Manage All Users]
+    ManageDepts[Manage Departments<br/>CRUD Operations]
+    ManageSubjects[Manage Subjects<br/>CRUD Operations]
+    ManageRooms[Manage Rooms<br/>CRUD Operations]
+    ManageCourses[Manage Courses<br/>CRUD Operations]
+    ManageStrands[Manage Strands<br/>CRUD Operations]
+    ManageFaculty[Manage Faculty<br/>CRUD Operations]
+    ManageSchedules[Manage Schedules<br/>CRUD Operations]
+    SystemAdmin[System Administration<br/>Reset/Clear/Import Data]
+    
+    %% User Processes
+    ViewOwnProfile[View Own Profile]
+    ViewSchedules[View Schedules<br/>Read-Only]
+    ViewDepts[View Departments<br/>Read-Only]
+    ViewSubjects[View Subjects<br/>Read-Only]
+    ViewRooms[View Rooms<br/>Read-Only]
+    
+    %% Data Stores
+    UsersDB[(Users Database)]
+    DeptsDB[(Departments Database)]
+    SubjectsDB[(Subjects Database)]
+    RoomsDB[(Rooms Database)]
+    CoursesDB[(Courses Database)]
+    StrandsDB[(Strands Database)]
+    FacultyDB[(Faculty Database)]
+    ScheduleDB[(Schedule Database)]
+    
+    %% Superadmin Dataflow
+    SuperAdmin -->|Login Credentials| Login
+    Login -->|Authenticate| AuthDB
+    AuthDB -->|JWT Token| SuperAdmin
+    
+    SuperAdmin -->|View Requests| ViewPendingUsers
+    ViewPendingUsers -->|Read| UsersDB
+    UsersDB -->|Pending Users List| SuperAdmin
+    
+    SuperAdmin -->|Approve/Reject| ApproveUser
+    ApproveUser -->|Update Status| UsersDB
+    
+    SuperAdmin -->|Assign| AssignRoleDept
+    AssignRoleDept -->|Update Role/Dept| UsersDB
+    
+    SuperAdmin -->|Manage| ManageUsers
+    ManageUsers <-->|CRUD| UsersDB
+    
+    SuperAdmin -->|Manage| ManageDepts
+    ManageDepts <-->|CRUD| DeptsDB
+    
+    SuperAdmin -->|Manage| ManageSubjects
+    ManageSubjects <-->|CRUD| SubjectsDB
+    
+    SuperAdmin -->|Manage| ManageRooms
+    ManageRooms <-->|CRUD| RoomsDB
+    
+    SuperAdmin -->|Manage| ManageCourses
+    ManageCourses <-->|CRUD| CoursesDB
+    
+    SuperAdmin -->|Manage| ManageStrands
+    ManageStrands <-->|CRUD| StrandsDB
+    
+    SuperAdmin -->|Manage| ManageFaculty
+    ManageFaculty <-->|CRUD| FacultyDB
+    
+    SuperAdmin -->|Manage| ManageSchedules
+    ManageSchedules <-->|CRUD| ScheduleDB
+    
+    SuperAdmin -->|System Operations| SystemAdmin
+    SystemAdmin -->|Reset/Clear/Import| UsersDB
+    SystemAdmin -->|Reset/Clear/Import| DeptsDB
+    SystemAdmin -->|Reset/Clear/Import| SubjectsDB
+    SystemAdmin -->|Reset/Clear/Import| RoomsDB
+    SystemAdmin -->|Reset/Clear/Import| ScheduleDB
+    
+    %% User Dataflow
+    User -->|Registration Data| Register
+    Register -->|Create Account| UsersDB
+    Register -->|Send Code| Email
+    Email -->|Verification Code| User
+    User -->|Enter Code| VerifyEmail
+    VerifyEmail -->|Verify| UsersDB
+    UsersDB -->|Status: Pending| User
+    
+    User -->|Login Credentials| Login
+    Login -->|Authenticate| AuthDB
+    AuthDB -->|JWT Token| User
+    
+    User -->|View Request| ViewOwnProfile
+    ViewOwnProfile -->|Read| UsersDB
+    UsersDB -->|Own Profile Data| User
+    
+    User -->|View Request| ViewSchedules
+    ViewSchedules -->|Read| ScheduleDB
+    ScheduleDB -->|Department Schedules| User
+    
+    User -->|View Request| ViewDepts
+    ViewDepts -->|Read| DeptsDB
+    DeptsDB -->|Department Info| User
+    
+    User -->|View Request| ViewSubjects
+    ViewSubjects -->|Read| SubjectsDB
+    SubjectsDB -->|Subject Info| User
+    
+    User -->|View Request| ViewRooms
+    ViewRooms -->|Read| RoomsDB
+    RoomsDB -->|Room Info| User
+    
+    %% Styling
+    classDef superadminProcess fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    classDef userProcess fill:#4dabf7,stroke:#1971c2,stroke-width:2px,color:#fff
+    classDef dataStore fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    classDef authProcess fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    classDef external fill:#845ef7,stroke:#5f3dc4,stroke-width:2px,color:#fff
+    
+    class SuperAdmin,ManageUsers,ManageDepts,ManageSubjects,ManageRooms,ManageCourses,ManageStrands,ManageFaculty,ManageSchedules,ViewPendingUsers,ApproveUser,AssignRoleDept,SystemAdmin superadminProcess
+    class User,ViewOwnProfile,ViewSchedules,ViewDepts,ViewSubjects,ViewRooms userProcess
+    class UsersDB,DeptsDB,SubjectsDB,RoomsDB,CoursesDB,StrandsDB,FacultyDB,ScheduleDB,AuthDB dataStore
+    class Login,Register,VerifyEmail,Verify2FA authProcess
+    class Email external
+

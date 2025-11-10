@@ -2123,7 +2123,7 @@ document.addEventListener('DOMContentLoaded', function() {
             wb.Props = {
                 Title: "Class Schedule",
                 Subject: "Timetable",
-                Author: "Automated Scheduling System",
+                Author: "Scheduling System",
                 CreatedDate: new Date()
             };
             
@@ -4117,7 +4117,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('Loading', filteredEvents.length, 'filtered events from server');
                         
                         // Clear existing events first to prevent duplication
+                        // But preserve fixed schedules - remove them separately and reload after
+                        const fixedScheduleEvents = calendar.getEvents().filter(e => e.extendedProps?.isFixedSchedule);
                         calendar.removeAllEvents();
+                        // Reload fixed schedules immediately after clearing
+                        if (fixedScheduleEvents.length > 0 && typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                            setTimeout(() => {
+                                if (window.fixedSchedules.load) {
+                                    window.fixedSchedules.load();
+                                }
+                                window.fixedSchedules.loadToCalendar();
+                            }, 50);
+                        }
                         
                         // Use the calendar's current view date (Monday-Saturday week being displayed)
                         // This allows events to show on the correct week when user navigates
@@ -4258,29 +4269,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Load fixed schedules for all users (they should be visible to everyone)
-                        // Use a small delay to ensure fixed schedules module is initialized
-                        setTimeout(() => {
-                            if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                                // First ensure fixed schedules are loaded from localStorage
-                                if (window.fixedSchedules.load) {
-                                    window.fixedSchedules.load();
-                                }
-                                window.fixedSchedules.loadToCalendar();
-                                console.log('Fixed schedules loaded for user view');
-                            } else {
-                                console.warn('Fixed schedules module not available yet, retrying...');
-                                // Retry after a longer delay
-                                setTimeout(() => {
-                                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                                        if (window.fixedSchedules.load) {
-                                            window.fixedSchedules.load();
-                                        }
-                                        window.fixedSchedules.loadToCalendar();
-                                        console.log('Fixed schedules loaded for user view (retry)');
-                                    }
-                                }, 1000);
+                        // Load immediately after events are added, no delay needed since events are already loaded
+                        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                            // First ensure fixed schedules are loaded from localStorage
+                            if (window.fixedSchedules.load) {
+                                window.fixedSchedules.load();
                             }
-                        }, 200);
+                            window.fixedSchedules.loadToCalendar();
+                            console.log('Fixed schedules loaded for user view');
+                        }
                     } else {
                         // No events found for this faculty member
                         console.log('No events found for faculty:', userName);

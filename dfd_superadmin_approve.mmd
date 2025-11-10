@@ -1,0 +1,33 @@
+flowchart TB
+    %% Figure 4.9: Child Diagram Approve Users Tab (Superadmin) - Optimized for PNG/Book
+    
+    SuperAdmin[Superadmin]
+    
+    subgraph P["Processes"]
+        direction LR
+        ApproveUsers["10.0 Approve"]
+        UpdateStatus["10.1 Status"]
+    end
+    
+    UserInfo[("user_info")]
+    
+    %% Admin to Processes
+    SuperAdmin -->|View/Approve| ApproveUsers
+    SuperAdmin -->|View/Approve| UpdateStatus
+    
+    %% Processes to Admin
+    ApproveUsers -->|Confirm| SuperAdmin
+    UpdateStatus -->|Confirm| SuperAdmin
+    
+    %% Process connections
+    ApproveUsers <--> UserInfo
+    UpdateStatus <--> UserInfo
+    
+    %% Styling
+    classDef externalEntity fill:#fff,stroke:#000,stroke-width:2px
+    classDef process fill:#fff,stroke:#000,stroke-width:2px
+    classDef dataStore fill:#fff,stroke:#000,stroke-width:2px
+    
+    class SuperAdmin externalEntity
+    class ApproveUsers,UpdateStatus process
+    class UserInfo dataStore

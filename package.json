@@ -1,7 +1,7 @@
 {
   "name": "web-based-scheduling-system",
   "version": "1.0.0",
-  "description": "Web-based automated scheduling system with custom timetable",
+  "description": "Web-based scheduling system with custom timetable",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

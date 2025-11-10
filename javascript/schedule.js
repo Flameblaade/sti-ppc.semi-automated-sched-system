@@ -1121,21 +1121,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.loadScheduleFromLocalStorage();
             }
             
-            // Also ensure fixed schedules are loaded for all users after calendar renders
-            // This ensures they're visible even if schedule loading is delayed
-            setTimeout(() => {
-                if (typeof window.fixedSchedules !== 'undefined') {
-                    // Ensure fixed schedules are loaded from localStorage
-                    if (window.fixedSchedules.load) {
-                        window.fixedSchedules.load();
-                    }
-                    // Load fixed schedules to calendar
-                    if (window.fixedSchedules.loadToCalendar) {
-                        window.fixedSchedules.loadToCalendar();
-                        console.log('Fixed schedules loaded on calendar initialization');
-                    }
-                }
-            }, 800);
+            // Fixed schedules will be loaded by loadScheduleFromLocalStorage, no need to load here
+            // This prevents duplicate loading and blinking
         }, 500);
         
         // Make variable accessible globally for eventDrop handler

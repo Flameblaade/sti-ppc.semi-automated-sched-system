@@ -1,0 +1,39 @@
+flowchart TB
+    %% Figure 4.7: Data Flow Diagram Users (Superadmin) - Optimized for PNG/Book
+    
+    SuperAdmin[Superadmin]
+    
+    subgraph P["Processes"]
+        direction LR
+        ManageUsers["2.0 Users"]
+        BatchUpload["2.1 Batch"]
+        UpdateStatus["2.2 Status"]
+    end
+    
+    UserInfo[("user_info")]
+    
+    %% Admin to Processes
+    SuperAdmin -->|View/Add| ManageUsers
+    SuperAdmin -->|Batch| BatchUpload
+    SuperAdmin -->|Update| UpdateStatus
+    
+    %% Processes to Admin
+    ManageUsers -->|Confirm| SuperAdmin
+    BatchUpload -->|Confirm| SuperAdmin
+    UpdateStatus -->|Confirm| SuperAdmin
+    
+    %% Process connections
+    ManageUsers <--> UserInfo
+    BatchUpload <--> UserInfo
+    UpdateStatus <--> UserInfo
+    ManageUsers <--> BatchUpload
+    BatchUpload <--> UpdateStatus
+    
+    %% Styling
+    classDef externalEntity fill:#fff,stroke:#000,stroke-width:2px
+    classDef process fill:#fff,stroke:#000,stroke-width:2px
+    classDef dataStore fill:#fff,stroke:#000,stroke-width:2px
+    
+    class SuperAdmin externalEntity
+    class ManageUsers,BatchUpload,UpdateStatus process
+    class UserInfo dataStore

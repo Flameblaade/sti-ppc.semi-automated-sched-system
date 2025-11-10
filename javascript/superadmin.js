@@ -334,9 +334,26 @@ function initializeDataManagementModals() {
                 // Regardless of API response, clear client-side caches and UI state
                 const keysToClear = [
                     'users', 'pendingUsers', 'departments', 'subjects', 'courses', 'strands', 'rooms',
-                    'allClasses', 'facultyAssignments', 'calendarEvents', 'scheduleLastUpdated', 'userData'
+                    'allClasses', 'facultyAssignments', 'calendarEvents', 'scheduleLastUpdated', 'userData',
+                    'fixedSchedules', 'schedules'
                 ];
                 keysToClear.forEach(k => localStorage.removeItem(k));
+                
+                // Also clear fixed schedules from calendar if it exists
+                if (window.calendar && typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                    const events = window.calendar.getEvents();
+                    events.forEach(event => {
+                        if (event.extendedProps?.isFixedSchedule) {
+                            event.remove();
+                        }
+                    });
+                }
+                
+                // Clear fixed schedules list display
+                const fixedSchedulesList = document.getElementById('fixedSchedulesList');
+                if (fixedSchedulesList) {
+                    fixedSchedulesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;"><i class="fas fa-calendar-times" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i><p>No fixed schedules yet. Click "Add New" to create one.</p></div>';
+                }
                 
                 // Purge IndexedDB offline caches and queues
                 try {
@@ -801,46 +818,7 @@ function setupEventListeners() {
         if (event.target === clearDataConfirmModal) closeModal(clearDataConfirmModal);
     });
 
-    // Backup functionality
-    if (confirmBackupBtn) {
-        confirmBackupBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            console.log('Confirm backup clicked');
-            try {
-                // Fetch all relevant datasets
-                const endpoints = ['/api/users','/api/pending-users','/api/departments','/api/faculty','/api/subjects','/api/courses','/api/strands','/api/rooms','/api/schedule'];
-                const token = localStorage.getItem('authToken');
-                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-                const results = {};
-                await Promise.all(endpoints.map(async (ep) => {
-                    try {
-                        const r = await fetch(ep, { headers });
-                        results[ep] = r.ok ? await r.json() : { error: `Failed: ${r.status}` };
-                    } catch (e) {
-                        results[ep] = { error: e?.message || 'Network error' };
-                    }
-                }));
-                const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), data: results }, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `backup-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                closeModal(backupModal);
-                if (typeof showNotification === 'function') {
-                    showNotification('Backup generated successfully', 'success');
-                }
-            } catch (err) {
-                console.error('Backup error', err);
-                if (typeof showNotification === 'function') {
-                    showNotification('Failed to generate backup', 'error');
-                }
-            }
-        });
-    }
+    // Backup functionality - REMOVED DUPLICATE (already handled in initializeDataManagementModals function above)
 
     // Clear data confirmation input validation
     if (confirmClearInput && finalClearDataBtn) {
@@ -856,9 +834,29 @@ function setupEventListeners() {
                 // Call API to clear data (fallback to local cleanup if not available)
                 const token = localStorage.getItem('authToken');
                 const resp = await fetch('/api/admin/clear-all-data', { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                
+                // Clear all localStorage items including fixed schedules and classes
+                const keysToRemove = ['users','pendingUsers','departments','subjects','courses','strands','rooms','allClasses','facultyAssignments','fixedSchedules','schedules'];
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+                
+                // Also clear fixed schedules from calendar if it exists
+                if (window.calendar && typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                    const events = window.calendar.getEvents();
+                    events.forEach(event => {
+                        if (event.extendedProps?.isFixedSchedule) {
+                            event.remove();
+                        }
+                    });
+                }
+                
+                // Clear fixed schedules list display
+                const fixedSchedulesList = document.getElementById('fixedSchedulesList');
+                if (fixedSchedulesList) {
+                    fixedSchedulesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;"><i class="fas fa-calendar-times" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i><p>No fixed schedules yet. Click "Add New" to create one.</p></div>';
+                }
+                
                 if (!resp.ok) {
-                    // Fallback: clear localStorage keys used by the app
-                    ['users','pendingUsers','departments','subjects','courses','strands','rooms','allClasses','facultyAssignments'].forEach(k => localStorage.removeItem(k));
+                    console.warn('API clear failed, but localStorage cleared');
                 }
                 // Sign out and redirect
                 localStorage.removeItem('authToken');

@@ -2687,6 +2687,10 @@ async function handleClearAllData(req, res) {
         saveData();
         console.log('All data saved to file');
         
+        // Clear localStorage items (fixed schedules, classes, etc.)
+        // Note: This will be handled client-side, but we log it here
+        console.log('Note: Client-side localStorage (fixed schedules, classes) should be cleared by the frontend');
+        
         // Clear any pending 2FA codes safely
         try {
             if (login2FACodes && typeof login2FACodes === 'object') {

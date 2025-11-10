@@ -1,4 +1,4 @@
-# Web-Based Automated Scheduling System with Custom Timetable
+# Web-Based Scheduling System with Custom Timetable
 
 This project implements a web-based scheduling system with secure user authentication featuring email-based two-factor authentication and role-based access control.
 

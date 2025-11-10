@@ -1,7 +1,7 @@
 {
-  "name": "Automated Scheduling System",
+  "name": "Scheduling System",
   "short_name": "Schedule System",
-  "description": "Web-based automated scheduling system with custom timetable",
+  "description": "Web-based scheduling system with custom timetable",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
