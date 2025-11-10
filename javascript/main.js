@@ -4082,7 +4082,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     if (userRole === 'user' || userRole === 'faculty') {
                         // For regular users and faculty, only show their assigned classes
+                        // BUT always include fixed schedules (they should be visible to everyone)
                         filteredEvents = eventsData.filter(event => {
+                            // Always include fixed schedules
+                            if (event.extendedProps?.isFixedSchedule) {
+                                console.log(`Including fixed schedule "${event.title}" for user view`);
+                                return true;
+                            }
+                            
                             const eventFaculty = (event.extendedProps?.faculty || '').toLowerCase().trim();
                             if (!eventFaculty) {
                                 console.log(`Event "${event.title}" has no faculty assigned, skipping`);
@@ -4249,10 +4256,22 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }, 100);
                         });
+                        
+                        // Load fixed schedules for all users (they should be visible to everyone)
+                        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                            window.fixedSchedules.loadToCalendar();
+                            console.log('Fixed schedules loaded for user view');
+                        }
                     } else {
                         // No events found for this faculty member
                         console.log('No events found for faculty:', userName);
                         calendar.removeAllEvents();
+                        
+                        // Still load fixed schedules even if no classes assigned
+                        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                            window.fixedSchedules.loadToCalendar();
+                            console.log('Fixed schedules loaded (no classes assigned)');
+                        }
                         
                         // Show a message to the user
                         if (userRole === 'user' || userRole === 'faculty') {
@@ -4284,6 +4303,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('No events found on server');
                     // Clear any existing events
                     calendar.removeAllEvents();
+                    
+                    // Still load fixed schedules even if no events from server
+                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+                        window.fixedSchedules.loadToCalendar();
+                        console.log('Fixed schedules loaded (no server events)');
+                    }
                     
                     if (userRole === 'user' || userRole === 'faculty') {
                         showNotification('No classes assigned to you yet. Please contact your administrator.', 'info');

@@ -1816,38 +1816,49 @@ function showEditUserModal(user) {
                     ">${displayName}</div>
                 </div>
                 <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Email</label>
-                    <div style="
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Email <span style="color: #ef4444;">*</span></label>
+                    <input type="email" id="editUserEmail" value="${user.email || ''}" style="
+                        width: 100%;
                         padding: 12px;
-                        background: #f8fafc;
+                        background: white;
                         border: 1px solid #e2e8f0;
                         border-radius: 6px;
                         font-size: 15px;
                         color: #1e293b;
-                    ">${user.email || 'N/A'}</div>
+                        box-sizing: border-box;
+                    " required>
                 </div>
                 <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Department</label>
-                    <div style="
+                    <select id="editUserDepartment" style="
+                        width: 100%;
                         padding: 12px;
-                        background: #f8fafc;
+                        background: white;
                         border: 1px solid #e2e8f0;
                         border-radius: 6px;
                         font-size: 15px;
                         color: #1e293b;
-                    ">${user.department === 'Pending Assignment' || !user.department ? 'Not assigned' : user.department}</div>
+                        box-sizing: border-box;
+                    ">
+                        <option value="">Not assigned</option>
+                    </select>
                 </div>
                 <div style="margin-bottom: 0;">
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Role</label>
-                    <div style="
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Role <span style="color: #ef4444;">*</span></label>
+                    <select id="editUserRole" style="
+                        width: 100%;
                         padding: 12px;
-                        background: #f8fafc;
+                        background: white;
                         border: 1px solid #e2e8f0;
                         border-radius: 6px;
                         font-size: 15px;
                         color: #1e293b;
+                        box-sizing: border-box;
                         text-transform: capitalize;
-                    ">${user.role || 'user'}</div>
+                    " required>
+                        <option value="user" ${(user.role || 'user') === 'user' ? 'selected' : ''}>User</option>
+                        <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>Superadmin</option>
+                    </select>
                 </div>
             </div>
             <div style="
@@ -1865,22 +1876,61 @@ function showEditUserModal(user) {
                     border-radius: 6px;
                     cursor: pointer;
                     font-weight: 500;
-                ">Close</button>
+                ">Cancel</button>
+                <button type="button" id="saveUserChangesBtn" class="btn btn-primary" style="
+                    background: #3b82f6;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 500;
+                ">Save Changes</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
     
+    // Store user data in modal for save function
+    modal.userData = user;
+    modal.userId = user.id;
+    
+    // Load departments into dropdown
+    loadDepartmentsForUser(modal, user.departmentId || user.department).then(() => {
+        // Set selected department if user has one
+        const departmentSelect = modal.querySelector('#editUserDepartment');
+        if (departmentSelect && user.department && user.department !== 'Pending Assignment') {
+            // Try to find matching department by name or ID
+            const options = Array.from(departmentSelect.options);
+            const matchingOption = options.find(opt => {
+                const optText = opt.textContent.toLowerCase();
+                const userDept = (user.department || '').toLowerCase();
+                return optText.includes(userDept) || opt.value === user.departmentId;
+            });
+            if (matchingOption) {
+                departmentSelect.value = matchingOption.value;
+            }
+        }
+    });
+    
     // Handle close button
     modal.querySelector('.close-btn').addEventListener('click', () => {
         document.body.removeChild(modal);
     });
     
-    // Handle cancel/close button
+    // Handle cancel button
     modal.querySelector('.btn-secondary').addEventListener('click', () => {
         document.body.removeChild(modal);
     });
+    
+    // Handle save button
+    const saveBtn = modal.querySelector('#saveUserChangesBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            saveUserChanges(user.id, modal);
+        });
+    }
     
     // Handle backdrop click
     modal.addEventListener('click', (e) => {
@@ -1896,7 +1946,7 @@ function showEditUserModal(user) {
 async function saveUserChanges(userId, modal) {
     try {
         const email = document.getElementById('editUserEmail').value;
-        const department = document.getElementById('editUserDepartment').value;
+        const departmentSelect = document.getElementById('editUserDepartment');
         const role = document.getElementById('editUserRole').value;
         
         if (!email || !role) {
@@ -1911,14 +1961,26 @@ async function saveUserChanges(userId, modal) {
             return;
         }
         
+        // Get department ID and name from selected option
+        let departmentId = null;
+        let departmentName = '';
         
-        // Handle department field - if it shows the placeholder text or "Pending Assignment", treat as empty
-        const actualDepartment = (department === 'Department not assigned yet' || department === 'Pending Assignment') ? '' : department;
+        if (departmentSelect && departmentSelect.value) {
+            departmentId = departmentSelect.value;
+            const selectedOption = departmentSelect.options[departmentSelect.selectedIndex];
+            // Extract department name from option text (format: "Name (Code)")
+            if (selectedOption && selectedOption.textContent) {
+                const optionText = selectedOption.textContent.trim();
+                // Remove the code part in parentheses if present
+                departmentName = optionText.replace(/\s*\([^)]*\)\s*$/, '').trim();
+            }
+        }
         
         const requestData = {
             name: existingUser.name, // Keep existing name
             email,
-            department: actualDepartment,
+            department: departmentName || '',
+            departmentId: departmentId || null,
             role
         };
         
@@ -2654,6 +2716,47 @@ async function loadUsersForFaculty(modal) {
         console.error('Error loading users for faculty:', error);
         const userSelect = modal.querySelector('#facultyUserSelect');
         userSelect.innerHTML = '<option value="">Error loading users</option>';
+    }
+}
+
+/**
+ * Load departments for user dropdown
+ */
+async function loadDepartmentsForUser(modal, selectedDepartmentId = null) {
+    try {
+        const departments = await fetchData('/api/departments');
+        const departmentSelect = modal.querySelector('#editUserDepartment');
+        
+        if (!departmentSelect) {
+            console.error('Department select not found in modal');
+            return Promise.resolve();
+        }
+        
+        if (departments && departments.length > 0) {
+            departmentSelect.innerHTML = '<option value="">Not assigned</option>' +
+                departments.map(dept => `<option value="${dept.id}">${dept.name} (${dept.code})</option>`).join('');
+            
+            // Set selected department if provided
+            if (selectedDepartmentId) {
+                const matchingOption = Array.from(departmentSelect.options).find(opt => 
+                    opt.value === String(selectedDepartmentId) || 
+                    opt.textContent.toLowerCase().includes(String(selectedDepartmentId).toLowerCase())
+                );
+                if (matchingOption) {
+                    departmentSelect.value = matchingOption.value;
+                }
+            }
+        } else {
+            departmentSelect.innerHTML = '<option value="">No departments available</option>';
+        }
+        return Promise.resolve();
+    } catch (error) {
+        console.error('Error loading departments for user:', error);
+        const departmentSelect = modal.querySelector('#editUserDepartment');
+        if (departmentSelect) {
+            departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        }
+        return Promise.resolve();
     }
 }
 
@@ -4900,7 +5003,7 @@ async function loadDepartmentsForCourse(modal) {
         console.error('Error loading departments for course:', error);
         const departmentSelect = modal.querySelector('#courseDepartment') || modal.querySelector('#editCourseDepartment');
         if (departmentSelect) {
-            departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
         }
     }
 }
