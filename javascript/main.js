@@ -1304,12 +1304,27 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Clear existing schedule first
-        clearSchedule();
+        // Clear existing schedule first (but preserve fixed schedules)
+        const calendar = window.calendar;
+        if (calendar) {
+            // Remove only non-fixed schedule events
+            const events = calendar.getEvents();
+            events.forEach(event => {
+                if (!event.extendedProps?.isFixedSchedule) {
+                    event.remove();
+                }
+            });
+            console.log('Schedule cleared - non-fixed events removed');
+        }
         
-        // Load fixed schedules to calendar when generating schedule
-        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-            window.fixedSchedules.loadToCalendar();
+        // Ensure fixed schedules are loaded from localStorage and added to calendar
+        if (typeof window.fixedSchedules !== 'undefined') {
+            if (window.fixedSchedules.load) {
+                window.fixedSchedules.load();
+            }
+            if (window.fixedSchedules.loadToCalendar) {
+                window.fixedSchedules.loadToCalendar();
+            }
         }
         
         // Show loading/progress indicator
@@ -1567,6 +1582,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Close the modal and show results
                 setTimeout(() => {
                     hideModal('loadingModal');
+                    
+                    // Ensure fixed schedules are still visible after schedule generation
+                    if (typeof window.fixedSchedules !== 'undefined') {
+                        if (window.fixedSchedules.load) {
+                            window.fixedSchedules.load();
+                        }
+                        if (window.fixedSchedules.loadToCalendar) {
+                            window.fixedSchedules.loadToCalendar();
+                        }
+                    }
                     
                     if (unscheduledClasses.length > 0) {
                         showConflictsModal(unscheduledClasses);
