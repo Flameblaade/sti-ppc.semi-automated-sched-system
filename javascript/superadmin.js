@@ -4878,18 +4878,30 @@ async function saveRoomChanges(roomId, modal) {
 async function loadDepartmentsForCourse(modal) {
     try {
         const departments = await fetchData('/api/departments');
-        const departmentSelect = modal.querySelector('#courseDepartment');
+        // Try both add and edit department selects
+        const departmentSelect = modal.querySelector('#courseDepartment') || modal.querySelector('#editCourseDepartment');
+        
+        if (!departmentSelect) {
+            console.error('Department select not found in modal');
+            return;
+        }
         
         if (departments && departments.length > 0) {
+            const currentValue = departmentSelect.value; // Preserve current selection
             departmentSelect.innerHTML = '<option value="">Select Department</option>' +
                 departments.map(dept => `<option value="${dept.id}">${dept.name} (${dept.code})</option>`).join('');
+            if (currentValue) {
+                departmentSelect.value = currentValue; // Restore selection
+            }
         } else {
             departmentSelect.innerHTML = '<option value="">No departments available</option>';
         }
     } catch (error) {
         console.error('Error loading departments for course:', error);
-        const departmentSelect = modal.querySelector('#courseDepartment');
-        departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        const departmentSelect = modal.querySelector('#courseDepartment') || modal.querySelector('#editCourseDepartment');
+        if (departmentSelect) {
+            departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        }
     }
 }
 

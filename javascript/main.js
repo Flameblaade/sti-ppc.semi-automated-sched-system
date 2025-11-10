@@ -167,7 +167,15 @@
                 // Check if faculty is the same
                 const sameFaculty = eFaculty && newFaculty && String(eFaculty) === String(newFaculty);
 
-                const timeStr = `${eStart.toTimeString().substring(0, 5)} - ${eEnd.toTimeString().substring(0, 5)}`;
+                // Convert to 12-hour format
+                const formatTime12Hour = (date) => {
+                    const hours = date.getHours();
+                    const minutes = date.getMinutes();
+                    const period = hours >= 12 ? 'PM' : 'AM';
+                    const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+                    return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`;
+                };
+                const timeStr = `${formatTime12Hour(eStart)} - ${formatTime12Hour(eEnd)}`;
 
                 // Block on any conflict: same subject OR same teacher OR same room
                 if (sameSubject) {
@@ -4893,6 +4901,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Modify UI based on role
         if (userRole === 'superadmin') {
+            // Start polling for new pending accounts if superadmin
+            startSuperAdminNotificationPolling();
             addAdminControls();
         } else if (userRole === 'admin') {
             addAdminControls(userData.department);
@@ -5528,6 +5538,114 @@ function initializeGenerateScheduleButton() {
         // Update button state based on classes count
         updateGenerateScheduleButtonState();
     }
+}
+
+// Superadmin notification polling for new user registrations
+let superAdminNotificationInterval = null;
+let lastPendingCountForSuperAdmin = 0;
+
+function startSuperAdminNotificationPolling() {
+    // Clear any existing interval
+    if (superAdminNotificationInterval) {
+        clearInterval(superAdminNotificationInterval);
+    }
+    
+    // Initial load
+    checkForNewPendingAccounts();
+    
+    // Poll every 5 seconds for new pending accounts
+    superAdminNotificationInterval = setInterval(() => {
+        checkForNewPendingAccounts();
+    }, 5000);
+}
+
+async function checkForNewPendingAccounts() {
+    try {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) return;
+        
+        const response = await fetch('/api/users/pending', {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (!response.ok) return;
+        
+        const pendingUsers = await response.json();
+        const currentCount = pendingUsers ? pendingUsers.length : 0;
+        
+        // If count increased, show notification
+        if (currentCount > lastPendingCountForSuperAdmin && lastPendingCountForSuperAdmin > 0) {
+            const newUsers = pendingUsers.slice(0, currentCount - lastPendingCountForSuperAdmin);
+            if (newUsers.length > 0) {
+                const newUser = newUsers[0];
+                showSuperAdminNewUserNotification(newUser);
+            }
+        }
+        
+        lastPendingCountForSuperAdmin = currentCount;
+    } catch (error) {
+        console.error('Error checking pending accounts:', error);
+    }
+}
+
+function showSuperAdminNewUserNotification(user) {
+    // Remove any existing notification
+    const existing = document.querySelector('.superadmin-new-user-notification');
+    if (existing) {
+        existing.remove();
+    }
+    
+    const userName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+    
+    const notification = document.createElement('div');
+    notification.className = 'superadmin-new-user-notification';
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        max-width: 400px;
+        animation: slideInRight 0.3s ease;
+        cursor: pointer;
+    `;
+    
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="font-size: 24px;">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 4px;">New Account Registered</div>
+                <div style="font-size: 13px; opacity: 0.9;">${userName} is waiting for approval</div>
+            </div>
+            <button style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 4px 8px;" onclick="this.parentElement.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    notification.addEventListener('click', function(e) {
+        if (e.target.closest('button')) return;
+        // Navigate to superadmin dashboard
+        window.location.href = 'superadmin.html#pending-accounts';
+    });
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 10000);
 }
 
 // Update Generate Schedule button state

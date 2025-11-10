@@ -91,10 +91,19 @@
             },
             editable: false, // Fixed schedules cannot be moved
             startEditable: false,
-            durationEditable: false
+            durationEditable: false,
+            resourceEditable: false,
+            display: 'block'
         };
         
-        window.calendar.addEvent(event);
+        const addedEvent = window.calendar.addEvent(event);
+        
+        // Ensure it stays non-editable even after calendar refresh
+        if (addedEvent) {
+            addedEvent.setProp('editable', false);
+            addedEvent.setProp('startEditable', false);
+            addedEvent.setProp('durationEditable', false);
+        }
     }
     
     // Load all fixed schedules to calendar
@@ -149,6 +158,15 @@
         return false;
     };
     
+    // Convert 24-hour time to 12-hour format with AM/PM
+    function formatTime12Hour(time24) {
+        if (!time24) return '';
+        const [hours, minutes] = time24.split(':').map(Number);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+        return `${displayHours}:${String(minutes || 0).padStart(2, '0')} ${period}`;
+    }
+    
     // Render fixed schedules list
     function renderFixedSchedulesList() {
         const listContainer = document.getElementById('fixedSchedulesList');
@@ -174,11 +192,13 @@
             
             const infoDiv = document.createElement('div');
             infoDiv.style.flex = '1';
+            const startTime12 = formatTime12Hour(schedule.startTime);
+            const endTime12 = formatTime12Hour(schedule.endTime);
             infoDiv.innerHTML = `
                 <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${schedule.name || 'Unnamed Schedule'}</div>
                 <div style="font-size: 0.85rem; color: #666;">
                     <i class="fas fa-calendar-day"></i> ${schedule.day || 'N/A'} | 
-                    <i class="fas fa-clock"></i> ${schedule.startTime || ''} - ${schedule.endTime || ''} |
+                    <i class="fas fa-clock"></i> ${startTime12} - ${endTime12} |
                     <i class="fas fa-${schedule.allowClasses ? 'check-circle' : 'times-circle'}" style="color: ${schedule.allowClasses ? '#4caf50' : '#f44336'};"></i> 
                     ${schedule.allowClasses ? 'Allows classes' : 'Blocks classes'}
                 </div>

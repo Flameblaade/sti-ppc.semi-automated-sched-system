@@ -752,6 +752,15 @@ document.addEventListener('DOMContentLoaded', function() {
             eventDrop: function(info) {
                 const event = info.event;
                 
+                // Prevent fixed schedules from being moved
+                if (event.extendedProps?.isFixedSchedule) {
+                    info.revert();
+                    if (typeof showNotification === 'function') {
+                        showNotification('Fixed schedules cannot be moved or modified.', 'error');
+                    }
+                    return;
+                }
+                
                 // Check for conflicts BEFORE proceeding
                 if (typeof window.wouldCreateScheduleConflict === 'function') {
                     const hasConflict = window.wouldCreateScheduleConflict(event, event.id);
@@ -868,6 +877,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Handle when events are resized (lengthened/shortened)
             eventResize: function(info) {
                 const event = info.event;
+                
+                // Prevent fixed schedules from being resized
+                if (event.extendedProps?.isFixedSchedule) {
+                    info.revert();
+                    if (typeof showNotification === 'function') {
+                        showNotification('Fixed schedules cannot be resized or modified.', 'error');
+                    }
+                    return;
+                }
                 
                 // Check for conflicts BEFORE proceeding
                 if (typeof window.wouldCreateScheduleConflict === 'function') {
