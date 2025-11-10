@@ -39,23 +39,165 @@
         <div class="main-content">
             <!-- Two Column Layout -->
             <div class="content-layout">
-                <!-- Left Column: Action Buttons -->
+                <!-- Left Column: Add New Classes -->
                 <div class="left-column">
                     <div class="form-panel">
                         <div class="panel-header">
-                            <h2><i class="fas fa-tasks"></i> Schedule Management</h2>
+                            <h2><i class="fas fa-plus-circle"></i> Add New Class</h2>
                         </div>
-                        <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
-                            <button type="button" id="openAddClassModalBtn" class="btn btn-primary" style="width: 100%; padding: 15px; font-size: 1rem;">
-                                <i class="fas fa-plus-circle"></i> Add New Class
+                        
+                        <form id="scheduleForm">
+                            <div class="form-group">
+                                <label for="departmentSelect">Department</label>
+                                <select id="departmentSelect" class="form-control" required>
+                                    <option value="" selected disabled>Select Department</option>
+                                </select>
+                                <div class="form-error">Please select a department</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="facultySelect">Faculty Member</label>
+                                <select id="facultySelect" class="form-control" required disabled>
+                                    <option value="" selected disabled>Select Department First</option>
+                                </select>
+                                <div class="form-error">Please select a faculty member</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="subjectSelect">Subject/Course</label>
+                                <select id="subjectSelect" class="form-control" disabled>
+                                    <option value="" selected disabled>Select Faculty First</option>
+                                </select>
+                                <div id="subjectDetails" class="subject-details" style="display: none; margin-top: 10px; padding: 10px; background-color: #f0f7ff; border-left: 3px solid #4a90e2; border-radius: 4px; font-size: 0.9rem;">
+                                    <div style="font-weight: 600; margin-bottom: 5px; color: #2c3e50;">
+                                        <i class="fas fa-info-circle"></i> Subject Details:
+                                    </div>
+                                    <div id="subjectDetailsContent" style="color: #555;">
+                                        <!-- Details will be populated here -->
+                                    </div>
+                                </div>
+                                <div class="form-error">Please select a subject/course</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="programSelect">Program/Strand</label>
+                                <select id="programSelect" class="form-control" disabled>
+                                    <option value="" selected disabled>Select Department First</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" id="classTypeGroup" style="display: none;">
+                                <label>Class Type</label>
+                                <div class="radio-group">
+                                    <label class="radio-container">
+                                        <input type="radio" name="classType" value="lecture" required>
+                                        <span class="radio-text">Lecture</span>
+                                    </label>
+                                    <label class="radio-container">
+                                        <input type="radio" name="classType" value="laboratory">
+                                        <span class="radio-text">Laboratory</span>
+                                    </label>
+                                </div>
+                                <div class="form-error">Please select a class type</div>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="button" id="submitScheduleBtn" class="btn btn-primary">
+                                    <i class="fas fa-check"></i> Submit
+                                </button>
+                                <button type="button" id="clearFormBtn" class="btn btn-secondary">
+                                    <i class="fas fa-undo"></i> Clear
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Created Classes Section -->
+                    <div class="form-panel" style="margin-top: 20px;">
+                        <div class="panel-header">
+                            <h2><i class="fas fa-list-check"></i> Created Classes</h2>
+                            <span class="badge" id="classesCountBadge">0</span>
+                        </div>
+                        <div style="padding: 15px;">
+                            <button type="button" id="viewClassesDetailsBtn" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">
+                                <i class="fas fa-info-circle"></i> View Classes Details
                             </button>
-                            <button type="button" id="viewCreatedClassesBtn" class="btn btn-primary" style="width: 100%; padding: 15px; font-size: 1rem;">
-                                <i class="fas fa-list-check"></i> View Created Classes
-                                <span class="badge" id="classesCountBadge" style="margin-left: 10px;">0</span>
+                            <button type="button" id="clearClassesBtn" class="btn btn-danger" style="width: 100%; margin-bottom: 15px;">
+                                <i class="fas fa-trash-alt"></i> Clear All Classes
                             </button>
-                            <button type="button" id="viewFixedSchedulesBtn" class="btn btn-primary" style="width: 100%; padding: 15px; font-size: 1rem;">
-                                <i class="fas fa-calendar-alt"></i> Fixed Schedules
-                            </button>
+                            <div id="createdClasses" class="classes-list" style="max-height: 300px; overflow-y: auto;">
+                                <div class="empty-state">
+                                    <i class="fas fa-calendar-plus"></i>
+                                    <h4>No classes created yet</h4>
+                                    <p>Start by filling the form above to create your first class</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Fixed Schedules Section -->
+                    <div class="form-panel" style="margin-top: 20px;">
+                        <div class="panel-header">
+                            <h2><i class="fas fa-calendar-alt"></i> Fixed Schedules</h2>
+                        </div>
+                        <div style="padding: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <h4 style="margin: 0; font-size: 1rem;">Existing Fixed Schedules</h4>
+                                <button type="button" id="addFixedScheduleBtn" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-plus"></i> Add New
+                                </button>
+                            </div>
+                            <div id="fixedSchedulesList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; margin-bottom: 15px;">
+                                <!-- Fixed schedules will be listed here -->
+                            </div>
+                            
+                            <!-- Add Fixed Schedule Form (initially hidden) -->
+                            <div id="addFixedScheduleFormContainer" style="display: none; border-top: 2px solid #e0e0e0; padding-top: 15px; margin-top: 15px;">
+                                <h4 style="margin-bottom: 15px; font-size: 1rem;">Add New Fixed Schedule</h4>
+                                <form id="fixedScheduleForm">
+                                    <div class="form-group">
+                                        <label for="fixedScheduleName">Schedule Name</label>
+                                        <input type="text" id="fixedScheduleName" class="form-control" placeholder="e.g., Common Break" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="fixedScheduleDay">Day</label>
+                                        <select id="fixedScheduleDay" class="form-control" required>
+                                            <option value="" selected disabled>Select Day</option>
+                                            <option value="Monday">Monday</option>
+                                            <option value="Tuesday">Tuesday</option>
+                                            <option value="Wednesday">Wednesday</option>
+                                            <option value="Thursday">Thursday</option>
+                                            <option value="Friday">Friday</option>
+                                            <option value="Saturday">Saturday</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="fixedScheduleStartTime">Start Time</label>
+                                        <input type="time" id="fixedScheduleStartTime" class="form-control" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="fixedScheduleEndTime">End Time</label>
+                                        <input type="time" id="fixedScheduleEndTime" class="form-control" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>
+                                            <input type="checkbox" id="fixedScheduleAllowClasses" checked>
+                                            Allow classes to be scheduled during this time
+                                        </label>
+                                        <small style="display: block; color: #666; margin-top: 5px;">
+                                            If unchecked, classes cannot be scheduled during this fixed schedule period
+                                        </small>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="button" id="saveFixedScheduleBtn" class="btn btn-primary">
+                                            <i class="fas fa-save"></i> Save Schedule
+                                        </button>
+                                        <button type="button" id="cancelAddFixedScheduleBtn" class="btn btn-secondary">
+                                            <i class="fas fa-times"></i> Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -136,29 +278,22 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-exclamation-triangle"></i> Clear Classes Confirmation</h3>
+                <button type="button" class="close-modal" data-close-modal="clearClassesModal">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             <div class="modal-body">
-                <p style="margin-bottom: 16px; color: var(--text-color);">
-                    <strong>Warning:</strong> This action will permanently delete all created classes from both the list and the calendar. This cannot be undone.
-                </p>
-                <p style="margin-bottom: 20px; color: var(--dark-gray); font-size: 0.9rem;">
-                    To confirm, please type <strong style="color: var(--accent-color);">"confirm"</strong> in the field below:
-                </p>
-                <input 
-                    type="text" 
-                    id="confirmClearClassesInput" 
-                    class="form-control" 
-                    placeholder="Type 'confirm' to proceed"
-                    autocomplete="off"
-                    style="margin-bottom: 16px;"
-                >
-                <p id="confirmClearClassesError" style="color: var(--accent-color); font-size: 0.85rem; margin-top: 8px; display: none;">
-                    <i class="fas fa-exclamation-circle"></i> Please type "confirm" exactly to proceed.
-                </p>
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #f44336; margin-bottom: 15px;"></i>
+                    <h4 style="color: #333; margin-bottom: 10px;">Are you sure?</h4>
+                    <p style="color: #666; margin-bottom: 0;">
+                        This action will permanently delete all created classes from both the list and the calendar. This cannot be undone.
+                    </p>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" id="confirmClearClassesBtn" class="btn btn-primary" disabled>
-                    <i class="fas fa-check"></i> Clear Classes
+                <button type="button" id="confirmClearClassesBtn" class="btn btn-danger">
+                    <i class="fas fa-trash-alt"></i> Delete All Classes
                 </button>
                 <button type="button" id="cancelClearClassesBtn" class="btn btn-secondary">
                     <i class="fas fa-times"></i> Cancel
@@ -167,115 +302,64 @@
         </div>
     </div>
     
-    <!-- Add New Class Modal -->
-    <div id="addClassModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 600px;">
+    <!-- Delete Fixed Schedule Confirmation Modal -->
+    <div id="deleteFixedScheduleModal" class="modal" style="display: none;">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fas fa-plus-circle"></i> Add New Class</h3>
-                <button type="button" class="close-modal" data-close-modal="addClassModal">
+                <h3><i class="fas fa-exclamation-triangle"></i> Delete Fixed Schedule</h3>
+                <button type="button" class="close-modal" data-close-modal="deleteFixedScheduleModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
-                <form id="scheduleForm">
-                    <div class="form-group">
-                        <label for="departmentSelect">Department</label>
-                        <select id="departmentSelect" class="form-control" required>
-                            <option value="" selected disabled>Select Department</option>
-                        </select>
-                        <div class="form-error">Please select a department</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="facultySelect">Faculty Member</label>
-                        <select id="facultySelect" class="form-control" required disabled>
-                            <option value="" selected disabled>Select Department First</option>
-                        </select>
-                        <div class="form-error">Please select a faculty member</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="subjectSelect">Subject/Course</label>
-                        <select id="subjectSelect" class="form-control" disabled>
-                            <option value="" selected disabled>Select Faculty First</option>
-                        </select>
-                        <div id="subjectDetails" class="subject-details" style="display: none; margin-top: 10px; padding: 10px; background-color: #f0f7ff; border-left: 3px solid #4a90e2; border-radius: 4px; font-size: 0.9rem;">
-                            <div style="font-weight: 600; margin-bottom: 5px; color: #2c3e50;">
-                                <i class="fas fa-info-circle"></i> Subject Details:
-                            </div>
-                            <div id="subjectDetailsContent" style="color: #555;">
-                                <!-- Details will be populated here -->
-                            </div>
-                        </div>
-                        <div class="form-error">Please select a subject/course</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="programSelect">Program/Strand</label>
-                        <select id="programSelect" class="form-control" disabled>
-                            <option value="" selected disabled>Select Department First</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="classTypeGroup" style="display: none;">
-                        <label>Class Type</label>
-                        <div class="radio-group">
-                            <label class="radio-container">
-                                <input type="radio" name="classType" value="lecture" required>
-                                <span class="radio-text">Lecture</span>
-                            </label>
-                            <label class="radio-container">
-                                <input type="radio" name="classType" value="laboratory">
-                                <span class="radio-text">Laboratory</span>
-                            </label>
-                        </div>
-                        <div class="form-error">Please select a class type</div>
-                    </div>
-                </form>
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #f44336; margin-bottom: 15px;"></i>
+                    <h4 style="color: #333; margin-bottom: 10px;">Are you sure?</h4>
+                    <p style="color: #666; margin-bottom: 0;" id="deleteFixedScheduleMessage">
+                        This action will permanently delete this fixed schedule. This cannot be undone.
+                    </p>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" id="submitScheduleBtn" class="btn btn-primary">
-                    <i class="fas fa-check"></i> Submit
+                <button type="button" id="confirmDeleteFixedScheduleBtn" class="btn btn-danger">
+                    <i class="fas fa-trash-alt"></i> Delete
                 </button>
-                <button type="button" id="clearFormBtn" class="btn btn-secondary">
-                    <i class="fas fa-undo"></i> Clear
-                </button>
-                <button type="button" class="btn btn-secondary close-modal" data-close-modal="addClassModal">
-                    <i class="fas fa-times"></i> Close
+                <button type="button" id="cancelDeleteFixedScheduleBtn" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
                 </button>
             </div>
         </div>
     </div>
     
-    <!-- Created Classes Modal -->
-    <div id="createdClassesModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 700px;">
+    <!-- Created Classes Details Modal -->
+    <div id="createdClassesDetailsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px;">
             <div class="modal-header">
-                <h3><i class="fas fa-list-check"></i> Created Classes</h3>
-                <button type="button" class="close-modal" data-close-modal="createdClassesModal">
+                <h3><i class="fas fa-list-check"></i> Created Classes Details</h3>
+                <button type="button" class="close-modal" data-close-modal="createdClassesDetailsModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <!-- Stats Section -->
-                <div class="modal-stats-grid">
-                    <div class="stat-card stat-card-purple">
-                        <div class="stat-label">Total Classes</div>
-                        <div class="stat-value" id="modalClassCount">0</div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; color: white; text-align: center;">
+                        <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 5px;">Total Classes</div>
+                        <div style="font-size: 2rem; font-weight: 700;" id="detailsTotalClasses">0</div>
                     </div>
-                    <div class="stat-card stat-card-pink">
-                        <div class="stat-label">Total Hours</div>
-                        <div class="stat-value" id="modalTotalHours">0</div>
+                    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 20px; border-radius: 8px; color: white; text-align: center;">
+                        <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 5px;">Total Hours</div>
+                        <div style="font-size: 2rem; font-weight: 700;" id="detailsTotalHours">0</div>
                     </div>
-                    <div class="stat-card stat-card-blue">
-                        <div class="stat-label">Conflicts</div>
-                        <div class="stat-value" id="modalConflictCount">0</div>
+                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 8px; color: white; text-align: center;">
+                        <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 5px;">Conflicts</div>
+                        <div style="font-size: 2rem; font-weight: 700;" id="detailsConflicts">0</div>
                     </div>
                 </div>
                 
                 <!-- Classes List -->
-                <div class="modal-classes-list-container">
-                    <div id="modalClassesList">
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <div id="createdClassesDetailsList">
                         <div class="empty-state">
                             <i class="fas fa-calendar-plus"></i>
                             <h4>No classes created yet</h4>
@@ -285,87 +369,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" id="clearClassesBtn" class="btn btn-danger">
-                    <i class="fas fa-trash-alt"></i> Clear All Classes
-                </button>
-                <button type="button" class="btn btn-secondary close-modal" data-close-modal="createdClassesModal">
-                    <i class="fas fa-times"></i> Close
-                </button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Fixed Schedules Modal -->
-    <div id="fixedSchedulesModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 800px;">
-            <div class="modal-header">
-                <h3><i class="fas fa-calendar-alt"></i> Fixed Schedules</h3>
-                <button type="button" class="close-modal" data-close-modal="fixedSchedulesModal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <!-- Fixed Schedules List -->
-                <div id="fixedSchedulesListContainer" style="margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0;">Existing Fixed Schedules</h4>
-                        <button type="button" id="addFixedScheduleBtn" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Add New
-                        </button>
-                    </div>
-                    <div id="fixedSchedulesList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px;">
-                        <!-- Fixed schedules will be listed here -->
-                    </div>
-                </div>
-                
-                <!-- Add Fixed Schedule Form (initially hidden) -->
-                <div id="addFixedScheduleFormContainer" style="display: none; border-top: 2px solid #e0e0e0; padding-top: 20px; margin-top: 20px;">
-                    <h4 style="margin-bottom: 15px;">Add New Fixed Schedule</h4>
-                    <form id="fixedScheduleForm">
-                        <div class="form-group">
-                            <label for="fixedScheduleName">Schedule Name</label>
-                            <input type="text" id="fixedScheduleName" class="form-control" placeholder="e.g., Common Break" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="fixedScheduleDay">Day</label>
-                            <select id="fixedScheduleDay" class="form-control" required>
-                                <option value="" selected disabled>Select Day</option>
-                                <option value="Monday">Monday</option>
-                                <option value="Tuesday">Tuesday</option>
-                                <option value="Wednesday">Wednesday</option>
-                                <option value="Thursday">Thursday</option>
-                                <option value="Friday">Friday</option>
-                                <option value="Saturday">Saturday</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="fixedScheduleStartTime">Start Time</label>
-                            <input type="time" id="fixedScheduleStartTime" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="fixedScheduleEndTime">End Time</label>
-                            <input type="time" id="fixedScheduleEndTime" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="fixedScheduleAllowClasses" checked>
-                                Allow classes to be scheduled during this time
-                            </label>
-                            <small style="display: block; color: #666; margin-top: 5px;">
-                                If unchecked, classes cannot be scheduled during this fixed schedule period
-                            </small>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" id="saveFixedScheduleBtn" class="btn btn-primary" style="display: none;">
-                    <i class="fas fa-save"></i> Save Schedule
-                </button>
-                <button type="button" id="cancelAddFixedScheduleBtn" class="btn btn-secondary" style="display: none;">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-                <button type="button" class="btn btn-secondary close-modal" data-close-modal="fixedSchedulesModal">
+                <button type="button" class="btn btn-secondary close-modal" data-close-modal="createdClassesDetailsModal">
                     <i class="fas fa-times"></i> Close
                 </button>
             </div>

@@ -73,13 +73,15 @@
         endDate.setHours(endHours, endMinutes, 0, 0);
         
         // Create event with special class to identify it as fixed schedule
+        // Use checkmark icon if schedule allows classes, X mark if it blocks classes
+        const icon = schedule.allowClasses ? '✓' : '✗';
         const event = {
             id: schedule.id,
-            title: schedule.name,
+            title: `${icon} ${schedule.name}`,
             start: startDate,
             end: endDate,
-            backgroundColor: '#ff9800',
-            borderColor: '#f57c00',
+            backgroundColor: schedule.allowClasses ? '#4caf50' : '#ff9800',
+            borderColor: schedule.allowClasses ? '#388e3c' : '#f57c00',
             textColor: '#ffffff',
             classNames: ['fixed-schedule-event'],
             extendedProps: {
@@ -162,47 +164,116 @@
             return;
         }
         
-        listContainer.innerHTML = fixedSchedules.map(schedule => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #ff9800;">
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${schedule.name}</div>
-                    <div style="font-size: 0.85rem; color: #666;">
-                        <i class="fas fa-calendar-day"></i> ${schedule.day} | 
-                        <i class="fas fa-clock"></i> ${schedule.startTime} - ${schedule.endTime} |
-                        <i class="fas fa-${schedule.allowClasses ? 'check-circle' : 'times-circle'}" style="color: ${schedule.allowClasses ? '#4caf50' : '#f44336'};"></i> 
-                        ${schedule.allowClasses ? 'Allows classes' : 'Blocks classes'}
-                    </div>
+        // Clear existing content
+        listContainer.innerHTML = '';
+        
+        // Create elements for each schedule
+        fixedSchedules.forEach(schedule => {
+            const scheduleDiv = document.createElement('div');
+            scheduleDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #ff9800;';
+            
+            const infoDiv = document.createElement('div');
+            infoDiv.style.flex = '1';
+            infoDiv.innerHTML = `
+                <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${schedule.name || 'Unnamed Schedule'}</div>
+                <div style="font-size: 0.85rem; color: #666;">
+                    <i class="fas fa-calendar-day"></i> ${schedule.day || 'N/A'} | 
+                    <i class="fas fa-clock"></i> ${schedule.startTime || ''} - ${schedule.endTime || ''} |
+                    <i class="fas fa-${schedule.allowClasses ? 'check-circle' : 'times-circle'}" style="color: ${schedule.allowClasses ? '#4caf50' : '#f44336'};"></i> 
+                    ${schedule.allowClasses ? 'Allows classes' : 'Blocks classes'}
                 </div>
-                <button type="button" class="btn btn-danger btn-sm" onclick="deleteFixedSchedule('${schedule.id}')" style="margin-left: 10px; padding: 5px 10px;">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `).join('');
+            `;
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.style.cssText = 'margin-left: 10px; padding: 5px 10px;';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            deleteBtn.addEventListener('click', function() {
+                if (typeof window.deleteFixedSchedule === 'function') {
+                    window.deleteFixedSchedule(schedule.id);
+                }
+            });
+            
+            scheduleDiv.appendChild(infoDiv);
+            scheduleDiv.appendChild(deleteBtn);
+            listContainer.appendChild(scheduleDiv);
+        });
     }
     
     // Delete fixed schedule
     window.deleteFixedSchedule = function(scheduleId) {
-        if (!confirm('Are you sure you want to delete this fixed schedule?')) {
-            return;
-        }
+        const schedule = fixedSchedules.find(s => s.id === scheduleId);
+        const scheduleName = schedule ? schedule.name : 'this fixed schedule';
         
-        fixedSchedules = fixedSchedules.filter(s => s.id !== scheduleId);
-        saveFixedSchedules();
+        // Show delete confirmation modal
+        const deleteModal = document.getElementById('deleteFixedScheduleModal');
+        const messageEl = document.getElementById('deleteFixedScheduleMessage');
         
-        // Remove from calendar
-        if (window.calendar) {
-            const events = window.calendar.getEvents();
-            events.forEach(event => {
-                if (event.extendedProps?.scheduleId === scheduleId) {
-                    event.remove();
+        if (deleteModal && messageEl) {
+            messageEl.textContent = `This action will permanently delete "${scheduleName}". This cannot be undone.`;
+            deleteModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            
+            // Set up confirm button
+            const confirmBtn = document.getElementById('confirmDeleteFixedScheduleBtn');
+            const cancelBtn = document.getElementById('cancelDeleteFixedScheduleBtn');
+            
+            // Remove existing listeners by cloning
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            const newCancelBtn = cancelBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+            
+            // Add new listener
+            newConfirmBtn.addEventListener('click', function() {
+                // Remove from array
+                fixedSchedules = fixedSchedules.filter(s => s.id !== scheduleId);
+                saveFixedSchedules();
+                
+                // Remove from calendar if it exists
+                if (window.calendar) {
+                    const events = window.calendar.getEvents();
+                    events.forEach(event => {
+                        if (event.extendedProps?.scheduleId === scheduleId || event.id === scheduleId) {
+                            event.remove();
+                        }
+                    });
+                }
+                
+                // Refresh the list
+                renderFixedSchedulesList();
+                
+                // Close modal
+                deleteModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+                
+                if (typeof showNotification === 'function') {
+                    showNotification('Fixed schedule deleted successfully', 'success');
                 }
             });
-        }
-        
-        renderFixedSchedulesList();
-        
-        if (typeof showNotification === 'function') {
-            showNotification('Fixed schedule deleted successfully', 'success');
+            
+            // Cancel button
+            newCancelBtn.addEventListener('click', function() {
+                deleteModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            });
+            
+            // Close modal handlers
+            document.querySelectorAll('[data-close-modal="deleteFixedScheduleModal"]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    deleteModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                });
+            });
+            
+            // Close on backdrop click
+            deleteModal.addEventListener('click', function(e) {
+                if (e.target === deleteModal) {
+                    deleteModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+            });
         }
     };
     
@@ -211,33 +282,14 @@
         // Load fixed schedules
         loadFixedSchedules();
         
-        // View Fixed Schedules Modal
-        const viewFixedSchedulesBtn = document.getElementById('viewFixedSchedulesBtn');
-        const fixedSchedulesModal = document.getElementById('fixedSchedulesModal');
+        // Render fixed schedules list on page load
+        renderFixedSchedulesList();
+        
         const addFixedScheduleBtn = document.getElementById('addFixedScheduleBtn');
         const addFixedScheduleFormContainer = document.getElementById('addFixedScheduleFormContainer');
         const saveFixedScheduleBtn = document.getElementById('saveFixedScheduleBtn');
         const cancelAddFixedScheduleBtn = document.getElementById('cancelAddFixedScheduleBtn');
         const fixedScheduleForm = document.getElementById('fixedScheduleForm');
-        
-        // Open fixed schedules modal (shows list first)
-        if (viewFixedSchedulesBtn && fixedSchedulesModal) {
-            viewFixedSchedulesBtn.addEventListener('click', function() {
-                fixedSchedulesModal.style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-                renderFixedSchedulesList();
-                // Hide form and show list
-                if (addFixedScheduleFormContainer) {
-                    addFixedScheduleFormContainer.style.display = 'none';
-                }
-                if (saveFixedScheduleBtn) {
-                    saveFixedScheduleBtn.style.display = 'none';
-                }
-                if (cancelAddFixedScheduleBtn) {
-                    cancelAddFixedScheduleBtn.style.display = 'none';
-                }
-            });
-        }
         
         // Show add form when "Add New" is clicked
         if (addFixedScheduleBtn) {
@@ -246,12 +298,6 @@
                     addFixedScheduleFormContainer.style.display = 'block';
                     fixedScheduleForm.reset();
                     document.getElementById('fixedScheduleAllowClasses').checked = true;
-                }
-                if (saveFixedScheduleBtn) {
-                    saveFixedScheduleBtn.style.display = 'inline-block';
-                }
-                if (cancelAddFixedScheduleBtn) {
-                    cancelAddFixedScheduleBtn.style.display = 'inline-block';
                 }
                 // Scroll to form
                 addFixedScheduleFormContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -264,41 +310,6 @@
                 if (addFixedScheduleFormContainer) {
                     addFixedScheduleFormContainer.style.display = 'none';
                     fixedScheduleForm.reset();
-                }
-                if (saveFixedScheduleBtn) {
-                    saveFixedScheduleBtn.style.display = 'none';
-                }
-                if (cancelAddFixedScheduleBtn) {
-                    cancelAddFixedScheduleBtn.style.display = 'none';
-                }
-            });
-        }
-        
-        // Close modal handlers
-        document.querySelectorAll('[data-close-modal="fixedSchedulesModal"]').forEach(btn => {
-            btn.addEventListener('click', function() {
-                if (fixedSchedulesModal) {
-                    fixedSchedulesModal.style.display = 'none';
-                    document.body.style.overflow = 'auto';
-                    // Reset form visibility
-                    if (addFixedScheduleFormContainer) {
-                        addFixedScheduleFormContainer.style.display = 'none';
-                    }
-                    if (saveFixedScheduleBtn) {
-                        saveFixedScheduleBtn.style.display = 'none';
-                    }
-                    if (cancelAddFixedScheduleBtn) {
-                        cancelAddFixedScheduleBtn.style.display = 'none';
-                    }
-                }
-            });
-        });
-        
-        if (fixedSchedulesModal) {
-            fixedSchedulesModal.addEventListener('click', function(e) {
-                if (e.target === fixedSchedulesModal) {
-                    fixedSchedulesModal.style.display = 'none';
-                    document.body.style.overflow = 'auto';
                 }
             });
         }
@@ -344,35 +355,21 @@
                 fixedSchedules.push(schedule);
                 saveFixedSchedules();
                 
-                // Add to calendar
-                if (window.calendar) {
-                    addFixedScheduleToCalendar(schedule);
-                    // Re-apply filter after adding
-                    setTimeout(() => {
-                        if (typeof window.applyScheduleFilter === 'function') {
-                            window.applyScheduleFilter();
-                        }
-                    }, 100);
-                }
+                // DO NOT add to calendar immediately - only when Generate Schedule is clicked
+                // The calendar will be populated when generateSchedule() is called
                 
                 // Reset form and hide it
                 fixedScheduleForm.reset();
                 if (addFixedScheduleFormContainer) {
                     addFixedScheduleFormContainer.style.display = 'none';
                 }
-                if (saveFixedScheduleBtn) {
-                    saveFixedScheduleBtn.style.display = 'none';
-                }
-                if (cancelAddFixedScheduleBtn) {
-                    cancelAddFixedScheduleBtn.style.display = 'none';
-                }
                 
-                // Refresh list
+                // Refresh list immediately so it appears in the list
                 renderFixedSchedulesList();
                 
                 // Show notification
                 if (typeof showNotification === 'function') {
-                    showNotification('Fixed schedule added successfully', 'success');
+                    showNotification('Fixed schedule added successfully. It will appear in the timetable when you click "Generate Schedule".', 'success');
                 }
             });
         }
@@ -441,44 +438,9 @@
         // Expose applyFilter globally
         window.applyScheduleFilter = applyFilter;
         
-        // Load fixed schedules to calendar when calendar is ready
-        function ensureFixedSchedulesLoaded() {
-            if (window.calendar) {
-                loadFixedSchedulesToCalendar();
-                // Re-apply filter after loading
-                setTimeout(() => {
-                    if (typeof window.applyScheduleFilter === 'function') {
-                        window.applyScheduleFilter();
-                    }
-                }, 200);
-            }
-        }
-        
-        // Try to load immediately
-        setTimeout(ensureFixedSchedulesLoaded, 1000);
-        
-        // Also load after schedule is loaded
-        const originalLoadSchedule = window.loadScheduleFromLocalStorage;
-        if (originalLoadSchedule) {
-            window.loadScheduleFromLocalStorage = async function(...args) {
-                const result = await originalLoadSchedule.apply(this, args);
-                // Load fixed schedules after regular schedule loads
-                setTimeout(ensureFixedSchedulesLoaded, 500);
-                return result;
-            };
-        }
-        
-        // Also listen for calendar ready
-        if (window.calendar) {
-            ensureFixedSchedulesLoaded();
-        } else {
-            const checkCalendar = setInterval(() => {
-                if (window.calendar) {
-                    ensureFixedSchedulesLoaded();
-                    clearInterval(checkCalendar);
-                }
-            }, 500);
-        }
+        // DO NOT automatically load fixed schedules to calendar on page load
+        // Fixed schedules will only be loaded when Generate Schedule is clicked
+        // This is handled in main.js generateSchedule() function
     });
     
     // Expose functions globally

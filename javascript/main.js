@@ -791,15 +791,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update classes count badge
             updateClassesCountBadge();
             
+            // Update created classes list
+            if (typeof updateCreatedClassesList === 'function') {
+                updateCreatedClassesList();
+            }
+            
             // Reset form fields but keep department selection
             resetFormFieldsPartial();
-            
-            // Close the modal if it's open
-            const addClassModal = document.getElementById('addClassModal');
-            if (addClassModal && addClassModal.style.display === 'flex') {
-                addClassModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
             
             // Show notification
             showNotification('Class added to list! Click "Generate Schedule" to add to timetable.', 'success');
@@ -1298,13 +1296,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Ensure fixed schedules are loaded to calendar
+        // Clear existing schedule first
+        clearSchedule();
+        
+        // Load fixed schedules to calendar when generating schedule
         if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
             window.fixedSchedules.loadToCalendar();
         }
-        
-        // Clear existing schedule
-        clearSchedule();
         
         // Show loading/progress indicator
         showModal('loadingModal');
@@ -5173,13 +5171,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Initialize Add Class Modal
-    if (typeof initializeAddClassModal === 'function') {
-        initializeAddClassModal();
-    }
-    
-    // Initialize Created Classes Modal
-    initializeCreatedClassesModal();
+    // Initialize Created Classes (now always visible)
+    initializeCreatedClasses();
     
     // Update classes count badge on page load
     updateClassesCountBadge();
@@ -5189,93 +5182,230 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Add New Class Modal Functions
-function initializeAddClassModal() {
-    const openAddClassModalBtn = document.getElementById('openAddClassModalBtn');
-    const addClassModal = document.getElementById('addClassModal');
+// Created Classes Functions (now always visible, no modal)
+function initializeCreatedClasses() {
+    // Update the created classes list on page load
+    updateCreatedClassesList();
     
-    if (openAddClassModalBtn && addClassModal) {
-        openAddClassModalBtn.addEventListener('click', function() {
-            addClassModal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+    // Set up view classes details button
+    const viewClassesDetailsBtn = document.getElementById('viewClassesDetailsBtn');
+    const classesDetailsModal = document.getElementById('createdClassesDetailsModal');
+    if (viewClassesDetailsBtn && classesDetailsModal) {
+        viewClassesDetailsBtn.addEventListener('click', function() {
+            showClassesDetailsModal();
         });
     }
     
-    // Close modal handlers
-    document.querySelectorAll('[data-close-modal="addClassModal"]').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (addClassModal) {
-                addClassModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
-        });
-    });
-    
-    if (addClassModal) {
-        addClassModal.addEventListener('click', function(e) {
-            if (e.target === addClassModal) {
-                addClassModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
-        });
-    }
-}
-
-// Created Classes Modal Functions
-function initializeCreatedClassesModal() {
-    const viewClassesBtn = document.getElementById('viewCreatedClassesBtn');
-    const modal = document.getElementById('createdClassesModal');
-    const closeBtn = modal?.querySelector('[data-close-modal="createdClassesModal"]');
-    
-    if (viewClassesBtn && modal) {
-        viewClassesBtn.addEventListener('click', function() {
-            showCreatedClassesModal();
-        });
-    }
-    
-    if (closeBtn && modal) {
-        closeBtn.addEventListener('click', function() {
-            hideModal('createdClassesModal');
-        });
-    }
-    
-    // Close modal when clicking outside
-    if (modal) {
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
-                hideModal('createdClassesModal');
-            }
-        });
-    }
-    
-    // Handle close-modal buttons
-    const closeModalButtons = modal?.querySelectorAll('.close-modal');
-    if (closeModalButtons) {
-        closeModalButtons.forEach(btn => {
+    // Close classes details modal handlers
+    if (classesDetailsModal) {
+        document.querySelectorAll('[data-close-modal="createdClassesDetailsModal"]').forEach(btn => {
             btn.addEventListener('click', function() {
-                hideModal('createdClassesModal');
+                classesDetailsModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
             });
         });
+        
+        classesDetailsModal.addEventListener('click', function(e) {
+            if (e.target === classesDetailsModal) {
+                classesDetailsModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    }
+    
+    // Set up clear classes button
+    const clearClassesBtn = document.getElementById('clearClassesBtn');
+    if (clearClassesBtn) {
+        clearClassesBtn.addEventListener('click', function() {
+            const classesList = document.getElementById('createdClasses');
+            if (!classesList) return;
+            
+            const classItems = classesList.querySelectorAll('.class-item');
+            if (classItems.length === 0) {
+                if (typeof showNotification === 'function') {
+                    showNotification('No classes to clear.', 'info');
+                }
+                return;
+            }
+            
+            // Show confirmation modal
+            const clearModal = document.getElementById('clearClassesModal');
+            if (clearModal) {
+                clearModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                
+                // Set up confirm button
+                const confirmBtn = document.getElementById('confirmClearClassesBtn');
+                const cancelBtn = document.getElementById('cancelClearClassesBtn');
+                
+                // Ensure button is enabled
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.style.opacity = '1';
+                    confirmBtn.style.cursor = 'pointer';
+                }
+                
+                // Remove existing listeners by cloning
+                const newConfirmBtn = confirmBtn.cloneNode(true);
+                const newCancelBtn = cancelBtn.cloneNode(true);
+                newConfirmBtn.disabled = false; // Ensure it's enabled
+                newConfirmBtn.style.opacity = '1';
+                newConfirmBtn.style.cursor = 'pointer';
+                confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+                cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+                
+                // Add new listener
+                newConfirmBtn.addEventListener('click', function() {
+                    // Clear all classes
+                    if (typeof clearAllClasses === 'function') {
+                        clearAllClasses(classesList, classItems);
+                    } else {
+                        // Fallback clearing
+                        classItems.forEach(item => item.remove());
+                        window.allClasses = [];
+                        if (window.calendar) {
+                            window.calendar.removeAllEvents();
+                        }
+                        updateClassesCountBadge();
+                        
+                        // Add empty state
+                        if (!classesList.querySelector('.empty-state')) {
+                            const emptyState = document.createElement('div');
+                            emptyState.className = 'empty-state';
+                            emptyState.innerHTML = `
+                                <i class="fas fa-calendar-plus"></i>
+                                <h4>No classes created yet</h4>
+                                <p>Start by filling the form above to create your first class</p>
+                            `;
+                            classesList.appendChild(emptyState);
+                        }
+                    }
+                    
+                    // Close modal
+                    clearModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                    
+                    if (typeof showNotification === 'function') {
+                        showNotification('All classes have been cleared.', 'success');
+                    }
+                });
+                
+                // Cancel button
+                newCancelBtn.addEventListener('click', function() {
+                    clearModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                });
+                
+                // Close modal handlers
+                document.querySelectorAll('[data-close-modal="clearClassesModal"]').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        clearModal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    });
+                });
+                
+                // Close on backdrop click
+                clearModal.addEventListener('click', function(e) {
+                    if (e.target === clearModal) {
+                        clearModal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                });
+            }
+        });
     }
 }
 
-function showCreatedClassesModal() {
-    const modal = document.getElementById('createdClassesModal');
-    if (modal) {
-        // Update modal content
-        updateModalClassesList();
-        updateModalStats();
-        
-        // Show modal
-        modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-        
-        // Add animation
-        modal.style.opacity = '0';
-        setTimeout(() => {
-            modal.style.opacity = '1';
-        }, 10);
+function updateCreatedClassesList() {
+    // This function is called by addClassToList, so the list should already be updated
+    // But we can ensure it's initialized on page load
+    const classesList = document.getElementById('createdClasses');
+    if (classesList && window.allClasses && window.allClasses.length > 0) {
+        // List should already be populated by addClassToList
+        // Just make sure empty state is removed if classes exist
+        const emptyState = classesList.querySelector('.empty-state');
+        if (emptyState && window.allClasses.length > 0) {
+            emptyState.remove();
+        }
     }
+}
+
+function showClassesDetailsModal() {
+    const modal = document.getElementById('createdClassesDetailsModal');
+    if (!modal) return;
+    
+    const classes = window.allClasses || [];
+    const totalClasses = classes.length;
+    const totalHours = classes.reduce((sum, cls) => {
+        const hours = cls.lectureHours && cls.labHours ? 
+            (parseInt(cls.lectureHours) || 0) + (parseInt(cls.labHours) || 0) : 
+            (parseInt(cls.unitLoad) || 3);
+        return sum + hours;
+    }, 0);
+    const conflicts = 0; // Can be implemented later
+    
+    // Update stats
+    const totalClassesEl = document.getElementById('detailsTotalClasses');
+    const totalHoursEl = document.getElementById('detailsTotalHours');
+    const conflictsEl = document.getElementById('detailsConflicts');
+    
+    if (totalClassesEl) totalClassesEl.textContent = totalClasses;
+    if (totalHoursEl) totalHoursEl.textContent = totalHours;
+    if (conflictsEl) conflictsEl.textContent = conflicts;
+    
+    // Update classes list
+    const classesListEl = document.getElementById('createdClassesDetailsList');
+    if (classesListEl) {
+        if (classes.length === 0) {
+            classesListEl.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-calendar-plus"></i>
+                    <h4>No classes created yet</h4>
+                    <p>Start by adding your first class</p>
+                </div>
+            `;
+        } else {
+            classesListEl.innerHTML = classes.map(cls => {
+                const lectureHours = parseInt(cls.lectureHours) || 0;
+                const labHours = parseInt(cls.labHours) || 0;
+                const totalClassHours = lectureHours + labHours || (parseInt(cls.unitLoad) || 3);
+                const classType = cls.classType || (lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : 'laboratory'));
+                
+                return `
+                    <div style="padding: 16px; margin-bottom: 12px; background: white; border-radius: 8px; border-left: 4px solid #4a90e2; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #333;">${cls.subject || 'Unknown Subject'}</h3>
+                            <span style="background: #4a90e2; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                                ${classType}
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.9rem; color: #666;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-graduation-cap" style="color: #4a90e2; width: 16px;"></i>
+                                <span><strong>Program:</strong> ${cls.course || 'N/A'}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-chalkboard-teacher" style="color: #4a90e2; width: 16px;"></i>
+                                <span><strong>Faculty:</strong> ${cls.faculty || 'N/A'}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-clock" style="color: #4a90e2; width: 16px;"></i>
+                                <span><strong>Hours:</strong> ${totalClassHours} ${lectureHours > 0 && labHours > 0 ? `(${lectureHours}L + ${labHours}Lab)` : ''}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-building" style="color: #4a90e2; width: 16px;"></i>
+                                <span><strong>Department:</strong> ${cls.department || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+    
+    // Show modal
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
 }
 
 // Create class element for modal display
