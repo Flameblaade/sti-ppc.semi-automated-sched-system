@@ -624,6 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isUser) {
             const leftColumn = document.querySelector('.left-column');
             if (leftColumn) {
+                // Hide the entire left column for users
                 leftColumn.style.display = 'none';
             }
             
@@ -633,6 +634,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 rightColumn.style.flex = '1 1 100%';
                 rightColumn.style.maxWidth = '100%';
             }
+            
+            // Ensure fixed schedules are loaded for users (they should see them in the timetable)
+            // Fixed schedules will be loaded by loadScheduleFromLocalStorage, but ensure they're loaded
+            setTimeout(() => {
+                if (typeof window.fixedSchedules !== 'undefined') {
+                    if (window.fixedSchedules.load) {
+                        window.fixedSchedules.load();
+                    }
+                    if (window.fixedSchedules.loadToCalendar) {
+                        window.fixedSchedules.loadToCalendar();
+                        console.log('Fixed schedules loaded for user view');
+                    }
+                }
+            }, 1000);
             
             const generateScheduleBtn = document.getElementById('generateScheduleBtn');
             if (generateScheduleBtn) {
