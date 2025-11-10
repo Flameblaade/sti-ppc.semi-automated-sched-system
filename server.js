@@ -2743,20 +2743,76 @@ async function handleImportData(req, res) {
             const importedUsers = importData['/api/users'];
             // Filter out superadmin from imported data to avoid duplicates
             const filteredUsers = importedUsers.filter(u => !(u.role === 'superadmin' && u.email === 'superadmin@school.edu'));
-            users = superAdminAccount ? [superAdminAccount, ...filteredUsers] : filteredUsers;
-            console.log(`Imported ${filteredUsers.length} users`);
+            
+            // Create a copy of existing users for reference
+            const existingUsers = [...users];
+            
+            // Start with superadmin if it exists, otherwise empty array
+            const newUsers = superAdminAccount ? [superAdminAccount] : [];
+            
+            // Process each imported user
+            filteredUsers.forEach(importedUser => {
+                // Find existing user by email or id in the existing users array
+                const existingUser = existingUsers.find(u => 
+                    (u.email === importedUser.email) || (u.id === importedUser.id)
+                );
+                
+                if (existingUser) {
+                    // Update existing user, preserving important fields like password hash
+                    const updatedUser = {
+                        ...existingUser,
+                        ...importedUser,
+                        // Preserve password hash if backup doesn't have it (backup is sanitized)
+                        password: importedUser.password || existingUser.password,
+                        // Preserve verified status if backup doesn't have it
+                        verified: importedUser.verified !== undefined ? importedUser.verified : existingUser.verified,
+                        // CRITICAL: Ensure status is preserved from backup (this is the main fix)
+                        status: importedUser.status || existingUser.status || 'pending',
+                        // Preserve departmentId if backup doesn't have it
+                        departmentId: importedUser.departmentId !== undefined ? importedUser.departmentId : existingUser.departmentId
+                    };
+                    newUsers.push(updatedUser);
+                } else {
+                    // New user - add with default values for missing fields
+                    newUsers.push({
+                        ...importedUser,
+                        // Set defaults for fields that might be missing from backup
+                        password: importedUser.password || '', // Will need to be reset if empty
+                        verified: importedUser.verified !== undefined ? importedUser.verified : false,
+                        // CRITICAL: Preserve status from backup
+                        status: importedUser.status || 'pending',
+                        departmentId: importedUser.departmentId || null
+                    });
+                }
+            });
+            
+            users = newUsers;
+            console.log(`Imported ${filteredUsers.length} users (status preserved from backup)`);
         }
 
-        // Import pending users
+        // Import pending users (these should already be in /api/users, but handle separately if needed)
         if (importData['/api/pending-users'] && Array.isArray(importData['/api/pending-users'])) {
             const pendingUsers = importData['/api/pending-users'];
             // Add pending users to main users array if not already present
             pendingUsers.forEach(pu => {
-                if (!users.find(u => u.id === pu.id || u.email === pu.email)) {
-                    users.push(pu);
+                const existingUserIndex = users.findIndex(u => u.id === pu.id || u.email === pu.email);
+                if (existingUserIndex >= 0) {
+                    // Update existing user's status if it's pending in the backup
+                    if (pu.status === 'pending') {
+                        users[existingUserIndex].status = 'pending';
+                    }
+                } else {
+                    // Add new pending user
+                    users.push({
+                        ...pu,
+                        password: pu.password || '',
+                        verified: pu.verified !== undefined ? pu.verified : false,
+                        status: pu.status || 'pending',
+                        departmentId: pu.departmentId || null
+                    });
                 }
             });
-            console.log(`Imported ${pendingUsers.length} pending users`);
+            console.log(`Processed ${pendingUsers.length} pending users from backup`);
         }
 
         // Import departments
