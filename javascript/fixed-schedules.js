@@ -147,40 +147,157 @@
         return false;
     };
     
+    // Render fixed schedules list
+    function renderFixedSchedulesList() {
+        const listContainer = document.getElementById('fixedSchedulesList');
+        if (!listContainer) return;
+        
+        if (fixedSchedules.length === 0) {
+            listContainer.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #666;">
+                    <i class="fas fa-calendar-times" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i>
+                    <p>No fixed schedules yet. Click "Add New" to create one.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        listContainer.innerHTML = fixedSchedules.map(schedule => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #ff9800;">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${schedule.name}</div>
+                    <div style="font-size: 0.85rem; color: #666;">
+                        <i class="fas fa-calendar-day"></i> ${schedule.day} | 
+                        <i class="fas fa-clock"></i> ${schedule.startTime} - ${schedule.endTime} |
+                        <i class="fas fa-${schedule.allowClasses ? 'check-circle' : 'times-circle'}" style="color: ${schedule.allowClasses ? '#4caf50' : '#f44336'};"></i> 
+                        ${schedule.allowClasses ? 'Allows classes' : 'Blocks classes'}
+                    </div>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteFixedSchedule('${schedule.id}')" style="margin-left: 10px; padding: 5px 10px;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+    
+    // Delete fixed schedule
+    window.deleteFixedSchedule = function(scheduleId) {
+        if (!confirm('Are you sure you want to delete this fixed schedule?')) {
+            return;
+        }
+        
+        fixedSchedules = fixedSchedules.filter(s => s.id !== scheduleId);
+        saveFixedSchedules();
+        
+        // Remove from calendar
+        if (window.calendar) {
+            const events = window.calendar.getEvents();
+            events.forEach(event => {
+                if (event.extendedProps?.scheduleId === scheduleId) {
+                    event.remove();
+                }
+            });
+        }
+        
+        renderFixedSchedulesList();
+        
+        if (typeof showNotification === 'function') {
+            showNotification('Fixed schedule deleted successfully', 'success');
+        }
+    };
+    
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
         // Load fixed schedules
         loadFixedSchedules();
         
-        // Open fixed schedule modal
+        // View Fixed Schedules Modal
+        const viewFixedSchedulesBtn = document.getElementById('viewFixedSchedulesBtn');
+        const fixedSchedulesModal = document.getElementById('fixedSchedulesModal');
         const addFixedScheduleBtn = document.getElementById('addFixedScheduleBtn');
-        const fixedScheduleModal = document.getElementById('fixedScheduleModal');
+        const addFixedScheduleFormContainer = document.getElementById('addFixedScheduleFormContainer');
         const saveFixedScheduleBtn = document.getElementById('saveFixedScheduleBtn');
+        const cancelAddFixedScheduleBtn = document.getElementById('cancelAddFixedScheduleBtn');
         const fixedScheduleForm = document.getElementById('fixedScheduleForm');
         
-        if (addFixedScheduleBtn && fixedScheduleModal) {
-            addFixedScheduleBtn.addEventListener('click', function() {
-                fixedScheduleModal.style.display = 'flex';
+        // Open fixed schedules modal (shows list first)
+        if (viewFixedSchedulesBtn && fixedSchedulesModal) {
+            viewFixedSchedulesBtn.addEventListener('click', function() {
+                fixedSchedulesModal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
-                fixedScheduleForm.reset();
-                document.getElementById('fixedScheduleAllowClasses').checked = true;
+                renderFixedSchedulesList();
+                // Hide form and show list
+                if (addFixedScheduleFormContainer) {
+                    addFixedScheduleFormContainer.style.display = 'none';
+                }
+                if (saveFixedScheduleBtn) {
+                    saveFixedScheduleBtn.style.display = 'none';
+                }
+                if (cancelAddFixedScheduleBtn) {
+                    cancelAddFixedScheduleBtn.style.display = 'none';
+                }
+            });
+        }
+        
+        // Show add form when "Add New" is clicked
+        if (addFixedScheduleBtn) {
+            addFixedScheduleBtn.addEventListener('click', function() {
+                if (addFixedScheduleFormContainer) {
+                    addFixedScheduleFormContainer.style.display = 'block';
+                    fixedScheduleForm.reset();
+                    document.getElementById('fixedScheduleAllowClasses').checked = true;
+                }
+                if (saveFixedScheduleBtn) {
+                    saveFixedScheduleBtn.style.display = 'inline-block';
+                }
+                if (cancelAddFixedScheduleBtn) {
+                    cancelAddFixedScheduleBtn.style.display = 'inline-block';
+                }
+                // Scroll to form
+                addFixedScheduleFormContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        }
+        
+        // Cancel add form
+        if (cancelAddFixedScheduleBtn) {
+            cancelAddFixedScheduleBtn.addEventListener('click', function() {
+                if (addFixedScheduleFormContainer) {
+                    addFixedScheduleFormContainer.style.display = 'none';
+                    fixedScheduleForm.reset();
+                }
+                if (saveFixedScheduleBtn) {
+                    saveFixedScheduleBtn.style.display = 'none';
+                }
+                if (cancelAddFixedScheduleBtn) {
+                    cancelAddFixedScheduleBtn.style.display = 'none';
+                }
             });
         }
         
         // Close modal handlers
-        document.querySelectorAll('[data-close-modal="fixedScheduleModal"]').forEach(btn => {
+        document.querySelectorAll('[data-close-modal="fixedSchedulesModal"]').forEach(btn => {
             btn.addEventListener('click', function() {
-                if (fixedScheduleModal) {
-                    fixedScheduleModal.style.display = 'none';
+                if (fixedSchedulesModal) {
+                    fixedSchedulesModal.style.display = 'none';
                     document.body.style.overflow = 'auto';
+                    // Reset form visibility
+                    if (addFixedScheduleFormContainer) {
+                        addFixedScheduleFormContainer.style.display = 'none';
+                    }
+                    if (saveFixedScheduleBtn) {
+                        saveFixedScheduleBtn.style.display = 'none';
+                    }
+                    if (cancelAddFixedScheduleBtn) {
+                        cancelAddFixedScheduleBtn.style.display = 'none';
+                    }
                 }
             });
         });
         
-        if (fixedScheduleModal) {
-            fixedScheduleModal.addEventListener('click', function(e) {
-                if (e.target === fixedScheduleModal) {
-                    fixedScheduleModal.style.display = 'none';
+        if (fixedSchedulesModal) {
+            fixedSchedulesModal.addEventListener('click', function(e) {
+                if (e.target === fixedSchedulesModal) {
+                    fixedSchedulesModal.style.display = 'none';
                     document.body.style.overflow = 'auto';
                 }
             });
@@ -238,10 +355,20 @@
                     }, 100);
                 }
                 
-                // Close modal
-                fixedScheduleModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
+                // Reset form and hide it
                 fixedScheduleForm.reset();
+                if (addFixedScheduleFormContainer) {
+                    addFixedScheduleFormContainer.style.display = 'none';
+                }
+                if (saveFixedScheduleBtn) {
+                    saveFixedScheduleBtn.style.display = 'none';
+                }
+                if (cancelAddFixedScheduleBtn) {
+                    cancelAddFixedScheduleBtn.style.display = 'none';
+                }
+                
+                // Refresh list
+                renderFixedSchedulesList();
                 
                 // Show notification
                 if (typeof showNotification === 'function') {

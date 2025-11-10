@@ -794,6 +794,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Reset form fields but keep department selection
             resetFormFieldsPartial();
             
+            // Close the modal if it's open
+            const addClassModal = document.getElementById('addClassModal');
+            if (addClassModal && addClassModal.style.display === 'flex') {
+                addClassModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+            
             // Show notification
             showNotification('Class added to list! Click "Generate Schedule" to add to timetable.', 'success');
         });
@@ -1289,6 +1296,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 showNotification('No rooms available for scheduling. Please add rooms first.', 'error');
                 return;
             }
+        }
+        
+        // Ensure fixed schedules are loaded to calendar
+        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
+            window.fixedSchedules.loadToCalendar();
         }
         
         // Clear existing schedule
@@ -5161,6 +5173,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Initialize Add Class Modal
+    if (typeof initializeAddClassModal === 'function') {
+        initializeAddClassModal();
+    }
+    
     // Initialize Created Classes Modal
     initializeCreatedClassesModal();
     
@@ -5171,6 +5188,38 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeGenerateScheduleButton();
     }
 });
+
+// Add New Class Modal Functions
+function initializeAddClassModal() {
+    const openAddClassModalBtn = document.getElementById('openAddClassModalBtn');
+    const addClassModal = document.getElementById('addClassModal');
+    
+    if (openAddClassModalBtn && addClassModal) {
+        openAddClassModalBtn.addEventListener('click', function() {
+            addClassModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        });
+    }
+    
+    // Close modal handlers
+    document.querySelectorAll('[data-close-modal="addClassModal"]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (addClassModal) {
+                addClassModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    });
+    
+    if (addClassModal) {
+        addClassModal.addEventListener('click', function(e) {
+            if (e.target === addClassModal) {
+                addClassModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    }
+}
 
 // Created Classes Modal Functions
 function initializeCreatedClassesModal() {
