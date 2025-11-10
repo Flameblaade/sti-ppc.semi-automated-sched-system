@@ -2767,7 +2767,10 @@ async function handleImportData(req, res) {
                         // Preserve verified status if backup doesn't have it
                         verified: importedUser.verified !== undefined ? importedUser.verified : existingUser.verified,
                         // CRITICAL: Ensure status is preserved from backup (this is the main fix)
-                        status: importedUser.status || existingUser.status || 'pending',
+                        // Prioritize imported status, fallback to existing, then default to 'pending'
+                        status: (importedUser.status !== undefined && importedUser.status !== null) 
+                            ? importedUser.status 
+                            : (existingUser.status || 'pending'),
                         // Preserve departmentId if backup doesn't have it
                         departmentId: importedUser.departmentId !== undefined ? importedUser.departmentId : existingUser.departmentId
                     };
@@ -2780,7 +2783,9 @@ async function handleImportData(req, res) {
                         password: importedUser.password || '', // Will need to be reset if empty
                         verified: importedUser.verified !== undefined ? importedUser.verified : false,
                         // CRITICAL: Preserve status from backup
-                        status: importedUser.status || 'pending',
+                        status: (importedUser.status !== undefined && importedUser.status !== null) 
+                            ? importedUser.status 
+                            : 'pending',
                         departmentId: importedUser.departmentId || null
                     });
                 }
