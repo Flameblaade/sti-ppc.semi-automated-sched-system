@@ -37,6 +37,7 @@ let departments = [];
 let subjects = [];
 let rooms = [];
 let schedule = []; // Global schedule storage
+let fixedSchedules = []; // Global fixed schedules storage
 
 try {
   if (fs.existsSync(USERS_FILE)) {
@@ -52,12 +53,14 @@ try {
     subjects = data.subjects || [];
     rooms = data.rooms || [];
     schedule = data.schedule || [];
+    fixedSchedules = data.fixedSchedules || [];
     console.log('Data loaded from file:');
     console.log('- Users:', users.length);
     console.log('- Departments:', departments.length);
     console.log('- Subjects:', subjects.length);
     console.log('- Rooms:', rooms.length);
     console.log('- Schedule events:', schedule.length);
+    console.log('- Fixed schedules:', fixedSchedules.length);
   }
 } catch (error) {
   console.error('Error loading data:', error);
@@ -71,6 +74,7 @@ try {
   ];
   subjects = [];
   rooms = [];
+  fixedSchedules = [];
 }
 
 // Queue for serializing file writes to prevent corruption
@@ -100,7 +104,7 @@ async function processSaveQueue() {
   const { resolve, reject } = saveQueue.shift();
   
   try {
-    const dataToSave = { users, departments, subjects, rooms, schedule };
+    const dataToSave = { users, departments, subjects, rooms, schedule, fixedSchedules };
     const dataString = JSON.stringify(dataToSave, null, 2);
     
     // Atomic write: Write to temp file first, then rename (prevents corruption)
@@ -2656,12 +2660,14 @@ async function handleClearAllData(req, res) {
         subjects = [];
         rooms = [];
         schedule = [];
+        fixedSchedules = [];
         
         console.log('After clear - Total users:', users.length);
         console.log('After clear - Total departments:', departments.length);
         console.log('After clear - Total subjects:', subjects.length);
         console.log('After clear - Total rooms:', rooms.length);
         console.log('After clear - Total schedule events:', schedule.length);
+        console.log('After clear - Total fixed schedules:', fixedSchedules.length);
         
         // Also clear auxiliary files that are not part of USERS_FILE bundle
         try {
@@ -2868,6 +2874,12 @@ async function handleImportData(req, res) {
             } catch (e) {
                 console.warn('Could not write strands file:', e);
             }
+        }
+
+        // Import fixed schedules
+        if (importData['/api/fixed-schedules'] && Array.isArray(importData['/api/fixed-schedules'])) {
+            fixedSchedules = importData['/api/fixed-schedules'];
+            console.log(`Imported ${fixedSchedules.length} fixed schedules`);
         }
 
         // Save all imported data
@@ -3504,6 +3516,64 @@ app.post('/api/schedule', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   } catch (error) {
     console.error('Error saving schedule:', error);
     res.status(500).json({ message: 'Failed to save schedule' });
+  }
+});
+
+// Fixed Schedules Management Endpoints
+
+// Get fixed schedules (all users can view)
+app.get('/api/fixed-schedules', isAuthenticated, (req, res) => {
+  try {
+    console.log('Fetching fixed schedules, count:', fixedSchedules.length);
+    res.status(200).json(fixedSchedules);
+  } catch (error) {
+    console.error('Error fetching fixed schedules:', error);
+    res.status(500).json({ message: 'Failed to fetch fixed schedules' });
+  }
+});
+
+// Save fixed schedules (only admins and superadmins)
+app.post('/api/fixed-schedules', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
+  try {
+    const { schedules } = req.body;
+    console.log('Saving fixed schedules, count:', schedules ? schedules.length : 0);
+    
+    if (!Array.isArray(schedules)) {
+      return res.status(400).json({ message: 'Schedules must be an array' });
+    }
+    
+    // Replace the entire fixed schedules array
+    fixedSchedules = schedules;
+    saveData();
+    
+    console.log('Fixed schedules saved successfully, total:', fixedSchedules.length);
+    res.status(200).json({ 
+      message: 'Fixed schedules saved successfully',
+      count: fixedSchedules.length
+    });
+  } catch (error) {
+    console.error('Error saving fixed schedules:', error);
+    res.status(500).json({ message: 'Failed to save fixed schedules' });
+  }
+});
+
+// Delete a fixed schedule (only admins and superadmins)
+app.delete('/api/fixed-schedules/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const index = fixedSchedules.findIndex(s => s.id === id);
+    
+    if (index === -1) {
+      return res.status(404).json({ message: 'Fixed schedule not found' });
+    }
+    
+    fixedSchedules.splice(index, 1);
+    saveData();
+    
+    res.status(200).json({ message: 'Fixed schedule deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting fixed schedule:', error);
+    res.status(500).json({ message: 'Failed to delete fixed schedule' });
   }
 });
 

@@ -635,19 +635,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 rightColumn.style.maxWidth = '100%';
             }
             
-            // Ensure fixed schedules are loaded for users (they should see them in the timetable)
-            // Fixed schedules will be loaded by loadScheduleFromLocalStorage, but ensure they're loaded
-            setTimeout(() => {
-                if (typeof window.fixedSchedules !== 'undefined') {
-                    if (window.fixedSchedules.load) {
-                        window.fixedSchedules.load();
-                    }
-                    if (window.fixedSchedules.loadToCalendar) {
-                        window.fixedSchedules.loadToCalendar();
-                        console.log('Fixed schedules loaded for user view');
-                    }
-                }
-            }, 1000);
+            // Fixed schedules will be loaded by loadScheduleFromLocalStorage
+            // No need to load them here as it's handled in main.js
             
             const generateScheduleBtn = document.getElementById('generateScheduleBtn');
             if (generateScheduleBtn) {

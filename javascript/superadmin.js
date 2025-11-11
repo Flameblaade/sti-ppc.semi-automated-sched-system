@@ -283,7 +283,7 @@ function initializeDataManagementModals() {
             console.log('Confirm backup clicked');
             try {
                 // Fetch all relevant datasets
-                const endpoints = ['/api/users','/api/pending-users','/api/departments','/api/faculty','/api/subjects','/api/courses','/api/strands','/api/rooms','/api/schedule'];
+                const endpoints = ['/api/users','/api/pending-users','/api/departments','/api/faculty','/api/subjects','/api/courses','/api/strands','/api/rooms','/api/schedule','/api/fixed-schedules'];
                 const token = localStorage.getItem('authToken');
                 const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
                 const results = {};

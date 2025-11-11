@@ -3,12 +3,41 @@
     // Initialize fixed schedules array
     let fixedSchedules = [];
     
-    // Load fixed schedules from localStorage
-    function loadFixedSchedules() {
+    // Load fixed schedules from server (with localStorage fallback)
+    async function loadFixedSchedules() {
         try {
+            // Try to load from server first
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                try {
+                    const response = await fetch('/api/fixed-schedules', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const serverSchedules = await response.json();
+                        if (Array.isArray(serverSchedules)) {
+                            fixedSchedules = serverSchedules;
+                            // Also save to localStorage as cache
+                            localStorage.setItem('fixedSchedules', JSON.stringify(fixedSchedules));
+                            console.log('Loaded', fixedSchedules.length, 'fixed schedules from server');
+                            return fixedSchedules;
+                        }
+                    }
+                } catch (serverError) {
+                    console.warn('Failed to load fixed schedules from server, trying localStorage:', serverError);
+                }
+            }
+            
+            // Fallback to localStorage
             const saved = localStorage.getItem('fixedSchedules');
             if (saved) {
                 fixedSchedules = JSON.parse(saved);
+                console.log('Loaded', fixedSchedules.length, 'fixed schedules from localStorage (fallback)');
+            } else {
+                fixedSchedules = [];
             }
         } catch (e) {
             console.error('Error loading fixed schedules:', e);
@@ -17,10 +46,40 @@
         return fixedSchedules;
     }
     
-    // Save fixed schedules to localStorage
-    function saveFixedSchedules() {
+    // Save fixed schedules to server and localStorage
+    async function saveFixedSchedules() {
         try {
+            // Save to localStorage first (for immediate access)
             localStorage.setItem('fixedSchedules', JSON.stringify(fixedSchedules));
+            
+            // Save to server (if user is admin/superadmin)
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                try {
+                    const response = await fetch('/api/fixed-schedules', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ schedules: fixedSchedules })
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Saved', fixedSchedules.length, 'fixed schedules to server');
+                    } else {
+                        // If not admin, that's okay - just log it
+                        if (response.status === 403) {
+                            console.log('User does not have permission to save fixed schedules to server (view-only)');
+                        } else {
+                            console.warn('Failed to save fixed schedules to server:', response.status);
+                        }
+                    }
+                } catch (serverError) {
+                    console.warn('Error saving fixed schedules to server:', serverError);
+                    // Continue anyway - localStorage is saved
+                }
+            }
         } catch (e) {
             console.error('Error saving fixed schedules:', e);
         }
@@ -246,10 +305,30 @@
             cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
             
             // Add new listener
-            newConfirmBtn.addEventListener('click', function() {
+            newConfirmBtn.addEventListener('click', async function() {
                 // Remove from array
                 fixedSchedules = fixedSchedules.filter(s => s.id !== scheduleId);
-                saveFixedSchedules();
+                
+                // Save to server and localStorage
+                await saveFixedSchedules();
+                
+                // Also try to delete from server directly (if admin)
+                const token = localStorage.getItem('authToken');
+                if (token) {
+                    try {
+                        const response = await fetch(`/api/fixed-schedules/${scheduleId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        if (response.ok) {
+                            console.log('Fixed schedule deleted from server');
+                        }
+                    } catch (e) {
+                        console.warn('Error deleting fixed schedule from server:', e);
+                    }
+                }
                 
                 // Remove from calendar if it exists
                 if (window.calendar) {
@@ -298,9 +377,9 @@
     };
     
     // Initialize when DOM is ready
-    document.addEventListener('DOMContentLoaded', function() {
-        // Load fixed schedules
-        loadFixedSchedules();
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Load fixed schedules from server
+        await loadFixedSchedules();
         
         // Render fixed schedules list on page load
         renderFixedSchedulesList();
@@ -336,7 +415,7 @@
         
         // Save fixed schedule
         if (saveFixedScheduleBtn && fixedScheduleForm) {
-            saveFixedScheduleBtn.addEventListener('click', function() {
+            saveFixedScheduleBtn.addEventListener('click', async function() {
                 const name = document.getElementById('fixedScheduleName').value.trim();
                 const day = document.getElementById('fixedScheduleDay').value;
                 const startTime = document.getElementById('fixedScheduleStartTime').value;
@@ -373,7 +452,7 @@
                 
                 // Add to array
                 fixedSchedules.push(schedule);
-                saveFixedSchedules();
+                await saveFixedSchedules();
                 
                 // DO NOT add to calendar immediately - only when Generate Schedule is clicked
                 // The calendar will be populated when generateSchedule() is called
@@ -394,47 +473,357 @@
             });
         }
         
-        // Filter functionality
-        const scheduleFilter = document.getElementById('scheduleFilter');
+        // Advanced Filter functionality
+        const scheduleFilterType = document.getElementById('scheduleFilterType');
+        const scheduleFilterValue = document.getElementById('scheduleFilterValue');
+        const scheduleFilterValueContainer = document.getElementById('scheduleFilterValueContainer');
+        const scheduleFilterValueLabel = document.getElementById('scheduleFilterValueLabel');
+        const clearScheduleFilterBtn = document.getElementById('clearScheduleFilterBtn');
+        
+        // Function to load filter options based on type
+        async function loadFilterOptions(filterType) {
+            if (!scheduleFilterValue) return;
+            
+            scheduleFilterValue.innerHTML = '<option value="">Loading...</option>';
+            scheduleFilterValue.disabled = true;
+            
+            try {
+                let options = [];
+                
+                if (filterType === 'department') {
+                    scheduleFilterValueLabel.textContent = 'Select Department:';
+                    const token = localStorage.getItem('authToken');
+                    const response = await fetch('/api/departments', {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    });
+                    if (response.ok) {
+                        const departments = await response.json();
+                        options = departments.map(dept => ({
+                            value: dept.id || dept.code, // Use ID as primary value
+                            text: `${dept.code || ''} - ${dept.name || ''}`.trim(),
+                            deptId: dept.id,
+                            deptCode: dept.code,
+                            deptName: dept.name
+                        }));
+                    }
+                } else if (filterType === 'faculty') {
+                    scheduleFilterValueLabel.textContent = 'Select Faculty:';
+                    const token = localStorage.getItem('authToken');
+                    const response = await fetch('/api/faculty', {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    });
+                    if (response.ok) {
+                        const faculty = await response.json();
+                        options = faculty.map(f => ({
+                            value: f.email || f.id || f.name,
+                            text: `${f.firstName || ''} ${f.lastName || ''}`.trim() || f.email || f.name
+                        }));
+                    }
+                } else if (filterType === 'program') {
+                    scheduleFilterValueLabel.textContent = 'Select Program:';
+                    try {
+                        // Try to load from server first
+                        const token = localStorage.getItem('authToken');
+                        let courses = [];
+                        
+                        try {
+                            const response = await fetch('/api/courses', {
+                                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                            });
+                            if (response.ok) {
+                                courses = await response.json();
+                            }
+                        } catch (e) {
+                            console.warn('Failed to load courses from server, trying localStorage:', e);
+                        }
+                        
+                        // Fallback to localStorage
+                        if (!courses || courses.length === 0) {
+                            courses = JSON.parse(localStorage.getItem('courses') || '[]');
+                        }
+                        
+                        const allCourses = courses.filter(c => (c.type || 'course') === 'course');
+                        options = allCourses.map(c => ({
+                            value: c.id || c.code,
+                            text: `${c.code || ''} - ${c.name || ''}`.trim()
+                        }));
+                    } catch (e) {
+                        console.error('Error loading programs:', e);
+                    }
+                } else if (filterType === 'strand') {
+                    scheduleFilterValueLabel.textContent = 'Select Strand:';
+                    try {
+                        // Try to load from server first
+                        const token = localStorage.getItem('authToken');
+                        let strands = [];
+                        
+                        try {
+                            const response = await fetch('/api/strands', {
+                                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                            });
+                            if (response.ok) {
+                                strands = await response.json();
+                            }
+                        } catch (e) {
+                            console.warn('Failed to load strands from server, trying localStorage:', e);
+                        }
+                        
+                        // Fallback to localStorage
+                        if (!strands || strands.length === 0) {
+                            strands = JSON.parse(localStorage.getItem('strands') || '[]');
+                        }
+                        
+                        const allStrands = strands.filter(s => (s.type || 'strand') === 'strand');
+                        options = allStrands.map(s => ({
+                            value: s.id || s.code,
+                            text: `${s.code || ''} - ${s.name || ''}`.trim()
+                        }));
+                    } catch (e) {
+                        console.error('Error loading strands:', e);
+                    }
+                }
+                
+                scheduleFilterValue.innerHTML = '<option value="">All</option>';
+                options.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.text;
+                    scheduleFilterValue.appendChild(option);
+                });
+                
+                scheduleFilterValue.disabled = false;
+            } catch (error) {
+                console.error('Error loading filter options:', error);
+                scheduleFilterValue.innerHTML = '<option value="">Error loading options</option>';
+            }
+        }
         
         // Function to apply filter
-        function applyFilter() {
-            if (!scheduleFilter || !window.calendar) return;
+        async function applyFilter() {
+            if (!scheduleFilterType || !window.calendar) {
+                console.log('Filter: Calendar or filter type not available');
+                return;
+            }
             
-            const filterValue = scheduleFilter.value || 'all';
+            const filterType = scheduleFilterType.value || 'all';
+            const filterValue = scheduleFilterValue?.value || '';
             const events = window.calendar.getEvents();
             
-            events.forEach(event => {
+            console.log(`Applying filter: type=${filterType}, value=${filterValue}, events=${events.length}`);
+            
+            // Pre-fetch department data if filtering by department
+            let departmentsData = null;
+            if (filterType === 'department' && filterValue) {
+                try {
+                    const token = localStorage.getItem('authToken');
+                    const response = await fetch('/api/departments', {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    });
+                    if (response.ok) {
+                        departmentsData = await response.json();
+                    }
+                } catch (e) {
+                    console.warn('Error fetching departments for filter:', e);
+                }
+            }
+            
+            let shownCount = 0;
+            let hiddenCount = 0;
+            
+            for (const event of events) {
                 const extendedProps = event.extendedProps || {};
-                const classType = extendedProps.classType || '';
                 const isFixed = extendedProps.isFixedSchedule || false;
+                
+                // ALWAYS show fixed schedules regardless of filter
+                if (isFixed) {
+                    const eventEl = event.el;
+                    if (eventEl) {
+                        eventEl.classList.remove('filtered-out');
+                        eventEl.style.display = '';
+                    }
+                    // Also try to find by event ID if el is not available
+                    if (!eventEl) {
+                        setTimeout(() => {
+                            const elById = document.querySelector(`[data-event-id="${event.id}"]`);
+                            if (elById) {
+                                elById.classList.remove('filtered-out');
+                                elById.style.display = '';
+                            }
+                        }, 100);
+                    }
+                    shownCount++;
+                    continue;
+                }
                 
                 let shouldShow = true;
                 
-                if (filterValue === 'lecture') {
-                    shouldShow = classType === 'lecture' && !isFixed;
-                } else if (filterValue === 'laboratory') {
-                    shouldShow = classType === 'laboratory' && !isFixed;
-                } else if (filterValue === 'fixed') {
-                    shouldShow = isFixed;
-                } else {
-                    // Show all
+                if (filterType === 'all') {
                     shouldShow = true;
+                } else if (filterType === 'department') {
+                    if (filterValue) {
+                        const eventDeptId = String(extendedProps.departmentId || '').trim();
+                        const eventDept = String(extendedProps.department || '').trim();
+                        const filterDept = String(filterValue).trim();
+                        
+                        // Exact match on ID (case-insensitive) - this is the primary match
+                        const eventDeptIdLower = eventDeptId.toLowerCase();
+                        const filterDeptLower = filterDept.toLowerCase();
+                        
+                        // Check exact ID match first (most reliable)
+                        shouldShow = (eventDeptIdLower === filterDeptLower);
+                        
+                        // If ID doesn't match, try matching by department name/code using pre-fetched data
+                        if (!shouldShow && departmentsData) {
+                            const eventDeptLower = eventDept ? eventDept.toLowerCase() : '';
+                            const selectedDept = departmentsData.find(d => 
+                                String(d.id || '').trim().toLowerCase() === filterDeptLower ||
+                                String(d.code || '').trim().toLowerCase() === filterDeptLower
+                            );
+                            
+                            if (selectedDept) {
+                                const selectedDeptId = String(selectedDept.id || '').trim().toLowerCase();
+                                const selectedDeptCode = String(selectedDept.code || '').trim().toLowerCase();
+                                const selectedDeptName = String(selectedDept.name || '').trim().toLowerCase();
+                                
+                                // Match if event's department ID/code/name matches selected department
+                                shouldShow = (
+                                    eventDeptIdLower === selectedDeptId ||
+                                    eventDeptIdLower === selectedDeptCode ||
+                                    eventDeptLower === selectedDeptName ||
+                                    eventDeptLower === selectedDeptCode
+                                );
+                            }
+                        }
+                        
+                        if (!shouldShow) {
+                            console.log(`HIDING event: "${event.title}" - eventDeptId="${eventDeptId}", eventDept="${eventDept}", filterDept="${filterDept}"`);
+                        }
+                    } else {
+                        shouldShow = true;
+                    }
+                } else if (filterType === 'faculty') {
+                    if (filterValue) {
+                        const eventFaculty = String(extendedProps.faculty || '').trim().toLowerCase();
+                        const filterFaculty = String(filterValue).trim().toLowerCase();
+                        // Exact match only - no partial matching
+                        shouldShow = (eventFaculty === filterFaculty);
+                        
+                        if (!shouldShow) {
+                            console.log(`HIDING event: "${event.title}" - eventFaculty="${eventFaculty}", filterFaculty="${filterFaculty}"`);
+                        }
+                    } else {
+                        shouldShow = true;
+                    }
+                } else if (filterType === 'program') {
+                    if (filterValue) {
+                        const eventCourseId = String(extendedProps.courseId || '').trim().toLowerCase();
+                        const filterProgram = String(filterValue).trim().toLowerCase();
+                        
+                        // Primary match: exact courseId match
+                        shouldShow = (eventCourseId === filterProgram);
+                        
+                        // If no match, try to match by program name/code
+                        if (!shouldShow) {
+                            try {
+                                const courses = JSON.parse(localStorage.getItem('courses') || '[]');
+                                const program = courses.find(c => 
+                                    String(c.id || '').trim().toLowerCase() === filterProgram ||
+                                    String(c.code || '').trim().toLowerCase() === filterProgram
+                                );
+                                
+                                if (program) {
+                                    const programId = String(program.id || '').trim().toLowerCase();
+                                    const programCode = String(program.code || '').trim().toLowerCase();
+                                    // Exact match only
+                                    shouldShow = (
+                                        eventCourseId === programId ||
+                                        eventCourseId === programCode
+                                    );
+                                }
+                            } catch (e) {
+                                console.warn('Error matching program:', e);
+                            }
+                        }
+                        
+                        if (!shouldShow) {
+                            console.log(`HIDING event: "${event.title}" - eventCourseId="${eventCourseId}", filterProgram="${filterProgram}"`);
+                        }
+                    } else {
+                        shouldShow = true;
+                    }
+                } else if (filterType === 'strand') {
+                    if (filterValue) {
+                        const eventCourseId = String(extendedProps.courseId || '').trim().toLowerCase();
+                        const filterStrand = String(filterValue).trim().toLowerCase();
+                        
+                        // Primary match: exact courseId match
+                        shouldShow = (eventCourseId === filterStrand);
+                        
+                        // If no match, try to match by strand name/code
+                        if (!shouldShow) {
+                            try {
+                                const strands = JSON.parse(localStorage.getItem('strands') || '[]');
+                                const strand = strands.find(s => 
+                                    String(s.id || '').trim().toLowerCase() === filterStrand ||
+                                    String(s.code || '').trim().toLowerCase() === filterStrand
+                                );
+                                
+                                if (strand) {
+                                    const strandId = String(strand.id || '').trim().toLowerCase();
+                                    const strandCode = String(strand.code || '').trim().toLowerCase();
+                                    // Exact match only
+                                    shouldShow = (
+                                        eventCourseId === strandId ||
+                                        eventCourseId === strandCode
+                                    );
+                                }
+                            } catch (e) {
+                                console.warn('Error matching strand:', e);
+                            }
+                        }
+                        
+                        if (!shouldShow) {
+                            console.log(`HIDING event: "${event.title}" - eventCourseId="${eventCourseId}", filterStrand="${filterStrand}"`);
+                        }
+                    } else {
+                        shouldShow = true;
+                    }
                 }
                 
-                // Add or remove filtered-out class
+                // Add or remove filtered-out class and set display style
                 const eventEl = event.el;
                 if (eventEl) {
                     if (shouldShow) {
                         eventEl.classList.remove('filtered-out');
+                        eventEl.style.display = '';
+                        shownCount++;
                     } else {
                         eventEl.classList.add('filtered-out');
+                        eventEl.style.display = 'none';
+                        hiddenCount++;
                     }
+                } else {
+                    // If el is not available, try to find it by event ID
+                    setTimeout(() => {
+                        const elById = document.querySelector(`[data-event-id="${event.id}"]`);
+                        if (elById) {
+                            if (shouldShow) {
+                                elById.classList.remove('filtered-out');
+                                elById.style.display = '';
+                            } else {
+                                elById.classList.add('filtered-out');
+                                elById.style.display = 'none';
+                            }
+                        }
+                    }, 100);
                 }
-            });
+            }
+            
+            console.log(`Filter applied: ${shownCount} shown, ${hiddenCount} hidden`);
         }
         
-        if (scheduleFilter) {
+        // Initialize filter system
+        if (scheduleFilterType) {
             // Add CSS for hiding events
             if (!document.getElementById('schedule-filter-styles')) {
                 const style = document.createElement('style');
@@ -442,17 +831,79 @@
                 style.textContent = `
                     .fc-event.filtered-out {
                         display: none !important;
+                        visibility: hidden !important;
+                        opacity: 0 !important;
+                    }
+                    .fc-event-time-grid-event.filtered-out,
+                    .fc-event-day-grid-event.filtered-out {
+                        display: none !important;
                     }
                 `;
                 document.head.appendChild(style);
             }
             
-            scheduleFilter.addEventListener('change', applyFilter);
+            // Show/hide value selector based on filter type
+            scheduleFilterType.addEventListener('change', function() {
+                const filterType = this.value;
+                if (filterType === 'all') {
+                    if (scheduleFilterValueContainer) {
+                        scheduleFilterValueContainer.style.display = 'none';
+                    }
+                    if (scheduleFilterValue) {
+                        scheduleFilterValue.value = '';
+                    }
+                    // Apply filter immediately
+                    setTimeout(async () => await applyFilter(), 50);
+                } else {
+                    if (scheduleFilterValueContainer) {
+                        scheduleFilterValueContainer.style.display = 'block';
+                    }
+                    loadFilterOptions(filterType).then(async () => {
+                        // Apply filter after options are loaded
+                        setTimeout(async () => await applyFilter(), 100);
+                    });
+                }
+            });
+            
+            // Apply filter when value changes
+            if (scheduleFilterValue) {
+                scheduleFilterValue.addEventListener('change', function() {
+                    setTimeout(async () => await applyFilter(), 50);
+                });
+            }
+            
+            // Clear filter button
+            if (clearScheduleFilterBtn) {
+                clearScheduleFilterBtn.addEventListener('click', function() {
+                    if (scheduleFilterType) {
+                        scheduleFilterType.value = 'all';
+                    }
+                    if (scheduleFilterValueContainer) {
+                        scheduleFilterValueContainer.style.display = 'none';
+                    }
+                    if (scheduleFilterValue) {
+                        scheduleFilterValue.value = '';
+                    }
+                    applyFilter().catch(e => console.error('Error applying filter:', e));
+                });
+            }
             
             // Re-apply filter when events are added or calendar is rendered
             if (window.calendar) {
-                window.calendar.on('eventsSet', applyFilter);
+                window.calendar.on('eventsSet', function() {
+                    setTimeout(async () => await applyFilter(), 100);
+                });
+                window.calendar.on('eventDidMount', function() {
+                    setTimeout(async () => await applyFilter(), 50);
+                });
             }
+            
+            // Also apply filter when calendar is ready
+            setTimeout(async () => {
+                if (window.calendar) {
+                    await applyFilter();
+                }
+            }, 1000);
         }
         
         // Expose applyFilter globally
