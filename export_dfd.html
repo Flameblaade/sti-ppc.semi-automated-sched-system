@@ -97,219 +97,329 @@
         <button class="export-all-btn" onclick="exportAllDiagrams()">Export All as PNG</button>
 
         <div class="diagram-section">
-            <h2>Figure 1: Context Diagram (Level 0)</h2>
-            <div class="mermaid" id="context-diagram">
-flowchart TD
-    System["0<br/>Web-Based Automated<br/>Scheduling System"]
+            <h2>Content Diagram</h2>
+            <div class="mermaid" id="content-diagram">
+flowchart LR
     SuperAdmin[Superadmin]
-    User[User]
-    SuperAdmin -->|Username/Password| System
-    SuperAdmin -->|User Registration Data| System
-    SuperAdmin -->|Department Data| System
-    SuperAdmin -->|Subject Data| System
-    SuperAdmin -->|Room Data| System
-    SuperAdmin -->|Course Data| System
-    SuperAdmin -->|Strand Data| System
-    SuperAdmin -->|Faculty Data| System
-    SuperAdmin -->|Schedule Data| System
-    SuperAdmin -->|Approval/Rejection| System
-    SuperAdmin -->|Role Assignment| System
-    User -->|Registration Data| System
-    User -->|Username/Password| System
-    User -->|View Request| System
-    System -->|Full System Information| SuperAdmin
-    System -->|User List| SuperAdmin
-    System -->|Department List| SuperAdmin
-    System -->|Subject List| SuperAdmin
-    System -->|Room List| SuperAdmin
-    System -->|Course List| SuperAdmin
-    System -->|Strand List| SuperAdmin
-    System -->|Faculty List| SuperAdmin
-    System -->|Schedule List| SuperAdmin
-    System -->|Confirmation| SuperAdmin
-    System -->|Verification Code| User
-    System -->|Confirmation| User
-    System -->|Schedule List| User
-    System -->|Department List| User
-    System -->|Subject List| User
-    System -->|Room List| User
-    System -->|Profile Information| User
+    System["Web-Based Automated<br/>Scheduling System"]
+    Faculty[User / Faculty]
+    SuperAdmin -->|Credentials / Admin Actions| System
+    Faculty -->|Credentials / View Requests| System
+    System -->|Approvals / Confirmations| SuperAdmin
+    System -->|Schedules / Info| Faculty
             </div>
-            <button class="export-btn" onclick="exportDiagram('context-diagram', 'Context_Diagram')">Export as PNG</button>
+            <button class="export-btn" onclick="exportDiagram('content-diagram', 'Content_Diagram')">Export as PNG</button>
         </div>
 
         <div class="diagram-section">
-            <h2>Figure 4.5: Data Flow Diagram (Superadmin)</h2>
-            <div class="mermaid" id="superadmin-diagram">
-flowchart TD
+            <h2>Data Flow Diagram (Level 0)</h2>
+            <div class="mermaid" id="dfd-level0">
+flowchart TB
     SuperAdmin[Superadmin]
-    Login["1.0<br/>Login"]
-    ManageUsers["2.0<br/>Manage Users"]
-    ManageDepts["3.0<br/>Manage Departments"]
-    ManageSubjects["4.0<br/>Manage Subjects"]
-    ManageRooms["5.0<br/>Manage Rooms"]
-    ManageCourses["6.0<br/>Manage Courses"]
-    ManageStrands["7.0<br/>Manage Strands"]
-    ManageFaculty["8.0<br/>Manage Faculty"]
-    ManageSchedules["9.0<br/>Manage Schedules"]
-    ApproveUsers["10.0<br/>Approve Users"]
-    UserAccounts[("dbo.user_accounts")]
-    UserInfo[("dbo.user_info")]
-    Departments[("dbo.departments")]
-    Subjects[("dbo.subjects")]
-    Rooms[("dbo.rooms")]
-    Courses[("dbo.courses")]
-    Strands[("dbo.strands")]
-    Faculty[("dbo.faculty")]
-    Schedules[("dbo.schedules")]
-    SuperAdmin -->|User Credentials| Login
-    SuperAdmin -->|View, Add Records| ManageUsers
-    SuperAdmin -->|View, Add Records| ManageDepts
-    SuperAdmin -->|View, Add Records| ManageSubjects
-    SuperAdmin -->|View, Add Records| ManageRooms
-    SuperAdmin -->|View, Add Records| ManageCourses
-    SuperAdmin -->|View, Add Records| ManageStrands
-    SuperAdmin -->|View, Add Records| ManageFaculty
-    SuperAdmin -->|View, Add Records| ManageSchedules
-    SuperAdmin -->|View, Approve, Reject| ApproveUsers
-    Login -->|Confirmation| SuperAdmin
-    ManageUsers -->|Confirmation| SuperAdmin
-    ManageDepts -->|Confirmation| SuperAdmin
-    ManageSubjects -->|Confirmation| SuperAdmin
-    ManageRooms -->|Confirmation| SuperAdmin
-    ManageCourses -->|Confirmation| SuperAdmin
-    ManageStrands -->|Confirmation| SuperAdmin
-    ManageFaculty -->|Confirmation| SuperAdmin
-    ManageSchedules -->|Confirmation| SuperAdmin
-    ApproveUsers -->|Confirmation| SuperAdmin
-    Login -->|Credentials| UserAccounts
-    UserAccounts -->|User Data| Login
-    ManageUsers -->|Add Records| UserInfo
-    UserInfo -->|Display User Details| ManageUsers
-    ManageDepts -->|Add/Update Records| Departments
-    Departments -->|Show Department Details| ManageDepts
-    ManageSubjects -->|Add/Update Records| Subjects
-    Subjects -->|Show Subject Details| ManageSubjects
-    ManageRooms -->|Add/Update Records| Rooms
-    Rooms -->|Show Room Details| ManageRooms
-    ManageCourses -->|Add/Update Records| Courses
-    Courses -->|Show Course Details| ManageCourses
-    ManageStrands -->|Add/Update Records| Strands
-    Strands -->|Show Strand Details| ManageStrands
-    ManageFaculty -->|Add/Update Records| Faculty
-    Faculty -->|Show Faculty Details| ManageFaculty
-    ManageSchedules -->|Add/Upload Schedule| Schedules
-    Schedules -->|Show Schedule Details| ManageSchedules
-    ApproveUsers -->|Accept/Reject Users| UserInfo
-    UserInfo -->|Show User Records| ApproveUsers
+    Faculty[User / Faculty]
+    subgraph System["0 Scheduling System"]
+      direction TB
+      P1["1.0 Authentication"]
+      P2["2.0 Dashboard"]
+      P3["3.0 Academic Management"]
+      P4["4.0 Data Management"]
+      P5["5.0 View Schedules"]
+    end
+    SuperAdmin -->|Login / Manage| P1
+    SuperAdmin -->|Navigate| P2
+    SuperAdmin -->|Manage Academics| P3
+    SuperAdmin -->|Manage Data| P4
+    SuperAdmin -->|Review Schedules| P5
+    Faculty -->|Login / View| P1
+    Faculty -->|Navigate| P2
+    Faculty -->|View Academic Info| P3
+    Faculty -->|View Data| P4
+    Faculty -->|View Schedules| P5
             </div>
-            <button class="export-btn" onclick="exportDiagram('superadmin-diagram', 'DFD_Superadmin')">Export as PNG</button>
+            <button class="export-btn" onclick="exportDiagram('dfd-level0', 'DFD_Level0')">Export as PNG</button>
         </div>
 
         <div class="diagram-section">
-            <h2>Figure 4.6: Data Flow Diagram (User)</h2>
-            <div class="mermaid" id="user-diagram">
-flowchart TD
-    User[User]
-    Login["1.0<br/>Login"]
-    UserDashboard["2.0<br/>User Dashboard"]
-    ViewProfile["2.1<br/>View Profile"]
-    UserAccounts[("dbo.user_accounts")]
-    UserInfo[("dbo.user_info")]
-    Schedules[("dbo.schedules")]
-    Departments[("dbo.departments")]
-    Subjects[("dbo.subjects")]
-    Rooms[("dbo.rooms")]
-    User -->|User Credentials| Login
-    User -->|View Records| UserDashboard
-    User -->|View Request| ViewProfile
-    Login -->|Confirmation| User
-    UserDashboard -->|Confirmation| User
-    ViewProfile -->|Confirmation| User
-    Login -->|Credentials| UserAccounts
-    UserAccounts -->|User Data| Login
-    UserDashboard -->|View Existing Schedules| Schedules
-    Schedules -->|Display Schedule Details| UserDashboard
-    UserDashboard -->|View Departments| Departments
-    Departments -->|Display Department Info| UserDashboard
-    UserDashboard -->|View Subjects| Subjects
-    Subjects -->|Display Subject Info| UserDashboard
-    UserDashboard -->|View Rooms| Rooms
-    Rooms -->|Display Room Info| UserDashboard
-    ViewProfile -->|View User Info| UserInfo
-    UserInfo -->|Display Profile Details| ViewProfile
+            <h2>Data Flow Diagram (Super Admin)</h2>
+            <div class="mermaid" id="dfd-superadmin">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      Login["1.0 Login"]
+      Dashboard["2.0 Dashboard"]
+      Pending["3.0 Pending Accounts"]
+      ManageUsers["4.0 Manage Users"]
+      Academic["5.0 Academic Management"]
+      DataMgmt["6.0 Data Management"]
+      Schedules["7.0 View Schedules"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      Departments[("departments")]
+      Subjects[("subjects")]
+      Rooms[("rooms")]
+      Courses[("courses")]
+      Strands[("strands")]
+      Faculty[("faculty")]
+      SchedulesDB[("schedules")]
+    end
+    SuperAdmin -->|Credentials| Login
+    Login -->|Confirm| SuperAdmin
+    SuperAdmin -->|Navigate| Dashboard
+    SuperAdmin -->|Review / Approve| Pending
+    Pending <--> UserInfo
+    SuperAdmin -->|CRUD| ManageUsers
+    ManageUsers <--> UserInfo
+    SuperAdmin -->|CRUD| Academic
+    Academic <--> Departments
+    Academic <--> Subjects
+    Academic <--> Rooms
+    Academic <--> Courses
+    Academic <--> Strands
+    Academic <--> Faculty
+    SuperAdmin -->|CRUD| DataMgmt
+    DataMgmt <--> UserAccounts
+    DataMgmt <--> SchedulesDB
+    SuperAdmin -->|View / Export| Schedules
+    Schedules <--> SchedulesDB
             </div>
-            <button class="export-btn" onclick="exportDiagram('user-diagram', 'DFD_User')">Export as PNG</button>
+            <button class="export-btn" onclick="exportDiagram('dfd-superadmin', 'DFD_SuperAdmin')">Export as PNG</button>
         </div>
 
         <div class="diagram-section">
-            <h2>Figure 4.7: Data Flow Diagram Users (Superadmin)</h2>
-            <div class="mermaid" id="superadmin-users-diagram">
-flowchart TD
-    SuperAdmin[Superadmin]
-    ManageUsers["2.0<br/>Manage Users"]
-    BatchUpload["2.1<br/>Batch Upload"]
-    UpdateStatus["2.2<br/>Update Status"]
-    UserInfo[("dbo.user_info")]
-    SuperAdmin -->|View, Add Records| ManageUsers
-    SuperAdmin -->|View, Batch upload| BatchUpload
-    SuperAdmin -->|Update Status| UpdateStatus
-    ManageUsers -->|Confirmation| SuperAdmin
-    BatchUpload -->|Confirmation| SuperAdmin
-    UpdateStatus -->|Confirmation| SuperAdmin
-    ManageUsers -->|Add Records| UserInfo
-    UserInfo -->|Display User Details| ManageUsers
-    UserInfo -->|Upload Existing User Records| ManageUsers
-    BatchUpload -->|Show User Details| UserInfo
-    UserInfo -->|Show User Details| BatchUpload
-    UpdateStatus -->|Change status of new applicant| UserInfo
-    UserInfo -->|Updated User Records| UpdateStatus
-    ManageUsers <--> BatchUpload
-    BatchUpload <--> UpdateStatus
+            <h2>Data Flow Diagram (User / Faculty)</h2>
+            <div class="mermaid" id="dfd-user-faculty">
+flowchart TB
+    Faculty[User / Faculty]
+    subgraph Processes[" "]
+      direction LR
+      Login["1.0 Login"]
+      Dashboard["2.0 Dashboard"]
+      ViewSchedules["3.0 View Schedules"]
+      Profile["4.0 Profile"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+      Subjects[("subjects")]
+      Rooms[("rooms")]
+    end
+    Faculty -->|Credentials| Login
+    Login -->|Confirm| Faculty
+    Faculty -->|Navigate| Dashboard
+    Faculty -->|Open| ViewSchedules
+    Faculty -->|Open| Profile
+    Login <--> UserAccounts
+    Profile <--> UserInfo
+    ViewSchedules <--> SchedulesDB
+    ViewSchedules <--> Departments
+    ViewSchedules <--> Subjects
+    ViewSchedules <--> Rooms
             </div>
-            <button class="export-btn" onclick="exportDiagram('superadmin-users-diagram', 'DFD_Superadmin_Users')">Export as PNG</button>
+            <button class="export-btn" onclick="exportDiagram('dfd-user-faculty', 'DFD_User_Faculty')">Export as PNG</button>
         </div>
 
         <div class="diagram-section">
-            <h2>Figure 4.8: Child Diagram Schedule Tab (Superadmin)</h2>
-            <div class="mermaid" id="superadmin-schedules-diagram">
-flowchart TD
-    SuperAdmin[Superadmin]
-    ManageSchedules["9.0<br/>Manage Schedules"]
-    BatchUpload["9.1<br/>Batch Upload"]
-    Schedules[("dbo.schedules")]
-    SuperAdmin -->|View, Batch upload| BatchUpload
-    BatchUpload -->|Confirmation| SuperAdmin
-    BatchUpload -->|Upload Records| ManageSchedules
-    ManageSchedules -->|Update Records| BatchUpload
-    BatchUpload -->|Upload Schedules| Schedules
-    Schedules -->|Show Schedule Details| BatchUpload
+            <h2>Data Flow Diagram (Dashboard)</h2>
+            <div class="mermaid" id="dfd-dashboard">
+flowchart TB
+    Actor[Superadmin / Faculty]
+    subgraph Processes[" "]
+      direction LR
+      Dashboard["2.0 Dashboard"]
+      Widgets["2.1 Widgets"]
+      Reports["2.2 Reports"]
+      QuickActions["2.3 Quick Actions"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+    end
+    Actor -->|Open| Dashboard
+    Dashboard -->|Confirm| Actor
+    Dashboard --> Widgets
+    Dashboard --> Reports
+    Dashboard --> QuickActions
+    Widgets <--> UserInfo
+    Widgets <--> SchedulesDB
+    Reports <--> SchedulesDB
+    Reports <--> Departments
             </div>
-            <button class="export-btn" onclick="exportDiagram('superadmin-schedules-diagram', 'DFD_Superadmin_Schedules')">Export as PNG</button>
+            <button class="export-btn" onclick="exportDiagram('dfd-dashboard', 'DFD_Dashboard')">Export as PNG</button>
         </div>
 
         <div class="diagram-section">
-            <h2>Figure 4.9: Child Diagram Approve Users Tab (Superadmin)</h2>
-            <div class="mermaid" id="superadmin-approve-diagram">
-flowchart TD
+            <h2>Data Flow Diagram (Pending Accounts)</h2>
+            <div class="mermaid" id="dfd-pending">
+flowchart TB
     SuperAdmin[Superadmin]
-    ApproveUsers["10.0<br/>Approve Users"]
-    UpdateStatus["10.1<br/>Update Status"]
-    UserInfo[("dbo.user_info")]
-    SuperAdmin -->|View, Approve, Reject users| ApproveUsers
-    SuperAdmin -->|View, Approve, Reject User| UpdateStatus
-    ApproveUsers -->|Confirmation| SuperAdmin
-    UpdateStatus -->|Confirmation| SuperAdmin
-    ApproveUsers -->|View Users| UserInfo
-    ApproveUsers -->|Show User Records| UserInfo
-    UserInfo -->|View Users| ApproveUsers
-    UserInfo -->|Show User Records| ApproveUsers
-    UpdateStatus -->|Update Users| UserInfo
-    UpdateStatus -->|Show User Records| UserInfo
-    UserInfo -->|Update Users| UpdateStatus
-    UserInfo -->|Show User Records| UpdateStatus
+    subgraph Processes[" "]
+      direction LR
+      Pending["3.0 Pending Accounts"]
+      Review["3.1 Review Applicant"]
+      Decide["3.2 Approve / Reject"]
+      Assign["3.3 Assign Role & Department"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      Departments[("departments")]
+    end
+    SuperAdmin -->|Open| Pending
+    Pending --> Review
+    Review <--> UserInfo
+    Review --> Decide
+    Decide <--> UserInfo
+    Decide --> Assign
+    Assign <--> UserInfo
+    Assign <--> Departments
             </div>
-            <button class="export-btn" onclick="exportDiagram('superadmin-approve-diagram', 'DFD_Superadmin_Approve')">Export as PNG</button>
+            <button class="export-btn" onclick="exportDiagram('dfd-pending', 'DFD_Pending_Accounts')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Manage Users)</h2>
+            <div class="mermaid" id="dfd-manage-users">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      ManageUsers["4.0 Manage Users"]
+      Create["4.1 Create User"]
+      Update["4.2 Update User"]
+      Deactivate["4.3 Deactivate User"]
+      Import["4.4 Batch Import"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      UserAccounts[("user_accounts")]
+    end
+    SuperAdmin -->|Open| ManageUsers
+    ManageUsers --> Create
+    ManageUsers --> Update
+    ManageUsers --> Deactivate
+    ManageUsers --> Import
+    Create <--> UserInfo
+    Create <--> UserAccounts
+    Update <--> UserInfo
+    Deactivate <--> UserInfo
+    Import <--> UserInfo
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-manage-users', 'DFD_Manage_Users')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Academic Management)</h2>
+            <div class="mermaid" id="dfd-academic">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      Academic["5.0 Academic Management"]
+      Depts["5.1 Departments"]
+      Subjects["5.2 Subjects"]
+      Rooms["5.3 Rooms"]
+      Courses["5.4 Courses"]
+      Strands["5.5 Strands"]
+      FacultyP["5.6 Faculty"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      Departments[("departments")]
+      SubjectsDB[("subjects")]
+      RoomsDB[("rooms")]
+      CoursesDB[("courses")]
+      StrandsDB[("strands")]
+      FacultyDB[("faculty")]
+    end
+    SuperAdmin -->|Open| Academic
+    Academic --> Depts
+    Academic --> Subjects
+    Academic --> Rooms
+    Academic --> Courses
+    Academic --> Strands
+    Academic --> FacultyP
+    Depts <--> Departments
+    Subjects <--> SubjectsDB
+    Rooms <--> RoomsDB
+    Courses <--> CoursesDB
+    Strands <--> StrandsDB
+    FacultyP <--> FacultyDB
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-academic', 'DFD_Academic_Management')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Data Management)</h2>
+            <div class="mermaid" id="dfd-data-mgmt">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      DataMgmt["6.0 Data Management"]
+      Backup["6.1 Backup / Export"]
+      Import["6.2 Import / Restore"]
+      Clean["6.3 Clear / Reset"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+    end
+    SuperAdmin -->|Open| DataMgmt
+    DataMgmt --> Backup
+    DataMgmt --> Import
+    DataMgmt --> Clean
+    Backup <--> UserAccounts
+    Backup <--> UserInfo
+    Backup <--> SchedulesDB
+    Import <--> UserAccounts
+    Import <--> UserInfo
+    Import <--> SchedulesDB
+    Clean <--> UserAccounts
+    Clean <--> UserInfo
+    Clean <--> SchedulesDB
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-data-mgmt', 'DFD_Data_Management')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (View Schedules)</h2>
+            <div class="mermaid" id="dfd-view-schedules">
+flowchart TB
+    Actor[Superadmin / Faculty]
+    subgraph Processes[" "]
+      direction LR
+      ViewSchedules["7.0 View Schedules"]
+      Filters["7.1 Apply Filters"]
+      Export["7.2 Export / Print"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+      Rooms[("rooms")]
+      Subjects[("subjects")]
+    end
+    Actor -->|Open| ViewSchedules
+    ViewSchedules --> Filters
+    Filters <--> Departments
+    Filters <--> Rooms
+    Filters <--> Subjects
+    ViewSchedules <--> SchedulesDB
+    ViewSchedules --> Export
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-view-schedules', 'DFD_View_Schedules')">Export as PNG</button>
         </div>
     </div>
 
@@ -331,11 +441,11 @@ flowchart TD
             // Wait a bit for Mermaid to render
             setTimeout(function() {
                 const allDiagrams = document.querySelectorAll('.mermaid svg');
-                if (allDiagrams.length >= 6) {
+                if (allDiagrams.length >= 10) {
                     diagramsReady = true;
                     console.log('All diagrams rendered:', allDiagrams.length);
                 } else {
-                    console.log('Waiting for diagrams to render...', allDiagrams.length, 'of 6');
+                    console.log('Waiting for diagrams to render...', allDiagrams.length, 'of 10');
                     // Check again after a delay
                     setTimeout(function() {
                         diagramsReady = true;
@@ -360,9 +470,7 @@ flowchart TD
             
             const ctx = canvas.getContext('2d');
             
-            // Fill white background
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Transparent background: do not fill canvas
             
             // Create image from SVG
             const img = new Image();
@@ -488,17 +596,21 @@ flowchart TD
             // Check if diagrams are ready
             if (!diagramsReady) {
                 const rendered = document.querySelectorAll('.mermaid svg').length;
-                alert(`Please wait for all diagrams to finish loading.\n\nCurrently rendered: ${rendered} of 6 diagrams.\n\nPlease wait a few more seconds and try again.`);
+                alert(`Please wait for all diagrams to finish loading.\n\nCurrently rendered: ${rendered} of 10 diagrams.\n\nPlease wait a few more seconds and try again.`);
                 return;
             }
 
             const diagrams = [
-                { id: 'context-diagram', name: 'Context_Diagram' },
-                { id: 'superadmin-diagram', name: 'DFD_Superadmin' },
-                { id: 'user-diagram', name: 'DFD_User' },
-                { id: 'superadmin-users-diagram', name: 'DFD_Superadmin_Users' },
-                { id: 'superadmin-schedules-diagram', name: 'DFD_Superadmin_Schedules' },
-                { id: 'superadmin-approve-diagram', name: 'DFD_Superadmin_Approve' }
+                { id: 'content-diagram', name: 'Content_Diagram' },
+                { id: 'dfd-level0', name: 'DFD_Level0' },
+                { id: 'dfd-superadmin', name: 'DFD_SuperAdmin' },
+                { id: 'dfd-user-faculty', name: 'DFD_User_Faculty' },
+                { id: 'dfd-dashboard', name: 'DFD_Dashboard' },
+                { id: 'dfd-pending', name: 'DFD_Pending_Accounts' },
+                { id: 'dfd-manage-users', name: 'DFD_Manage_Users' },
+                { id: 'dfd-academic', name: 'DFD_Academic_Management' },
+                { id: 'dfd-data-mgmt', name: 'DFD_Data_Management' },
+                { id: 'dfd-view-schedules', name: 'DFD_View_Schedules' }
             ];
 
             let successCount = 0;

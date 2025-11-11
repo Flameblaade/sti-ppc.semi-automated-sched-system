@@ -9,7 +9,6 @@ function initializeDataManagementModals() {
     const backupModal = document.getElementById('backupModal');
     const importDataModal = document.getElementById('importDataModal');
     const clearDataInfoModal = document.getElementById('clearDataInfoModal');
-    const clearDataConfirmModal = document.getElementById('clearDataConfirmModal');
     
     // Buttons
     const openBackupModalBtn = document.getElementById('openBackupModalBtn');
@@ -17,18 +16,15 @@ function initializeDataManagementModals() {
     const openClearDataModalBtn = document.getElementById('openClearDataModalBtn');
     const confirmBackupBtn = document.getElementById('confirmBackupBtn');
     const confirmImportDataBtn = document.getElementById('confirmImportDataBtn');
-    const proceedToClearDataBtn = document.getElementById('proceedToClearDataBtn');
     const finalClearDataBtn = document.getElementById('finalClearDataBtn');
     
     // Close buttons
     const closeBackupModal = document.getElementById('closeBackupModal');
     const closeImportDataModal = document.getElementById('closeImportDataModal');
     const closeClearDataInfoModal = document.getElementById('closeClearDataInfoModal');
-    const closeClearDataConfirmModal = document.getElementById('closeClearDataConfirmModal');
     const cancelBackupBtn = document.getElementById('cancelBackupBtn');
     const cancelImportDataBtn = document.getElementById('cancelImportDataBtn');
     const cancelClearDataInfoBtn = document.getElementById('cancelClearDataInfoBtn');
-    const cancelClearDataConfirmBtn = document.getElementById('cancelClearDataConfirmBtn');
     
     // Confirmation input
     const confirmClearInput = document.getElementById('confirmClearInput');
@@ -48,7 +44,16 @@ function initializeDataManagementModals() {
     const closeModal = (modal) => {
         if (!modal) return;
         modal.classList.remove('show');
-        setTimeout(() => { modal.style.display = 'none'; document.body.style.overflow = 'auto'; }, 200);
+        setTimeout(() => { 
+            modal.style.display = 'none'; 
+            document.body.style.overflow = 'auto';
+            
+            // Reset clear data confirmation input
+            if (modal === clearDataInfoModal && confirmClearInput && finalClearDataBtn) {
+                confirmClearInput.value = '';
+                finalClearDataBtn.disabled = true;
+            }
+        }, 200);
     };
 
     // Open backup modal
@@ -132,32 +137,18 @@ function initializeDataManagementModals() {
         });
     }
 
-    // Proceed to clear data confirmation
-    if (proceedToClearDataBtn) {
-        proceedToClearDataBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (clearDataInfoModal && clearDataConfirmModal) {
-                closeModal(clearDataInfoModal);
-                setTimeout(() => openModal(clearDataConfirmModal), 200);
-            }
-        });
-    }
-
     if (closeBackupModal) closeBackupModal.addEventListener('click', () => closeModal(backupModal));
     if (closeImportDataModal) closeImportDataModal.addEventListener('click', () => closeModal(importDataModal));
     if (closeClearDataInfoModal) closeClearDataInfoModal.addEventListener('click', () => closeModal(clearDataInfoModal));
-    if (closeClearDataConfirmModal) closeClearDataConfirmModal.addEventListener('click', () => closeModal(clearDataConfirmModal));
     if (cancelBackupBtn) cancelBackupBtn.addEventListener('click', () => closeModal(backupModal));
     if (cancelImportDataBtn) cancelImportDataBtn.addEventListener('click', () => closeModal(importDataModal));
     if (cancelClearDataInfoBtn) cancelClearDataInfoBtn.addEventListener('click', () => closeModal(clearDataInfoModal));
-    if (cancelClearDataConfirmBtn) cancelClearDataConfirmBtn.addEventListener('click', () => closeModal(clearDataConfirmModal));
 
     // Close modals when clicking outside
     window.addEventListener('click', (event) => {
         if (event.target === backupModal) closeModal(backupModal);
         if (event.target === importDataModal) closeModal(importDataModal);
         if (event.target === clearDataInfoModal) closeModal(clearDataInfoModal);
-        if (event.target === clearDataConfirmModal) closeModal(clearDataConfirmModal);
     });
 
     // Import Data functionality
@@ -320,7 +311,8 @@ function initializeDataManagementModals() {
     // Clear data confirmation input validation
     if (confirmClearInput && finalClearDataBtn) {
         confirmClearInput.addEventListener('input', () => {
-            finalClearDataBtn.disabled = confirmClearInput.value.trim().toUpperCase() !== 'CONFIRM';
+            const isValid = confirmClearInput.value.trim().toUpperCase() === 'CONFIRM';
+            finalClearDataBtn.disabled = !isValid;
         });
 
         finalClearDataBtn.addEventListener('click', async (e) => {
@@ -737,22 +729,18 @@ function setupEventListeners() {
     // Modal elements
     const backupModal = document.getElementById('backupModal');
     const clearDataInfoModal = document.getElementById('clearDataInfoModal');
-    const clearDataConfirmModal = document.getElementById('clearDataConfirmModal');
     
     // Buttons
     const openBackupModalBtn = document.getElementById('openBackupModalBtn');
     const openClearDataModalBtn = document.getElementById('openClearDataModalBtn');
     const confirmBackupBtn = document.getElementById('confirmBackupBtn');
-    const proceedToClearDataBtn = document.getElementById('proceedToClearDataBtn');
     const finalClearDataBtn = document.getElementById('finalClearDataBtn');
     
     // Close buttons
     const closeBackupModal = document.getElementById('closeBackupModal');
     const closeClearDataInfoModal = document.getElementById('closeClearDataInfoModal');
-    const closeClearDataConfirmModal = document.getElementById('closeClearDataConfirmModal');
     const cancelBackupBtn = document.getElementById('cancelBackupBtn');
     const cancelClearDataInfoBtn = document.getElementById('cancelClearDataInfoBtn');
-    const cancelClearDataConfirmBtn = document.getElementById('cancelClearDataConfirmBtn');
     
     // Confirmation input
     const confirmClearInput = document.getElementById('confirmClearInput');
@@ -785,94 +773,32 @@ function setupEventListeners() {
         });
     }
 
-    // Proceed to clear data confirmation
-    if (proceedToClearDataBtn) {
-        proceedToClearDataBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (clearDataInfoModal && clearDataConfirmModal) {
-                clearDataInfoModal.style.display = 'none';
-                clearDataConfirmModal.style.display = 'block';
-            }
-        });
-    }
-
     // Close modals
     const closeModal = (modal) => {
         if (modal) {
             modal.style.display = 'none';
             document.body.style.overflow = 'auto';
+            
+            // Reset clear data confirmation input
+            if (modal === clearDataInfoModal && confirmClearInput && finalClearDataBtn) {
+                confirmClearInput.value = '';
+                finalClearDataBtn.disabled = true;
+            }
         }
     };
 
     if (closeBackupModal) closeBackupModal.addEventListener('click', () => closeModal(backupModal));
     if (closeClearDataInfoModal) closeClearDataInfoModal.addEventListener('click', () => closeModal(clearDataInfoModal));
-    if (closeClearDataConfirmModal) closeClearDataConfirmModal.addEventListener('click', () => closeModal(clearDataConfirmModal));
     if (cancelBackupBtn) cancelBackupBtn.addEventListener('click', () => closeModal(backupModal));
     if (cancelClearDataInfoBtn) cancelClearDataInfoBtn.addEventListener('click', () => closeModal(clearDataInfoModal));
-    if (cancelClearDataConfirmBtn) cancelClearDataConfirmBtn.addEventListener('click', () => closeModal(clearDataConfirmModal));
 
     // Close modals when clicking outside
     window.addEventListener('click', (event) => {
         if (event.target === backupModal) closeModal(backupModal);
         if (event.target === clearDataInfoModal) closeModal(clearDataInfoModal);
-        if (event.target === clearDataConfirmModal) closeModal(clearDataConfirmModal);
     });
 
-    // Backup functionality - REMOVED DUPLICATE (already handled in initializeDataManagementModals function above)
-
-    // Clear data confirmation input validation
-    if (confirmClearInput && finalClearDataBtn) {
-        confirmClearInput.addEventListener('input', () => {
-            finalClearDataBtn.disabled = confirmClearInput.value.trim().toUpperCase() !== 'CONFIRM';
-        });
-
-        finalClearDataBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            if (finalClearDataBtn.disabled) return;
-            console.log('Final clear data clicked');
-            try {
-                // Call API to clear data (fallback to local cleanup if not available)
-                const token = localStorage.getItem('authToken');
-                const resp = await fetch('/api/admin/clear-all-data', { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
-                
-                // Clear all localStorage items including fixed schedules and classes
-                const keysToRemove = ['users','pendingUsers','departments','subjects','courses','strands','rooms','allClasses','facultyAssignments','fixedSchedules','schedules'];
-                keysToRemove.forEach(k => localStorage.removeItem(k));
-                
-                // Also clear fixed schedules from calendar if it exists
-                if (window.calendar && typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                    const events = window.calendar.getEvents();
-                    events.forEach(event => {
-                        if (event.extendedProps?.isFixedSchedule) {
-                            event.remove();
-                        }
-                    });
-                }
-                
-                // Clear fixed schedules list display
-                const fixedSchedulesList = document.getElementById('fixedSchedulesList');
-                if (fixedSchedulesList) {
-                    fixedSchedulesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;"><i class="fas fa-calendar-times" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i><p>No fixed schedules yet. Click "Add New" to create one.</p></div>';
-                }
-                
-                if (!resp.ok) {
-                    console.warn('API clear failed, but localStorage cleared');
-                }
-                // Sign out and redirect
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('userData');
-                if (typeof showNotification === 'function') {
-                    showNotification('All data cleared. Signing out...', 'success');
-                }
-                setTimeout(() => { window.location.href = 'login.html'; }, 1200);
-            } catch (e) {
-                console.error('Clear data error', e);
-                if (typeof showNotification === 'function') {
-                    showNotification('Failed to clear data', 'error');
-                }
-            }
-        });
-    }
+    // Backup functionality and clear data validation - handled in initializeDataManagementModals function above
 }
 
 /**

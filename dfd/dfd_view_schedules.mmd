@@ -1,0 +1,39 @@
+flowchart TB
+    %% Data Flow Diagram - View Schedules
+
+    Actor[Superadmin / Faculty]
+
+    subgraph Processes[" "]
+      direction LR
+      ViewSchedules["7.0 View Schedules"]
+      Filters["7.1 Apply Filters"]
+      Export["7.2 Export / Print"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+      Rooms[("rooms")]
+      Subjects[("subjects")]
+    end
+
+    Actor -->|Open| ViewSchedules
+    ViewSchedules --> Filters
+    Filters <--> Departments
+    Filters <--> Rooms
+    Filters <--> Subjects
+    ViewSchedules <--> SchedulesDB
+    ViewSchedules --> Export
+
+    Export -->|File| Actor
+
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class Actor ext
+    class ViewSchedules,Filters,Export proc
+    class SchedulesDB,Departments,Rooms,Subjects store
+
+

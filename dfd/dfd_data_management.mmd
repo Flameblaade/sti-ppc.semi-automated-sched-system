@@ -1,0 +1,48 @@
+flowchart TB
+    %% Data Flow Diagram - Data Management
+
+    SuperAdmin[Superadmin]
+
+    subgraph Processes[" "]
+      direction LR
+      DataMgmt["6.0 Data Management"]
+      Backup["6.1 Backup / Export"]
+      Import["6.2 Import / Restore"]
+      Clean["6.3 Clear / Reset"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+    end
+
+    SuperAdmin -->|Open| DataMgmt
+    DataMgmt --> Backup
+    DataMgmt --> Import
+    DataMgmt --> Clean
+
+    Backup <--> UserAccounts
+    Backup <--> UserInfo
+    Backup <--> SchedulesDB
+
+    Import <--> UserAccounts
+    Import <--> UserInfo
+    Import <--> SchedulesDB
+
+    Clean <--> UserAccounts
+    Clean <--> UserInfo
+    Clean <--> SchedulesDB
+
+    DataMgmt -->|Confirmation| SuperAdmin
+
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class SuperAdmin ext
+    class DataMgmt,Backup,Import,Clean proc
+    class UserAccounts,UserInfo,SchedulesDB store
+
+

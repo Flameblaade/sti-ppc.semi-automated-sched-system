@@ -1,0 +1,45 @@
+flowchart TB
+    %% Data Flow Diagram - User / Faculty
+
+    Faculty[User / Faculty]
+
+    subgraph Processes[" "]
+      direction LR
+      Login["1.0 Login"]
+      Dashboard["2.0 Dashboard"]
+      ViewSchedules["3.0 View Schedules"]
+      Profile["4.0 Profile"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+      Subjects[("subjects")]
+      Rooms[("rooms")]
+    end
+
+    Faculty -->|Credentials| Login
+    Login -->|Confirm| Faculty
+    Faculty -->|Navigate| Dashboard
+    Faculty -->|Open| ViewSchedules
+    Faculty -->|Open| Profile
+
+    Login <--> UserAccounts
+    Profile <--> UserInfo
+    ViewSchedules <--> SchedulesDB
+    ViewSchedules <--> Departments
+    ViewSchedules <--> Subjects
+    ViewSchedules <--> Rooms
+
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class Faculty ext
+    class Login,Dashboard,ViewSchedules,Profile proc
+    class UserAccounts,UserInfo,SchedulesDB,Departments,Subjects,Rooms store
+
+
