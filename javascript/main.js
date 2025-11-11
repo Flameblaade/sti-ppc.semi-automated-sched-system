@@ -1237,20 +1237,17 @@ document.addEventListener('DOMContentLoaded', function() {
         showModal('confirmModal');
     }
 
-    // Function to clear all classes (but NOT fixed schedules)
-    function clearAllClasses(classesList, classItems) {
+    // Function to clear all classes (including fixed schedules)
+    async function clearAllClasses(classesList, classItems) {
+        console.log('clearAllClasses called - clearing everything');
+        
         // Remove all class items from DOM
         classItems.forEach(item => item.remove());
         
-        // Clear only non-fixed schedule events from calendar (preserve fixed schedules)
+        // Clear ALL events from calendar including fixed schedules
         if (window.calendar && typeof window.calendar.getEvents === 'function') {
-            const events = window.calendar.getEvents();
-            events.forEach(event => {
-                // Only remove events that are NOT fixed schedules
-                if (!event.extendedProps?.isFixedSchedule) {
-                    event.remove();
-                }
-            });
+            window.calendar.removeAllEvents();
+            console.log('All calendar events removed');
         }
         
         // Reset allClasses array
@@ -1261,8 +1258,71 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             localStorage.removeItem('allClasses');
             localStorage.setItem('allClasses', JSON.stringify([]));
+            // Also clear fixed schedules from localStorage
+            localStorage.removeItem('fixedSchedules');
+            localStorage.setItem('fixedSchedules', JSON.stringify([]));
+            // Clear calendar events
+            localStorage.removeItem('calendarEvents');
+            localStorage.setItem('calendarEvents', JSON.stringify([]));
+            console.log('localStorage cleared');
         } catch (e) {
             console.warn('Error clearing allClasses from localStorage:', e);
+        }
+        
+        // Clear fixed schedules from server
+        try {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                const clearResponse = await fetch('/api/fixed-schedules', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ schedules: [] }) // Save empty array
+                });
+                if (clearResponse.ok) {
+                    console.log('Fixed schedules cleared from server');
+                } else {
+                    console.error('Failed to clear fixed schedules from server:', clearResponse.status);
+                }
+            }
+        } catch (e) {
+            console.warn('Error clearing fixed schedules from server:', e);
+        }
+        
+        // Save empty schedule to server so it persists after reload
+        try {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                const response = await fetch('/api/schedule', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ events: [] }) // Save empty array to server
+                });
+                if (response.ok) {
+                    console.log('Cleared schedule saved to server - will persist after refresh');
+                    // Also update localStorage timestamp
+                    localStorage.setItem('scheduleLastUpdated', Date.now().toString());
+                } else {
+                    console.error('Failed to save cleared schedule to server:', response.status);
+                }
+            }
+        } catch (e) {
+            console.error('Error saving cleared schedule to server:', e);
+        }
+        
+        // Also call saveScheduleToLocalStorage to ensure consistency
+        if (typeof window.saveScheduleToLocalStorage === 'function') {
+            try {
+                await window.saveScheduleToLocalStorage();
+                console.log('Schedule save function called to ensure empty state is saved');
+            } catch (e) {
+                console.warn('Error calling saveScheduleToLocalStorage:', e);
+            }
         }
         
         // Persist and update UI state
@@ -1291,12 +1351,7 @@ document.addEventListener('DOMContentLoaded', function() {
             classesList.appendChild(emptyState);
         }
         
-        // Re-apply filter after clearing to ensure fixed schedules are still visible
-        if (typeof window.applyScheduleFilter === 'function') {
-            setTimeout(() => {
-                window.applyScheduleFilter().catch(e => console.error('Error reapplying filter:', e));
-            }, 100);
-        }
+        console.log('clearAllClasses completed - all data cleared and saved to server');
     }
     
     // Function to generate schedule
@@ -4014,7 +4069,34 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Clearing schedule...');
         localStorage.removeItem('calendarEvents');
         if (window.calendar) {
+            // Remove ALL events including fixed schedules
             window.calendar.removeAllEvents();
+        }
+        
+        // Also clear fixed schedules from localStorage and server
+        try {
+            localStorage.removeItem('fixedSchedules');
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                // Clear fixed schedules from server
+                try {
+                    const clearResponse = await fetch('/api/fixed-schedules', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ schedules: [] }) // Save empty array
+                    });
+                    if (clearResponse.ok) {
+                        console.log('Fixed schedules cleared from server');
+                    }
+                } catch (e) {
+                    console.warn('Error clearing fixed schedules from server:', e);
+                }
+            }
+        } catch (e) {
+            console.warn('Error clearing fixed schedules:', e);
         }
         
         // Save empty schedule to server so it persists after reload
@@ -4037,7 +4119,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error saving cleared schedule to server:', e);
         }
         
-        console.log('Schedule cleared');
+        console.log('Schedule cleared (including fixed schedules)');
     };
     
     // Debug function to check server and localStorage
@@ -4122,6 +4204,20 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok) {
                 const eventsData = await response.json();
                 console.log('Found events data from server:', eventsData.length, 'events');
+                
+                // If events array is empty, it means schedule was cleared - don't load anything
+                if (!eventsData || eventsData.length === 0) {
+                    console.log('Schedule is empty (was cleared) - not loading any events');
+                    // Clear calendar if it has events
+                    if (calendar) {
+                        const existingEvents = calendar.getEvents();
+                        if (existingEvents.length > 0) {
+                            calendar.removeAllEvents();
+                            console.log('Cleared existing events from calendar (schedule was cleared)');
+                        }
+                    }
+                    return; // Exit early - don't load anything
+                }
                 
                 if (eventsData && eventsData.length) {
                     // Filter events based on user role and faculty assignment
@@ -4310,31 +4406,36 @@ document.addEventListener('DOMContentLoaded', function() {
                             }, 100);
                         });
                         
-                        // Re-apply filter after all events are added
-                        setTimeout(() => {
-                            if (typeof window.applyScheduleFilter === 'function') {
-                                window.applyScheduleFilter();
-                            }
-                        }, 300);
+                        // Filter functionality removed
                         
                         // Load fixed schedules for all users (they should be visible to everyone)
                         // Load AFTER all filtered events are added to ensure they're not removed
                         // Use a small delay to ensure calendar has finished rendering the filtered events
+                        // Only load if fixed schedules haven't been explicitly cleared
                         setTimeout(async () => {
+                            // Check if fixed schedules were cleared (empty array in localStorage means cleared)
+                            const clearedFixedSchedules = localStorage.getItem('fixedSchedules');
+                            if (clearedFixedSchedules === '[]' || clearedFixedSchedules === null) {
+                                console.log('Fixed schedules were cleared, skipping load');
+                                return;
+                            }
+                            
                             if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
                                 // First ensure fixed schedules are loaded from server/localStorage
                                 if (window.fixedSchedules.load) {
-                                    await window.fixedSchedules.load();
+                                    const loadedSchedules = await window.fixedSchedules.load();
+                                    // If loaded schedules is empty, don't add to calendar
+                                    if (!loadedSchedules || loadedSchedules.length === 0) {
+                                        console.log('No fixed schedules to load (empty array)');
+                                        return;
+                                    }
                                 }
                                 if (window.fixedSchedules.loadToCalendar) {
                                     window.fixedSchedules.loadToCalendar();
                                 }
                                 console.log('Fixed schedules loaded for user view (after filtered events)');
                                 
-                                // Re-apply filter after fixed schedules are loaded
-                                if (typeof window.applyScheduleFilter === 'function') {
-                                    setTimeout(() => window.applyScheduleFilter(), 100);
-                                }
+                                // Filter functionality removed
                             }
                         }, 200);
                     } else {
@@ -4350,11 +4451,24 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Still load fixed schedules even if no classes assigned
                         // Use a small delay to ensure calendar is ready
+                        // Only load if fixed schedules haven't been explicitly cleared
                         setTimeout(async () => {
+                            // Check if fixed schedules were cleared (empty array in localStorage means cleared)
+                            const clearedFixedSchedules = localStorage.getItem('fixedSchedules');
+                            if (clearedFixedSchedules === '[]' || clearedFixedSchedules === null) {
+                                console.log('Fixed schedules were cleared, skipping load');
+                                return;
+                            }
+                            
                             if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
                                 // First ensure fixed schedules are loaded from server/localStorage
                                 if (window.fixedSchedules.load) {
-                                    await window.fixedSchedules.load();
+                                    const loadedSchedules = await window.fixedSchedules.load();
+                                    // If loaded schedules is empty, don't add to calendar
+                                    if (!loadedSchedules || loadedSchedules.length === 0) {
+                                        console.log('No fixed schedules to load (empty array)');
+                                        return;
+                                    }
                                 }
                                 if (window.fixedSchedules.loadToCalendar) {
                                     window.fixedSchedules.loadToCalendar();
@@ -4363,9 +4477,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             } else {
                                 console.warn('Fixed schedules module not available yet, retrying...');
                                 setTimeout(async () => {
+                                    // Check again if fixed schedules were cleared
+                                    const clearedFixedSchedulesRetry = localStorage.getItem('fixedSchedules');
+                                    if (clearedFixedSchedulesRetry === '[]' || clearedFixedSchedulesRetry === null) {
+                                        console.log('Fixed schedules were cleared, skipping load (retry)');
+                                        return;
+                                    }
+                                    
                                     if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
                                         if (window.fixedSchedules.load) {
-                                            await window.fixedSchedules.load();
+                                            const loadedSchedules = await window.fixedSchedules.load();
+                                            // If loaded schedules is empty, don't add to calendar
+                                            if (!loadedSchedules || loadedSchedules.length === 0) {
+                                                console.log('No fixed schedules to load (empty array, retry)');
+                                                return;
+                                            }
                                         }
                                         if (window.fixedSchedules.loadToCalendar) {
                                             window.fixedSchedules.loadToCalendar();
@@ -4502,9 +4628,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Load classes from localStorage
-    function loadClassesFromLocalStorage() {
+    async function loadClassesFromLocalStorage() {
         try {
-            const savedClasses = JSON.parse(localStorage.getItem('allClasses'));
+            // Check if schedule was cleared on server - if so, don't reload classes
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                try {
+                    const scheduleResponse = await fetch('/api/schedule', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    if (scheduleResponse.ok) {
+                        const scheduleData = await scheduleResponse.json();
+                        // If schedule is empty, it means it was cleared - don't reload classes
+                        if (!scheduleData || scheduleData.length === 0) {
+                            console.log('Schedule is empty on server - classes were cleared, not reloading');
+                            // Clear allClasses array
+                            allClasses = [];
+                            window.allClasses = [];
+                            // Clear localStorage
+                            localStorage.setItem('allClasses', JSON.stringify([]));
+                            // Clear the classes list UI
+                            const classesList = document.getElementById('createdClasses');
+                            if (classesList) {
+                                classesList.innerHTML = '';
+                            }
+                            return; // Exit early - don't load classes
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error checking server schedule:', e);
+                    // Continue with localStorage load if server check fails
+                }
+            }
+            
+            const savedClasses = JSON.parse(localStorage.getItem('allClasses') || '[]');
             if (savedClasses && savedClasses.length) {
                 console.log('Loading', savedClasses.length, 'classes from localStorage');
                 
@@ -4522,6 +4681,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update the allClasses array
                 allClasses = savedClasses;
                 window.allClasses = allClasses;
+            } else {
+                // No classes in localStorage - ensure arrays are empty
+                allClasses = [];
+                window.allClasses = [];
             }
         } catch (e) {
             console.error('Error loading classes from localStorage:', e);

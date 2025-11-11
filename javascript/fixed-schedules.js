@@ -473,13 +473,11 @@
             });
         }
         
-        // Advanced Filter functionality
-        const scheduleFilterType = document.getElementById('scheduleFilterType');
-        const scheduleFilterValue = document.getElementById('scheduleFilterValue');
-        const scheduleFilterValueContainer = document.getElementById('scheduleFilterValueContainer');
-        const scheduleFilterValueLabel = document.getElementById('scheduleFilterValueLabel');
-        const clearScheduleFilterBtn = document.getElementById('clearScheduleFilterBtn');
+        // Advanced Filter functionality - REMOVED per user request
+        // Filter functionality has been disabled
         
+        // Filter functions removed - no longer needed
+        /*
         // Function to load filter options based on type
         async function loadFilterOptions(filterType) {
             if (!scheduleFilterValue) return;
@@ -662,19 +660,19 @@
                 } else if (filterType === 'department') {
                     if (filterValue) {
                         const eventDeptId = String(extendedProps.departmentId || '').trim();
-                        const eventDept = String(extendedProps.department || '').trim();
+                        const eventDept = String(extendedProps.department || extendedProps.course || '').trim();
                         const filterDept = String(filterValue).trim();
                         
                         // Exact match on ID (case-insensitive) - this is the primary match
                         const eventDeptIdLower = eventDeptId.toLowerCase();
                         const filterDeptLower = filterDept.toLowerCase();
+                        const eventDeptLower = eventDept ? eventDept.toLowerCase() : '';
                         
                         // Check exact ID match first (most reliable)
                         shouldShow = (eventDeptIdLower === filterDeptLower);
                         
                         // If ID doesn't match, try matching by department name/code using pre-fetched data
                         if (!shouldShow && departmentsData) {
-                            const eventDeptLower = eventDept ? eventDept.toLowerCase() : '';
                             const selectedDept = departmentsData.find(d => 
                                 String(d.id || '').trim().toLowerCase() === filterDeptLower ||
                                 String(d.code || '').trim().toLowerCase() === filterDeptLower
@@ -690,13 +688,25 @@
                                     eventDeptIdLower === selectedDeptId ||
                                     eventDeptIdLower === selectedDeptCode ||
                                     eventDeptLower === selectedDeptName ||
-                                    eventDeptLower === selectedDeptCode
+                                    eventDeptLower === selectedDeptCode ||
+                                    eventDeptLower === selectedDeptId
                                 );
                             }
                         }
                         
+                        // Also try direct matching if departmentsData is not available
+                        if (!shouldShow && !departmentsData) {
+                            // Try to match event department name/code directly with filter value
+                            shouldShow = (
+                                eventDeptIdLower === filterDeptLower ||
+                                eventDeptLower === filterDeptLower
+                            );
+                        }
+                        
                         if (!shouldShow) {
                             console.log(`HIDING event: "${event.title}" - eventDeptId="${eventDeptId}", eventDept="${eventDept}", filterDept="${filterDept}"`);
+                        } else {
+                            console.log(`SHOWING event: "${event.title}" - eventDeptId="${eventDeptId}", eventDept="${eventDept}", filterDept="${filterDept}"`);
                         }
                     } else {
                         shouldShow = true;
@@ -791,28 +801,59 @@
                 }
                 
                 // Add or remove filtered-out class and set display style
+                // Use multiple methods to ensure the event is hidden/shown
                 const eventEl = event.el;
                 if (eventEl) {
                     if (shouldShow) {
                         eventEl.classList.remove('filtered-out');
-                        eventEl.style.display = '';
+                        // Remove inline styles to restore default display
+                        eventEl.style.removeProperty('display');
+                        eventEl.style.removeProperty('visibility');
+                        eventEl.style.removeProperty('opacity');
+                        eventEl.style.removeProperty('height');
+                        eventEl.style.removeProperty('padding');
+                        eventEl.style.removeProperty('margin');
                         shownCount++;
                     } else {
                         eventEl.classList.add('filtered-out');
-                        eventEl.style.display = 'none';
+                        // Force hide with inline styles
+                        eventEl.style.setProperty('display', 'none', 'important');
+                        eventEl.style.setProperty('visibility', 'hidden', 'important');
+                        eventEl.style.setProperty('opacity', '0', 'important');
+                        eventEl.style.setProperty('height', '0', 'important');
+                        eventEl.style.setProperty('padding', '0', 'important');
+                        eventEl.style.setProperty('margin', '0', 'important');
                         hiddenCount++;
                     }
                 } else {
-                    // If el is not available, try to find it by event ID
+                    // If el is not available, try to find it by event ID or other selectors
                     setTimeout(() => {
-                        const elById = document.querySelector(`[data-event-id="${event.id}"]`);
+                        // Try multiple selectors to find the event element
+                        let elById = document.querySelector(`[data-event-id="${event.id}"]`);
+                        if (!elById) {
+                            elById = document.querySelector(`.fc-event[data-event-id="${event.id}"]`);
+                        }
+                        if (!elById) {
+                            // Try to find by title if ID doesn't work
+                            const allEvents = document.querySelectorAll('.fc-event');
+                            for (const el of allEvents) {
+                                if (el.textContent && el.textContent.includes(event.title)) {
+                                    elById = el;
+                                    break;
+                                }
+                            }
+                        }
                         if (elById) {
                             if (shouldShow) {
                                 elById.classList.remove('filtered-out');
-                                elById.style.display = '';
+                                elById.style.removeProperty('display');
+                                elById.style.removeProperty('visibility');
+                                elById.style.removeProperty('opacity');
                             } else {
                                 elById.classList.add('filtered-out');
-                                elById.style.display = 'none';
+                                elById.style.setProperty('display', 'none', 'important');
+                                elById.style.setProperty('visibility', 'hidden', 'important');
+                                elById.style.setProperty('opacity', '0', 'important');
                             }
                         }
                     }, 100);
@@ -822,92 +863,8 @@
             console.log(`Filter applied: ${shownCount} shown, ${hiddenCount} hidden`);
         }
         
-        // Initialize filter system
-        if (scheduleFilterType) {
-            // Add CSS for hiding events
-            if (!document.getElementById('schedule-filter-styles')) {
-                const style = document.createElement('style');
-                style.id = 'schedule-filter-styles';
-                style.textContent = `
-                    .fc-event.filtered-out {
-                        display: none !important;
-                        visibility: hidden !important;
-                        opacity: 0 !important;
-                    }
-                    .fc-event-time-grid-event.filtered-out,
-                    .fc-event-day-grid-event.filtered-out {
-                        display: none !important;
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-            
-            // Show/hide value selector based on filter type
-            scheduleFilterType.addEventListener('change', function() {
-                const filterType = this.value;
-                if (filterType === 'all') {
-                    if (scheduleFilterValueContainer) {
-                        scheduleFilterValueContainer.style.display = 'none';
-                    }
-                    if (scheduleFilterValue) {
-                        scheduleFilterValue.value = '';
-                    }
-                    // Apply filter immediately
-                    setTimeout(async () => await applyFilter(), 50);
-                } else {
-                    if (scheduleFilterValueContainer) {
-                        scheduleFilterValueContainer.style.display = 'block';
-                    }
-                    loadFilterOptions(filterType).then(async () => {
-                        // Apply filter after options are loaded
-                        setTimeout(async () => await applyFilter(), 100);
-                    });
-                }
-            });
-            
-            // Apply filter when value changes
-            if (scheduleFilterValue) {
-                scheduleFilterValue.addEventListener('change', function() {
-                    setTimeout(async () => await applyFilter(), 50);
-                });
-            }
-            
-            // Clear filter button
-            if (clearScheduleFilterBtn) {
-                clearScheduleFilterBtn.addEventListener('click', function() {
-                    if (scheduleFilterType) {
-                        scheduleFilterType.value = 'all';
-                    }
-                    if (scheduleFilterValueContainer) {
-                        scheduleFilterValueContainer.style.display = 'none';
-                    }
-                    if (scheduleFilterValue) {
-                        scheduleFilterValue.value = '';
-                    }
-                    applyFilter().catch(e => console.error('Error applying filter:', e));
-                });
-            }
-            
-            // Re-apply filter when events are added or calendar is rendered
-            if (window.calendar) {
-                window.calendar.on('eventsSet', function() {
-                    setTimeout(async () => await applyFilter(), 100);
-                });
-                window.calendar.on('eventDidMount', function() {
-                    setTimeout(async () => await applyFilter(), 50);
-                });
-            }
-            
-            // Also apply filter when calendar is ready
-            setTimeout(async () => {
-                if (window.calendar) {
-                    await applyFilter();
-                }
-            }, 1000);
-        }
-        
-        // Expose applyFilter globally
-        window.applyScheduleFilter = applyFilter;
+        // Filter system removed - no longer needed
+        */
         
         // DO NOT automatically load fixed schedules to calendar on page load
         // Fixed schedules will only be loaded when Generate Schedule is clicked
