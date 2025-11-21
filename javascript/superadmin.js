@@ -3,6 +3,30 @@
  * Simple and clean functionality for superadmin operations
  */
 
+/**
+ * Format full name with middle initial
+ * @param {string} firstName - First name
+ * @param {string} middleName - Middle name (optional)
+ * @param {string} lastName - Last name
+ * @returns {string} Formatted name (e.g., "John M. Doe" or "John Doe")
+ */
+function formatFullName(firstName, middleName, lastName) {
+    if (!firstName && !lastName) return '';
+    
+    let name = firstName || '';
+    
+    if (middleName && middleName.trim()) {
+        const middleInitial = middleName.trim().charAt(0).toUpperCase();
+        name += ` ${middleInitial}.`;
+    }
+    
+    if (lastName) {
+        name += ` ${lastName}`;
+    }
+    
+    return name.trim();
+}
+
 // Data Management Modal Functions
 function initializeDataManagementModals() {
     // Modal elements
@@ -543,7 +567,7 @@ function showNewUserNotification(user) {
                         Dismiss
                     </button>
                     <button class="new-user-notification-btn-primary" data-action="view">
-                        <i class="fas fa-eye"></i> View Pending Accounts
+                        <i class="fas fa-eye"></i> View Faculty Verification
                     </button>
                 </div>
             </div>
@@ -813,7 +837,7 @@ function setupEventListeners() {
 }
 
 /**
- * Filter rows in Pending Accounts by search term
+ * Filter rows in Faculty Verification by search term
  */
 function filterPendingAccounts() {
     const term = (document.getElementById('pendingSearchInput')?.value || '').trim().toLowerCase();
@@ -852,7 +876,7 @@ function filterPendingAccounts() {
             tr.className = 'empty-state-row';
             tr.innerHTML = `<td colspan="6" class="empty-state">
                 <i class="fas fa-search"></i>
-                <p>No pending accounts match your search</p>
+                <p>No faculty verification accounts match your search</p>
             </td>`;
             tbody.appendChild(tr);
         } else {
@@ -963,7 +987,7 @@ async function loadAllAcademicData() {
 }
 
 /**
- * Load pending accounts
+ * Load faculty verification accounts
  */
 async function loadPendingAccounts() {
     try {
@@ -986,7 +1010,7 @@ async function loadPendingAccounts() {
                     <td colspan="6">
                         <div class="empty-state">
                             <i class="fas fa-clock"></i>
-                            <p>No pending accounts found</p>
+                            <p>No users awaiting verification</p>
                         </div>
                     </td>
                 </tr>
@@ -997,7 +1021,7 @@ async function loadPendingAccounts() {
         }
         
         tbody.innerHTML = filteredPendingUsers.map(user => {
-            const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+            const displayName = user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || '') || user.email;
             return `
             <tr>
                 <td>${displayName}</td>
@@ -1021,7 +1045,7 @@ async function loadPendingAccounts() {
         lastPendingCount = filteredPendingUsers.length;
     } catch (error) {
         console.error('Error loading pending accounts:', error);
-        showNotification('Failed to load pending accounts', 'error');
+        showNotification('Failed to load faculty verification accounts', 'error');
     }
 }
 
@@ -1057,11 +1081,7 @@ async function loadUsers() {
         }
         
         tbody.innerHTML = users.map(user => {
-            const first = user.firstName || '';
-            const middle = user.middleName || '';
-            const last = user.lastName || '';
-            const middleInitial = middle ? ` ${middle.charAt(0)}.` : '';
-            const displayName = (first || last) ? `${first}${middleInitial} ${last}`.trim() : (user.name || user.email || '');
+            const displayName = user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || '') || user.email || '';
             const dept = user.department || user.departmentName || '';
             const role = user.role || '';
             const status = (user.status || '').toLowerCase();
@@ -1156,7 +1176,14 @@ async function loadFaculty() {
         const faculty = await fetchData('/api/faculty');
         const tbody = document.getElementById('facultyTableBody');
         
-        if (!faculty || faculty.length === 0) {
+        // Filter out superadmin account
+        const filteredFaculty = (faculty || []).filter(member => 
+            member.email !== 'superadmin@school.edu' &&
+            member.role !== 'superadmin' &&
+            String(member.role || '').toLowerCase() !== 'superadmin'
+        );
+        
+        if (!filteredFaculty || filteredFaculty.length === 0) {
             tbody.innerHTML = `
                 <tr class="empty-row">
                     <td colspan="5">
@@ -1170,7 +1197,7 @@ async function loadFaculty() {
             return;
         }
         
-        tbody.innerHTML = faculty.map(member => {
+        tbody.innerHTML = filteredFaculty.map(member => {
             const isVerified = member.verified === true;
             const statusBadge = isVerified 
                 ? `<span style="color: #5cb85c; font-weight: bold;"><i class="fas fa-check-circle"></i> Verified</span>`
@@ -1183,7 +1210,7 @@ async function loadFaculty() {
             
             return `
             <tr>
-                <td>${member.firstName || ''} ${member.lastName || ''}</td>
+                <td>${formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || ''}</td>
                 <td>${member.email || ''}</td>
                 <td>${member.department || ''}</td>
                 <td>${statusBadge}</td>
@@ -1228,7 +1255,7 @@ async function loadRemovedFaculty() {
         tbody.innerHTML = removedFaculty.map(member => {
             return `
             <tr>
-                <td>${member.firstName || ''} ${member.lastName || ''}</td>
+                <td>${formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || ''}</td>
                 <td>${member.email || 'No email'}</td>
                 <td>${member.department || 'Not assigned'}</td>
                 <td>
@@ -1920,9 +1947,7 @@ function showEditUserModal(user) {
         justify-content: center;
     `;
     
-    const displayName = user.firstName && user.lastName 
-        ? `${user.firstName} ${user.middleName ? user.middleName.charAt(0) + '. ' : ''}${user.lastName}`.trim()
-        : user.name || user.email || 'User';
+    const displayName = user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || '') || user.email || 'User';
     
     modal.innerHTML = `
         <div style="
@@ -2733,6 +2758,17 @@ function showAddFacultyModal() {
                     " placeholder="Enter first name">
                 </div>
                 <div style="margin-bottom: 20px;">
+                    <label for="facultyMiddleName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Middle Name <span style="color: #999; font-size: 12px;">(Optional)</span></label>
+                    <input type="text" id="facultyMiddleName" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter middle name (optional)">
+                </div>
+                <div style="margin-bottom: 20px;">
                     <label for="facultyLastName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Last Name <span style="color: red;">*</span></label>
                     <input type="text" id="facultyLastName" required style="
                         width: 100%;
@@ -2875,7 +2911,7 @@ async function loadUsersForFaculty(modal) {
         
         if (approvedUsers.length > 0) {
             userSelect.innerHTML = '<option value="">Select User</option>' +
-                approvedUsers.map(user => `<option value="${user.id}">${user.name || user.firstName + ' ' + user.lastName} (${user.email})</option>`).join('');
+                approvedUsers.map(user => `<option value="${user.id}">${user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || '')} (${user.email})</option>`).join('');
         } else {
             userSelect.innerHTML = '<option value="">No approved users available</option>';
         }
@@ -2963,6 +2999,7 @@ async function saveFaculty(modal) {
     try {
         // Get form values before removing modal
         const firstNameInput = modal.querySelector('#facultyFirstName');
+        const middleNameInput = modal.querySelector('#facultyMiddleName');
         const lastNameInput = modal.querySelector('#facultyLastName');
         const emailInput = modal.querySelector('#facultyEmail');
         const departmentInput = modal.querySelector('#facultyDepartment');
@@ -2973,6 +3010,7 @@ async function saveFaculty(modal) {
         }
         
         const firstName = firstNameInput.value.trim();
+        const middleName = middleNameInput ? middleNameInput.value.trim() : '';
         const lastName = lastNameInput.value.trim();
         const email = emailInput.value.trim().toLowerCase() || null;
         const departmentId = departmentInput.value;
@@ -2999,6 +3037,7 @@ async function saveFaculty(modal) {
             },
             body: JSON.stringify({
                 firstName,
+                middleName: middleName || '',
                 lastName,
                 email,
                 departmentId
@@ -3074,6 +3113,17 @@ function showEditFacultyModal(faculty) {
                         font-size: 14px;
                         box-sizing: border-box;
                     " placeholder="Enter first name">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="editFacultyMiddleName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Middle Name <span style="color: #999; font-size: 12px;">(Optional)</span></label>
+                    <input type="text" id="editFacultyMiddleName" value="${faculty.middleName || ''}" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter middle name (optional)">
                 </div>
                 <div style="margin-bottom: 20px;">
                     <label for="editFacultyLastName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Last Name <span style="color: red;">*</span></label>
@@ -3180,6 +3230,7 @@ async function saveFacultyChanges(facultyId, modal) {
     try {
         // Get form values before removing modal
         const firstNameInput = modal.querySelector('#editFacultyFirstName');
+        const middleNameInput = modal.querySelector('#editFacultyMiddleName');
         const lastNameInput = modal.querySelector('#editFacultyLastName');
         const emailInput = modal.querySelector('#editFacultyEmail');
         const departmentInput = modal.querySelector('#editFacultyDepartment');
@@ -3190,6 +3241,7 @@ async function saveFacultyChanges(facultyId, modal) {
         }
         
         const firstName = firstNameInput.value.trim();
+        const middleName = middleNameInput ? middleNameInput.value.trim() : '';
         const lastName = lastNameInput.value.trim();
         const email = emailInput ? emailInput.value.trim() : '';
         const departmentId = departmentInput.value;
@@ -3221,6 +3273,7 @@ async function saveFacultyChanges(facultyId, modal) {
             },
             body: JSON.stringify({
                 firstName,
+                middleName: middleName || '',
                 lastName,
                 email: email || null,
                 departmentId
@@ -3991,6 +4044,8 @@ async function deleteUser(id) {
         
         showNotification('User deleted successfully', 'success');
         loadUsers(); // Refresh the users list
+        loadFaculty(); // Refresh faculty list (user will be removed if they were faculty)
+        loadRemovedFaculty(); // Refresh removed faculty list (user will appear here if they were verified faculty)
     } catch (error) {
         console.error('Error deleting user:', error);
         showNotification('Failed to delete user', 'error');

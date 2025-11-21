@@ -514,7 +514,19 @@
                         const faculty = await response.json();
                         options = faculty.map(f => ({
                             value: f.email || f.id || f.name,
-                            text: `${f.firstName || ''} ${f.lastName || ''}`.trim() || f.email || f.name
+                            text: (() => {
+                                const firstName = f.firstName || '';
+                                const middleName = f.middleName || '';
+                                const lastName = f.lastName || '';
+                                let name = firstName || '';
+                                if (middleName && middleName.trim()) {
+                                    name += ` ${middleName.trim().charAt(0).toUpperCase()}.`;
+                                }
+                                if (lastName) {
+                                    name += ` ${lastName}`;
+                                }
+                                return name.trim() || f.email || f.name;
+                            })()
                         }));
                     }
                 } else if (filterType === 'program') {

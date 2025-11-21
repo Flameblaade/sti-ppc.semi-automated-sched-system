@@ -1,5 +1,29 @@
 // FullCalendar Test Initialization + Data Loading Functions from index.html
 
+/**
+ * Format full name with middle initial
+ * @param {string} firstName - First name
+ * @param {string} middleName - Middle name (optional)
+ * @param {string} lastName - Last name
+ * @returns {string} Formatted name (e.g., "John M. Doe" or "John Doe")
+ */
+function formatFullName(firstName, middleName, lastName) {
+    if (!firstName && !lastName) return '';
+    
+    let name = firstName || '';
+    
+    if (middleName && middleName.trim()) {
+        const middleInitial = middleName.trim().charAt(0).toUpperCase();
+        name += ` ${middleInitial}.`;
+    }
+    
+    if (lastName) {
+        name += ` ${lastName}`;
+    }
+    
+    return name.trim();
+}
+
 // Function to get the auth token from localStorage
 function getAuthToken() {
     return localStorage.getItem('authToken');
@@ -168,6 +192,33 @@ async function loadDepartments() {
     }
 }
 
+// Helper function to resolve department ID from code or malformed ID
+function resolveDepartmentId(departmentIdOrCode) {
+    if (!departmentIdOrCode) return null;
+    
+    // Clean up malformed values like "IT:1" - extract the part before colon
+    let cleaned = String(departmentIdOrCode).trim();
+    if (cleaned.includes(':')) {
+        cleaned = cleaned.split(':')[0];
+    }
+    
+    // Try to resolve from departments list
+    try {
+        const depts = JSON.parse(localStorage.getItem('departments') || '[]');
+        const eq = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+        const dept = depts.find(d => 
+            eq(d.id, cleaned) || 
+            eq(d.code, cleaned) ||
+            eq(d.id, departmentIdOrCode) || 
+            eq(d.code, departmentIdOrCode)
+        );
+        return dept?.id || cleaned;
+    } catch (e) {
+        console.warn('Error resolving department ID:', e);
+        return cleaned;
+    }
+}
+
 // Function to load faculty by department (server first, fallback to localStorage users/facultyAssignments)
 async function loadFaculty(departmentIdOrCode) {
     const facultySelect = document.getElementById('facultySelect');
@@ -197,6 +248,12 @@ async function loadFaculty(departmentIdOrCode) {
             const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(actualDeptId)}`);
             if (response && response.ok) {
                 faculty = await response.json();
+                // Filter out superadmin account
+                faculty = faculty.filter(f => 
+                    f.email !== 'superadmin@school.edu' && 
+                    f.role !== 'superadmin' && 
+                    String(f.role || '').toLowerCase() !== 'superadmin'
+                );
                 console.log('Loaded faculty from API:', faculty.length);
             }
         } catch (e) {
@@ -222,6 +279,12 @@ async function loadFaculty(departmentIdOrCode) {
             const localFaculty = [];
             // From users - match by departmentId (which is the ID stored on users)
             users.filter(u => {
+                // Exclude superadmin account
+                if (u.email === 'superadmin@school.edu' || 
+                    u.role === 'superadmin' || 
+                    String(u.role || '').toLowerCase() === 'superadmin') {
+                    return false;
+                }
                 // Check if user has a departmentId assigned (faculty assignment)
                 const hasDeptId = u.departmentId != null && u.departmentId !== '';
                 // Also check if role is faculty (though assignment via departmentId is the key)
@@ -238,7 +301,7 @@ async function loadFaculty(departmentIdOrCode) {
                 if (matches) {
                     localFaculty.push({ 
                         id: u.id, 
-                        name: `${u.firstName||''} ${u.lastName||''}`.trim() || u.email || 'Faculty', 
+                        name: formatFullName(u.firstName || '', u.middleName || '', u.lastName || '') || u.email || 'Faculty', 
                         email: u.email 
                     });
                 }
@@ -250,7 +313,7 @@ async function loadFaculty(departmentIdOrCode) {
                 if (deptIdCandidates.has(assignmentDeptId)) {
                     localFaculty.push({ 
                         id: a.userId, 
-                        name: `${a.firstName||''} ${a.lastName||''}`.trim() || a.email || 'Faculty', 
+                        name: formatFullName(a.firstName || '', a.middleName || '', a.lastName || '') || a.email || 'Faculty', 
                         email: a.email 
                     });
                 }
@@ -268,13 +331,20 @@ async function loadFaculty(departmentIdOrCode) {
             console.log('Loaded faculty from localStorage:', faculty.length, faculty);
         }
 
+        // Filter out superadmin account before populating dropdown
+        faculty = (faculty || []).filter(f => 
+            f.email !== 'superadmin@school.edu' && 
+            f.role !== 'superadmin' && 
+            String(f.role || '').toLowerCase() !== 'superadmin'
+        );
+        
         // Update faculty select
         facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty</option>';
-        (faculty||[]).forEach(f => {
+        faculty.forEach(f => {
             const option = document.createElement('option');
             option.value = f.id;
             // tolerate different shapes
-            const display = f.name || `${f.firstName||''} ${f.lastName||''}`.trim() || f.email || 'Faculty';
+            const display = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
             option.textContent = display;
             if (f.email) option.dataset.email = f.email;
             facultySelect.appendChild(option);
@@ -540,7 +610,7 @@ function updateUserInfo() {
             console.log('User role:', role);
             
             if (userNameEl) {
-                userNameEl.textContent = user.name || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email) || 'User';
+                userNameEl.textContent = user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || '') || user.email || 'User';
             }
             if (userRoleEl) {
                 userRoleEl.textContent = role.charAt(0).toUpperCase() + role.slice(1);
@@ -1316,13 +1386,27 @@ document.addEventListener('DOMContentLoaded', function() {
             facultySelect.disabled = true;
             
             try {
+                // Resolve department ID properly (handle codes, IDs, or malformed values)
+                const resolvedDeptId = resolveDepartmentId(eventData.departmentId);
+                if (!resolvedDeptId) {
+                    console.warn('Could not resolve department ID:', eventData.departmentId);
+                    facultySelect.innerHTML = '<option value="">No department found</option>';
+                    facultySelect.disabled = false;
+                    return;
+                }
+                
                 // Load faculty for the event's department
-                const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(eventData.departmentId)}`);
+                const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(resolvedDeptId)}`);
                 if (response && response.ok) {
                     const faculty = await response.json();
                     
-                    // Filter to only verified faculty
-                    const verifiedFaculty = faculty.filter(f => f.verified === true);
+                    // Filter to only verified faculty and exclude superadmin
+                    const verifiedFaculty = faculty.filter(f => 
+                        f.verified === true &&
+                        f.email !== 'superadmin@school.edu' &&
+                        f.role !== 'superadmin' &&
+                        String(f.role || '').toLowerCase() !== 'superadmin'
+                    );
                     
                     facultySelect.innerHTML = '<option value="">Select a faculty member...</option>';
                     
@@ -1330,7 +1414,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         verifiedFaculty.forEach(member => {
                             const option = document.createElement('option');
                             option.value = member.id;
-                            const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'Faculty';
+                            const name = formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || 'Faculty';
                             option.textContent = name;
                             
                             // Mark current faculty as selected
@@ -1464,14 +1548,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     const event = calendar.getEventById(eventId);
                     if (!event) return;
                     
+                    // Resolve department ID properly (handle codes, IDs, or malformed values)
+                    const resolvedDeptId = resolveDepartmentId(eventData.departmentId);
+                    if (!resolvedDeptId) {
+                        console.warn('Could not resolve department ID:', eventData.departmentId);
+                        if (typeof showNotification === 'function') {
+                            showNotification('Could not resolve department ID', 'error');
+                        }
+                        return;
+                    }
+                    
                     // Get faculty member details
-                    const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(eventData.departmentId)}`);
+                    const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(resolvedDeptId)}`);
                     if (response && response.ok) {
                         const faculty = await response.json();
                         const selectedFaculty = faculty.find(f => f.id === selectedFacultyId);
                         
                         if (selectedFaculty) {
-                            const facultyName = `${selectedFaculty.firstName || ''} ${selectedFaculty.lastName || ''}`.trim() || selectedFaculty.email || 'Faculty';
+                            const facultyName = formatFullName(selectedFaculty.firstName || '', selectedFaculty.middleName || '', selectedFaculty.lastName || '') || selectedFaculty.email || 'Faculty';
                             
                             // Update the event
                             event.setExtendedProp('facultyId', selectedFacultyId);
@@ -2280,6 +2374,10 @@ function initializeUnassignedSchedules() {
     const assignSchedulesBtn = document.getElementById('assignSchedulesBtn');
     const unassignedSchedulesList = document.getElementById('unassignedSchedulesList');
     const unassignedCountBadge = document.getElementById('unassignedCountBadge');
+    const searchInput = document.getElementById('searchUnassignedSchedules');
+    
+    // Store all schedules for filtering
+    let allUnassignedSchedules = [];
     
     if (!unassignedPanel || !assignFacultySelect || !assignSchedulesBtn || !unassignedSchedulesList) {
         return; // Elements not found, skip initialization
@@ -2290,6 +2388,13 @@ function initializeUnassignedSchedules() {
     
     // Load faculty members for assignment dropdown
     loadFacultyForAssignment();
+    
+    // Handle search input
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            filterUnassignedSchedules(this.value);
+        });
+    }
     
     // Handle faculty selection change
     assignFacultySelect.addEventListener('change', function() {
@@ -2347,6 +2452,11 @@ function initializeUnassignedSchedules() {
                 alert(result.message || 'Schedules assigned successfully');
             }
             
+            // Clear search input
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            
             // Reload unassigned schedules and refresh calendar
             loadUnassignedSchedules();
             if (window.loadScheduleFromLocalStorage) {
@@ -2385,26 +2495,89 @@ function initializeUnassignedSchedules() {
                 unassignedCountBadge.textContent = unassignedSchedules.length;
             }
             
-            // Show/hide panel
-            if (unassignedSchedules.length > 0) {
+            // Store all unassigned schedules for filtering
+            allUnassignedSchedules = unassignedSchedules;
+            
+            // Check if there are any schedules at all (to determine if panel should show)
+            // We need to fetch the full schedule to check if any schedules exist
+            let totalSchedulesCount = 0;
+            try {
+                const scheduleResponse = await fetchWithAuth('/api/schedule', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                });
+                if (scheduleResponse && scheduleResponse.ok) {
+                    const allSchedules = await scheduleResponse.json();
+                    totalSchedulesCount = Array.isArray(allSchedules) ? allSchedules.length : 0;
+                }
+            } catch (e) {
+                console.warn('Could not fetch total schedule count:', e);
+            }
+            
+            // Check user role - always show panel for admins/superadmins
+            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+            const userRole = userData.role || 'user';
+            const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+            
+            // Show panel if:
+            // 1. There are unassigned schedules, OR
+            // 2. There are any schedules at all (even if all assigned), OR
+            // 3. User is admin/superadmin (always show for them)
+            if (unassignedSchedules.length > 0 || totalSchedulesCount > 0 || isAdmin) {
                 unassignedPanel.style.display = 'block';
             } else {
                 unassignedPanel.style.display = 'none';
                 return;
             }
             
-            // Display schedules
-            if (unassignedSchedules.length === 0) {
-                unassignedSchedulesList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-check-circle"></i>
-                        <p>No unassigned schedules</p>
-                    </div>
-                `;
-                return;
-            }
+            // Display schedules (apply search filter if any)
+            const searchTerm = searchInput ? searchInput.value : '';
+            displayUnassignedSchedules(unassignedSchedules, searchTerm);
             
-            unassignedSchedulesList.innerHTML = unassignedSchedules.map(schedule => {
+        } catch (error) {
+            console.error('Error loading unassigned schedules:', error);
+            unassignedPanel.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Display unassigned schedules with optional search filter
+     */
+    function displayUnassignedSchedules(schedules, searchTerm = '') {
+        // Filter schedules based on search term
+        const filteredSchedules = searchTerm.trim() 
+            ? schedules.filter(schedule => {
+                const extendedProps = schedule.extendedProps || {};
+                const subject = (extendedProps.subject || schedule.title || '').toLowerCase();
+                const department = (extendedProps.department || extendedProps.course || '').toLowerCase();
+                const day = (extendedProps.dayOfWeek || (schedule.start ? new Date(schedule.start).toLocaleDateString('en-US', { weekday: 'long' }) : '')).toLowerCase();
+                const startTime = schedule.start ? new Date(schedule.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                const endTime = schedule.end ? new Date(schedule.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                const room = (extendedProps.room || '').toLowerCase();
+                const searchLower = searchTerm.toLowerCase();
+                
+                return subject.includes(searchLower) ||
+                       department.includes(searchLower) ||
+                       day.includes(searchLower) ||
+                       startTime.includes(searchLower) ||
+                       endTime.includes(searchLower) ||
+                       room.includes(searchLower);
+            })
+            : schedules;
+        
+        // Display schedules
+        if (filteredSchedules.length === 0) {
+            unassignedSchedulesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-search"></i>
+                    <p>${searchTerm.trim() ? 'No schedules match your search' : 'No unassigned schedules'}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        unassignedSchedulesList.innerHTML = filteredSchedules.map(schedule => {
                 const extendedProps = schedule.extendedProps || {};
                 const subject = extendedProps.subject || schedule.title || 'Unknown Subject';
                 const department = extendedProps.department || extendedProps.course || 'Unknown Department';
@@ -2429,36 +2602,38 @@ function initializeUnassignedSchedules() {
                 `;
             }).join('');
             
-            // Add select all checkbox
-            const selectAllHtml = `
-                <div style="padding: 10px; border-bottom: 2px solid #e0e0e0; background: #f8fafc;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
-                        <input type="checkbox" id="selectAllUnassigned" style="cursor: pointer;">
-                        <span>Select All</span>
-                    </label>
-                </div>
-            `;
-            unassignedSchedulesList.innerHTML = selectAllHtml + unassignedSchedulesList.innerHTML;
-            
-            // Handle select all
-            const selectAllCheckbox = document.getElementById('selectAllUnassigned');
-            if (selectAllCheckbox) {
-                selectAllCheckbox.addEventListener('change', function() {
-                    const checkboxes = unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:not(#selectAllUnassigned)');
-                    checkboxes.forEach(cb => cb.checked = this.checked);
-                    updateSelectedSchedules();
-                });
-            }
-            
-            // Handle individual checkbox changes
-            unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:not(#selectAllUnassigned)').forEach(checkbox => {
-                checkbox.addEventListener('change', updateSelectedSchedules);
+        // Add select all checkbox
+        const selectAllHtml = `
+            <div style="padding: 10px; border-bottom: 2px solid #e0e0e0; background: #f8fafc;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                    <input type="checkbox" id="selectAllUnassigned" style="cursor: pointer;">
+                    <span>Select All (${filteredSchedules.length} shown)</span>
+                </label>
+            </div>
+        `;
+        unassignedSchedulesList.innerHTML = selectAllHtml + unassignedSchedulesList.innerHTML;
+        
+        // Handle select all
+        const selectAllCheckbox = document.getElementById('selectAllUnassigned');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function() {
+                const checkboxes = unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:not(#selectAllUnassigned)');
+                checkboxes.forEach(cb => cb.checked = this.checked);
+                updateSelectedSchedules();
             });
-            
-        } catch (error) {
-            console.error('Error loading unassigned schedules:', error);
-            unassignedPanel.style.display = 'none';
         }
+        
+        // Handle individual checkbox changes
+        unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:not(#selectAllUnassigned)').forEach(checkbox => {
+            checkbox.addEventListener('change', updateSelectedSchedules);
+        });
+    }
+    
+    /**
+     * Filter unassigned schedules based on search term
+     */
+    function filterUnassignedSchedules(searchTerm) {
+        displayUnassignedSchedules(allUnassignedSchedules, searchTerm);
     }
     
     /**
@@ -2487,13 +2662,25 @@ function initializeUnassignedSchedules() {
                 const response = await fetchWithAuth('/api/faculty');
                 if (response && response.ok) {
                     const faculty = await response.json();
-                    populateFacultyAssignmentDropdown(faculty);
+                    // Filter out superadmin
+                    const filteredFaculty = faculty.filter(f => 
+                        f.email !== 'superadmin@school.edu' &&
+                        f.role !== 'superadmin' &&
+                        String(f.role || '').toLowerCase() !== 'superadmin'
+                    );
+                    populateFacultyAssignmentDropdown(filteredFaculty);
                 }
             } else {
                 // Load faculty for selected department
                 if (typeof loadFaculty === 'function') {
                     const faculty = await loadFacultyForDept(deptSelect.value);
-                    populateFacultyAssignmentDropdown(faculty);
+                    // Filter out superadmin
+                    const filteredFaculty = (faculty || []).filter(f => 
+                        f.email !== 'superadmin@school.edu' &&
+                        f.role !== 'superadmin' &&
+                        String(f.role || '').toLowerCase() !== 'superadmin'
+                    );
+                    populateFacultyAssignmentDropdown(filteredFaculty);
                 }
             }
         } catch (error) {
@@ -2506,7 +2693,14 @@ function initializeUnassignedSchedules() {
      */
     async function loadFacultyForDept(departmentId) {
         try {
-            const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(departmentId)}`);
+            // Resolve department ID properly (handle codes, IDs, or malformed values)
+            const resolvedDeptId = resolveDepartmentId(departmentId);
+            if (!resolvedDeptId) {
+                console.warn('Could not resolve department ID:', departmentId);
+                return [];
+            }
+            
+            const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(resolvedDeptId)}`);
             if (response && response.ok) {
                 return await response.json();
             }
@@ -2522,11 +2716,18 @@ function initializeUnassignedSchedules() {
     function populateFacultyAssignmentDropdown(faculty) {
         assignFacultySelect.innerHTML = '<option value="">Select Faculty Member</option>';
         
-        if (faculty && faculty.length > 0) {
-            faculty.forEach(member => {
+        // Filter out superadmin account
+        const filteredFaculty = (faculty || []).filter(member => 
+            member.email !== 'superadmin@school.edu' &&
+            member.role !== 'superadmin' &&
+            String(member.role || '').toLowerCase() !== 'superadmin'
+        );
+        
+        if (filteredFaculty.length > 0) {
+            filteredFaculty.forEach(member => {
                 const option = document.createElement('option');
                 option.value = member.id;
-                const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'Faculty';
+                const name = formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || 'Faculty';
                 option.textContent = `${name}${member.department ? ' - ' + member.department : ''}`;
                 assignFacultySelect.appendChild(option);
             });

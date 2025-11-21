@@ -31,7 +31,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Set admin name and role in header
-    document.getElementById('adminName').textContent = `${userData.firstName} ${userData.lastName}`;
+    const formatFullName = (firstName, middleName, lastName) => {
+        if (!firstName && !lastName) return '';
+        let name = firstName || '';
+        if (middleName && middleName.trim()) {
+            name += ` ${middleName.trim().charAt(0).toUpperCase()}.`;
+        }
+        if (lastName) {
+            name += ` ${lastName}`;
+        }
+        return name.trim();
+    };
+    document.getElementById('adminName').textContent = formatFullName(userData.firstName || '', userData.middleName || '', userData.lastName || '') || userData.email || 'Admin';
     const adminRoleElement = document.getElementById('adminRole');
     if (adminRoleElement) {
         adminRoleElement.textContent = userData.role ? userData.role.charAt(0).toUpperCase() + userData.role.slice(1) : 'Admin';
@@ -154,9 +165,20 @@ function displayDepartmentUsers(users) {
     
     users.forEach(user => {
         if (user) { // Add null check for user object
+            const formatName = (firstName, middleName, lastName) => {
+                if (!firstName && !lastName) return '';
+                let name = firstName || '';
+                if (middleName && middleName.trim()) {
+                    name += ` ${middleName.trim().charAt(0).toUpperCase()}.`;
+                }
+                if (lastName) {
+                    name += ` ${lastName}`;
+                }
+                return name.trim();
+            };
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${user.firstName || ''} ${user.middleName ? user.middleName + ' ' : ''}${user.lastName || ''}</td>
+                <td>${formatName(user.firstName || '', user.middleName || '', user.lastName || '')}</td>
                 <td>${user.email || 'N/A'}</td>
                 <td>${user.role || 'N/A'}</td>
                 <td>${user.department || 'N/A'}</td>

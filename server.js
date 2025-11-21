@@ -164,6 +164,30 @@ async function processSaveQueue() {
   }
 }
 
+/**
+ * Format full name with middle initial
+ * @param {string} firstName - First name
+ * @param {string} middleName - Middle name (optional)
+ * @param {string} lastName - Last name
+ * @returns {string} Formatted name (e.g., "John M. Doe" or "John Doe")
+ */
+function formatFullName(firstName, middleName, lastName) {
+  if (!firstName && !lastName) return '';
+  
+  let name = firstName || '';
+  
+  if (middleName && middleName.trim()) {
+    const middleInitial = middleName.trim().charAt(0).toUpperCase();
+    name += ` ${middleInitial}.`;
+  }
+  
+  if (lastName) {
+    name += ` ${lastName}`;
+  }
+  
+  return name.trim();
+}
+
 // Security middleware with permissive CSP for development
 app.use(helmet({
   contentSecurityPolicy: false // Temporarily disable CSP to identify the issue
@@ -1087,7 +1111,7 @@ app.post('/api/auth/verify', (req, res) => {
       // Notify that a new user has verified and is ready for approval
       console.log('📢 New user verified and ready for approval:', {
         email: users[userIndex].email,
-        name: `${users[userIndex].firstName} ${users[userIndex].lastName}`,
+        name: formatFullName(users[userIndex].firstName || '', users[userIndex].middleName || '', users[userIndex].lastName || ''),
         status: 'pending',
         verified: true
       });
@@ -1520,26 +1544,36 @@ app.post('/api/users/clear-sessions', isAuthenticated, isSuperAdmin, async (req,
 });
 
 // Get all pending users (superadmin only)
+// Changed to show users who have been sent verification emails (awaiting verification)
 app.get('/api/users/pending', isAuthenticated, isSuperAdmin, (req, res) => {
   try {
-    console.log('Fetching pending users. Total users:', users.length);
+    console.log('Fetching pending users (awaiting verification). Total users:', users.length);
     
-    // Filter users with 'pending' status AND verified (OTP confirmed)
-    // Only show users who have completed OTP verification
+    // Filter users who have been sent verification emails but not yet verified
+    // These are users with verificationToken set but verified !== true
     // Exclude hardcoded superadmin account
     const pendingUsers = users.filter(user => {
       // Exclude hardcoded superadmin account
       if (user.email === 'superadmin@school.edu') {
         return false;
       }
-      const isPending = user.status === 'pending';
-      const isVerified = user.verified === true || user.emailVerified === true;
-      const shouldShow = isPending && isVerified;
-      console.log(`User ${user.email} - Status: ${user.status} - Verified: ${isVerified} - Show: ${shouldShow}`);
+      
+      // User has been sent verification email (has verificationToken)
+      const hasVerificationToken = user.verificationToken && user.verificationToken.length > 0;
+      
+      // User is not yet verified
+      const notVerified = user.verified !== true && user.emailVerified !== true;
+      
+      // Check if verification token hasn't expired (if expiration is set)
+      const tokenNotExpired = !user.verificationExpires || user.verificationExpires > Date.now();
+      
+      const shouldShow = hasVerificationToken && notVerified && tokenNotExpired;
+      
+      console.log(`User ${user.email} - Has Token: ${hasVerificationToken} - Not Verified: ${notVerified} - Token Valid: ${tokenNotExpired} - Show: ${shouldShow}`);
       return shouldShow;
     });
     
-    console.log(`Found ${pendingUsers.length} pending users`);
+    console.log(`Found ${pendingUsers.length} users awaiting verification`);
     
     // Return minimal user data (no password hashes)
     const sanitizedUsers = pendingUsers.map(user => ({
@@ -1547,12 +1581,13 @@ app.get('/api/users/pending', isAuthenticated, isSuperAdmin, (req, res) => {
       firstName: user.firstName,
       middleName: user.middleName,
       lastName: user.lastName,
-      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      name: formatFullName(user.firstName || '', user.middleName || '', user.lastName || '') || user.email,
       email: user.email,
       role: user.role,
-      department: user.department || 'Pending Assignment',
+      department: user.department || user.departmentId || 'Pending Assignment',
       status: user.status,
       verified: user.verified,
+      verificationTokenSent: !!user.verificationToken,
       createdAt: user.createdAt
     }));
     
@@ -1834,7 +1869,7 @@ app.get('/api/users/:userId', isAuthenticated, (req, res) => {
     // Return user data (without sensitive information)
     res.status(200).json({
       id: user.id,
-      name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      name: user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || ''),
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
@@ -2319,8 +2354,8 @@ app.post('/api/faculty', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
 app.post('/api/faculty/create', isAuthenticated, isAdminOrSuperAdmin, async (req, res) => {
   console.log('POST /api/faculty/create - Route hit');
   try {
-    const { firstName, lastName, email, departmentId } = req.body;
-    console.log('Request body:', { firstName, lastName, email, departmentId });
+    const { firstName, middleName, lastName, email, departmentId } = req.body;
+    console.log('Request body:', { firstName, middleName, lastName, email, departmentId });
     
     // Validate required fields (email is optional)
     if (!firstName || !lastName || !departmentId) {
@@ -2355,6 +2390,7 @@ app.post('/api/faculty/create', isAuthenticated, isAdminOrSuperAdmin, async (req
     const newUser = {
       id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
       firstName: firstName.trim(),
+      middleName: middleName ? middleName.trim() : '',
       lastName: lastName.trim(),
       email: email ? email.toLowerCase().trim() : null,
       password: require('crypto').createHash('sha256').update(tempPassword).digest('hex'),
@@ -2658,7 +2694,7 @@ app.get('/api/faculty/verify/:token/info', async (req, res) => {
       firstName: user.firstName || '',
       lastName: user.lastName || '',
       email: user.email || '',
-      fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim()
+      fullName: formatFullName(user.firstName || '', user.middleName || '', user.lastName || '')
     });
     
   } catch (error) {
@@ -2812,6 +2848,7 @@ app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
       departmentId,
       email,
       firstName,
+      middleName,
       lastName
     } = req.body;
     
@@ -2835,6 +2872,11 @@ app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
     // Update firstName if provided
     if (firstName !== undefined && firstName !== null) {
       users[facultyIndex].firstName = firstName.trim();
+    }
+    
+    // Update middleName if provided
+    if (middleName !== undefined && middleName !== null) {
+      users[facultyIndex].middleName = middleName.trim();
     }
     
     // Update lastName if provided
@@ -4308,7 +4350,7 @@ app.put('/api/schedule/assign-faculty', isAuthenticated, isAdminOrSuperAdmin, (r
       return res.status(404).json({ error: 'Faculty member not found' });
     }
     
-    const facultyName = `${facultyMember.firstName || ''} ${facultyMember.lastName || ''}`.trim() || facultyMember.email || 'Faculty';
+    const facultyName = formatFullName(facultyMember.firstName || '', facultyMember.middleName || '', facultyMember.lastName || '') || facultyMember.email || 'Faculty';
     
     // Update schedules
     let updatedCount = 0;

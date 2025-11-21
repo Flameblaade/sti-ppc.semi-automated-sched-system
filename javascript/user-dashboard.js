@@ -48,8 +48,19 @@ document.addEventListener('DOMContentLoaded', async function() {
     let middleName = userData.middleName || sessionStorage.getItem('middleName') || '';
     let lastName = userData.lastName || sessionStorage.getItem('lastName') || '';
 
-    // Fill in fields
-    const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+    // Fill in fields - format with middle initial
+    const formatFullName = (firstName, middleName, lastName) => {
+        if (!firstName && !lastName) return '';
+        let name = firstName || '';
+        if (middleName && middleName.trim()) {
+            name += ` ${middleName.trim().charAt(0).toUpperCase()}.`;
+        }
+        if (lastName) {
+            name += ` ${lastName}`;
+        }
+        return name.trim();
+    };
+    const fullName = formatFullName(firstName, middleName, lastName);
     if (userFullNameSpan) userFullNameSpan.textContent = fullName || userData.email || 'User';
     if (userEmailSpan) userEmailSpan.textContent = userData.email || '';
     if (userFirstNameSpan) userFirstNameSpan.textContent = firstName;

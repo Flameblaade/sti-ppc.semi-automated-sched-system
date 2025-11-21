@@ -8,7 +8,7 @@ const STATIC_CACHE_NAME = 'sched-system-static-v3';
 // NOTE: JavaScript files are EXCLUDED from pre-cache to ensure they're always fetched fresh
 // This prevents hard refresh issues when code changes are made
 const STATIC_ASSETS = [
-  '/',
+  '/index.html', // Main entry point (explicit path, not redirect)
   // CSS files can be cached (less frequently changed)
   '/css/schedule.css',
   '/css/main.css',
@@ -44,10 +44,25 @@ self.addEventListener('install', (event) => {
       const sameOriginAssets = STATIC_ASSETS.filter(url => 
         url.startsWith('/') || url.startsWith(location.origin)
       );
-      return cache.addAll(sameOriginAssets.map(url => new Request(url, { credentials: 'same-origin' }))).catch((err) => {
-        console.warn('[Service Worker] Some assets failed to cache:', err);
-        // Cache what we can, continue even if some fail
-        return Promise.resolve();
+      
+      // Cache assets individually so one failure doesn't stop others
+      // This is more resilient than cache.addAll() which fails if ANY asset fails
+      const cachePromises = sameOriginAssets.map(url => {
+        return cache.add(new Request(url, { credentials: 'same-origin' }))
+          .then(() => {
+            console.log('[Service Worker] ✓ Cached:', url);
+          })
+          .catch((err) => {
+            // Log which specific asset failed, but don't stop the installation
+            console.warn(`[Service Worker] ✗ Failed to cache ${url}:`, err.message || err);
+            // Continue even if this asset fails
+            return Promise.resolve();
+          });
+      });
+      
+      // Wait for all cache attempts to complete (successful or not)
+      return Promise.allSettled(cachePromises).then(() => {
+        console.log('[Service Worker] Asset caching completed');
       });
     })
   );
@@ -102,24 +117,48 @@ self.addEventListener('fetch', (event) => {
           caches.open(STATIC_CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => {});
           return response;
         })
-        .catch(() => caches.match(request).then(r => r || caches.match('/index.html')))
+        .catch(() => {
+          return caches.match(request).then(r => {
+            if (r) return r;
+            return caches.match('/index.html').then(fallback => {
+              return fallback || new Response('Page not available offline', {
+                status: 503,
+                statusText: 'Service Unavailable',
+                headers: { 'Content-Type': 'text/plain' }
+              });
+            });
+          });
+        })
     );
     return;
   }
 
   // For API endpoints, always do network-first; only cache whitelisted endpoints
   if (url.pathname.startsWith('/api/')) {
-    const shouldCache = API_ENDPOINTS_TO_CACHE.includes(url.pathname);
+    const shouldCache = API_ENDPOINTS_TO_CACHE.some(endpoint => url.pathname.startsWith(endpoint));
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (shouldCache && response.ok) {
             const responseToCache = response.clone();
-            caches.open(API_CACHE_NAME).then((cache) => cache.put(request, responseToCache));
+            caches.open(API_CACHE_NAME).then((cache) => cache.put(request, responseToCache)).catch(() => {});
           }
           return response;
         })
-        .catch(() => caches.match(request))
+        .catch(() => {
+          // Try to get from cache, but always return a Response
+          return caches.match(request).then(cachedResponse => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            // Return a proper error response instead of undefined
+            return new Response(JSON.stringify({ error: 'Network request failed and no cache available' }), {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
+        })
     );
     return;
   }
@@ -185,9 +224,20 @@ self.addEventListener('fetch', (event) => {
           }
           // Network failed and no cache, return error
           if (url.origin === location.origin) {
-            return caches.match('/index.html');
+            return caches.match('/index.html').then(fallback => {
+              return fallback || new Response('Resource not available offline', {
+                status: 503,
+                statusText: 'Service Unavailable',
+                headers: { 'Content-Type': 'text/plain' }
+              });
+            });
           }
-          return fetch(request);
+          // For external resources, return error response instead of trying fetch again
+          return new Response('Network request failed', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain' }
+          });
         });
     })
   );

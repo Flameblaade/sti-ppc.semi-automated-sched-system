@@ -415,10 +415,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Rebuild faculty dropdown
                 facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty Member</option>';
                 
-                // Filter and add faculty options for selected department
-                const filteredFaculty = selectedDepartment ? 
+                // Filter and add faculty options for selected department, excluding superadmin
+                const filteredFaculty = (selectedDepartment ? 
                     facultyMembers.filter(f => f.department === selectedDepartment) : 
-                    facultyMembers;
+                    facultyMembers).filter(f => 
+                        f.email !== 'superadmin@school.edu' &&
+                        f.role !== 'superadmin' &&
+                        String(f.role || '').toLowerCase() !== 'superadmin'
+                    );
                 
                 if (filteredFaculty.length > 0) {
                     console.log('Faculty members for department', selectedDepartment, ':', filteredFaculty.length);
@@ -511,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Create the faculty name element
                     const nameEl = document.createElement('span');
                     nameEl.className = 'faculty-name';
-                    nameEl.textContent = `${faculty.firstName} ${faculty.lastName}`;
+                    nameEl.textContent = formatFullName(faculty.firstName || '', faculty.middleName || '', faculty.lastName || '') || faculty.email || '';
                     
                     // Create the remove button
                     const removeBtn = document.createElement('button');
@@ -548,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!faculty) return;
         
         // Get the name for the notification
-        const facultyName = `${faculty.firstName} ${faculty.lastName}`;
+        const facultyName = formatFullName(faculty.firstName || '', faculty.middleName || '', faculty.lastName || '') || faculty.email || '';
         
         // Remove from the array
         facultyMembers = facultyMembers.filter(f => f.id !== id);
@@ -820,10 +824,40 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Button handlers for generate, clear and print
+    // Button handlers for backup, import, generate and clear
+    const backupBtn = document.getElementById('backupScheduleBtn');
+    const importBtn = document.getElementById('importScheduleBtn');
+    const importFileInput = document.getElementById('importScheduleFile');
     const generateBtn = document.getElementById('generateScheduleBtn');
     const clearBtn = document.getElementById('clearScheduleBtn');
-    const printBtn = document.getElementById('printScheduleBtn');
+    
+    // Backup schedule button handler
+    if (backupBtn) {
+        backupBtn.addEventListener('click', function() {
+            backupSchedule();
+        });
+    }
+    
+    // Import schedule button handler
+    if (importBtn) {
+        importBtn.addEventListener('click', function() {
+            if (importFileInput) {
+                importFileInput.click();
+            }
+        });
+    }
+    
+    // Import file input handler
+    if (importFileInput) {
+        importFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                importSchedule(file);
+            }
+            // Reset input so same file can be selected again
+            e.target.value = '';
+        });
+    }
     
     if (generateBtn) {
         generateBtn.addEventListener('click', function() {
@@ -855,27 +889,38 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
-    if (printBtn) {
-        printBtn.addEventListener('click', function() {
-            printSchedule();
-        });
-    }
 
     // Helper Functions
     // Note: wouldCreateScheduleConflict is defined at the top level for immediate availability
     
-    // Format faculty name
+    // Format faculty name with middle initial
     function formatFacultyName(firstName, middleName, lastName, department) {
         let name = `${firstName} `;
         
-        if (middleName) {
-            name += `${middleName.charAt(0)}. `;
+        if (middleName && middleName.trim()) {
+            name += `${middleName.trim().charAt(0).toUpperCase()}. `;
         }
         
         name += `${lastName} (${department})`;
-        
         return name;
+    }
+    
+    // Format full name with middle initial (for general use)
+    function formatFullName(firstName, middleName, lastName) {
+        if (!firstName && !lastName) return '';
+        
+        let name = firstName || '';
+        
+        if (middleName && middleName.trim()) {
+            const middleInitial = middleName.trim().charAt(0).toUpperCase();
+            name += ` ${middleInitial}.`;
+        }
+        
+        if (lastName) {
+            name += ` ${lastName}`;
+        }
+        
+        return name.trim();
     }
     
     // Populate faculty dropdown
@@ -887,11 +932,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear dropdown
         facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty Member</option>';
         
-        // Filter by current department if one is selected
-        let filteredFaculty = facultyMembers;
+        // Filter by current department if one is selected, and exclude superadmin
+        let filteredFaculty = facultyMembers.filter(f => 
+            f.email !== 'superadmin@school.edu' &&
+            f.role !== 'superadmin' &&
+            String(f.role || '').toLowerCase() !== 'superadmin'
+        );
         
         if (departmentSelect && departmentSelect.value) {
-            filteredFaculty = facultyMembers.filter(f => f.department === departmentSelect.value);
+            filteredFaculty = filteredFaculty.filter(f => f.department === departmentSelect.value);
         }
         
         // Add faculty options
@@ -2214,8 +2263,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return false;
     }
     
-    // Print schedule - simplified to only show the timetable
-    // Export schedule to Excel file
+    // Print schedule - print the current timetable view
     function printSchedule() {
         const calendar = window.calendar;
         if (!calendar) {
@@ -2224,142 +2272,360 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
+            // Add print class to body to trigger print styles
+            document.body.classList.add('printing-timetable');
+            
+            // Add print date attribute
+            const now = new Date();
+            document.body.setAttribute('data-print-date', now.toLocaleString());
+            
+            // Hide elements that shouldn't be printed
+            const leftColumn = document.querySelector('.left-column');
+            const header = document.querySelector('.header');
+            const filterPanel = document.querySelector('.filter-panel');
+            const panelActions = document.querySelector('.panel-actions');
+            
+            if (leftColumn) leftColumn.style.display = 'none';
+            if (header) header.style.display = 'none';
+            if (filterPanel) filterPanel.style.display = 'none';
+            if (panelActions) panelActions.style.display = 'none';
+            
+            // Show notification
+            if (typeof showNotification === 'function') {
+                showNotification('Opening print dialog...', 'info');
+            }
+            
+            // Wait a moment for styles to apply, then print
+            setTimeout(() => {
+                window.print();
+                
+                // Restore elements after printing
+                setTimeout(() => {
+                    if (leftColumn) leftColumn.style.display = '';
+                    if (header) header.style.display = '';
+                    if (filterPanel) filterPanel.style.display = '';
+                    if (panelActions) panelActions.style.display = '';
+                    document.body.classList.remove('printing-timetable');
+                    document.body.removeAttribute('data-print-date');
+                }, 500);
+            }, 200);
+        } catch (error) {
+            console.error('Error printing schedule:', error);
+            if (typeof showNotification === 'function') {
+                showNotification('Error printing schedule: ' + error.message, 'error');
+            }
+            // Restore elements on error
+            const leftColumn = document.querySelector('.left-column');
+            const header = document.querySelector('.header');
+            const filterPanel = document.querySelector('.filter-panel');
+            const panelActions = document.querySelector('.panel-actions');
+            if (leftColumn) leftColumn.style.display = '';
+            if (header) header.style.display = '';
+            if (filterPanel) filterPanel.style.display = '';
+            if (panelActions) panelActions.style.display = '';
+            document.body.classList.remove('printing-timetable');
+        }
+    }
+    
+    // Export schedule to Excel file in timetable format (matching sample)
+    function exportScheduleToExcel() {
+        const calendar = window.calendar;
+        if (!calendar) {
+            showNotification('Calendar not initialized', 'error');
+            return;
+        }
+
+        try {
+            if (typeof XLSX === 'undefined') {
+                showNotification('Excel library not loaded. Please refresh the page.', 'error');
+                return;
+            }
+
             showNotification('Preparing Excel file...', 'info');
+            
+            // Get all events from the calendar
+            const allEvents = calendar.getEvents();
+            
+            // Filter events - check if they're visible (not filtered out)
+            // The filter system in schedule.js hides events by setting display: none on event.el
+            // and adding 'filtered-out' class
+            const visibleEvents = allEvents.filter(event => {
+                // Skip fixed schedules
+                if (event.extendedProps?.isFixedSchedule) {
+                    return false;
+                }
+                
+                // Check if event is visible by checking its DOM element
+                if (event.el) {
+                    // Check if element is hidden via display style or filtered-out class
+                    const isHidden = event.el.style.display === 'none' || 
+                                   event.el.classList.contains('filtered-out');
+                    return !isHidden;
+                }
+                
+                // If no element exists yet, assume it's visible
+                return true;
+            });
             
             // Create a new workbook
             const wb = XLSX.utils.book_new();
             wb.Props = {
-                Title: "Class Schedule",
+                Title: "Schedule Timetable",
                 Subject: "Timetable",
                 Author: "Scheduling System",
                 CreatedDate: new Date()
             };
             
-            // Add a worksheet for the timetable
-            wb.SheetNames.push("Schedule");
+            // Days of the week (Monday to Saturday)
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             
-            // Create the header row (time slots)
+            // Create 15-minute time intervals from 7:00 AM to 8:30 PM (or later if needed)
+            // Format: "7:00-7:15", "7:15-7:30", etc.
             const timeSlots = [];
-            for (let hour = 7; hour < 20; hour++) {
-                const amPm = hour >= 12 ? 'PM' : 'AM';
-                const hour12 = hour > 12 ? hour - 12 : hour;
-                timeSlots.push(`${hour12}:00 ${amPm}`);
-                timeSlots.push(`${hour12}:30 ${amPm}`);
+            for (let hour = 7; hour <= 20; hour++) {
+                for (let minute = 0; minute < 60; minute += 15) {
+                    const nextMinute = minute + 15;
+                    const nextHour = nextMinute >= 60 ? hour + 1 : hour;
+                    const actualNextMinute = nextMinute >= 60 ? 0 : nextMinute;
+                    
+                    const amPm1 = hour >= 12 ? 'PM' : 'AM';
+                    const hour12_1 = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+                    const minuteStr1 = String(minute).padStart(2, '0');
+                    
+                    const amPm2 = nextHour >= 12 ? 'PM' : 'AM';
+                    const hour12_2 = nextHour > 12 ? nextHour - 12 : (nextHour === 0 ? 12 : nextHour);
+                    const minuteStr2 = String(actualNextMinute).padStart(2, '0');
+                    
+                    timeSlots.push({
+                        label: `${hour12_1}:${minuteStr1}-${hour12_2}:${minuteStr2}`,
+                        hour: hour,
+                        minute: minute
+                    });
+                }
             }
             
             // Prepare data structure for worksheet
             const wsData = [];
             
-            // Add header row with time slots
-            wsData.push(['Day/Time', ...timeSlots]);
+            // Header row: TIME, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
+            wsData.push(['TIME', ...days]);
             
-            // Get all events from the calendar
-            const events = calendar.getEvents();
+            // Get current week's Monday date
+            const today = new Date();
+            const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+            const daysToMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
+            const mondayDate = new Date(today);
+            mondayDate.setDate(today.getDate() - daysToMonday);
+            mondayDate.setHours(0, 0, 0, 0);
             
-            // Create a row for each day
-            days.forEach(day => {
-                const dayRow = [day.title]; // First cell is the day name
-                
-                // Fill the row with empty cells initially
-                for (let i = 0; i < timeSlots.length; i++) {
-                    dayRow.push('');
-                }
-                
-                // Find events for this day and fill in the cells
-                // For timeGridWeek, we need to find events that fall on this day of the week
-                // Calculate the date for this day in the current week
-                const today = new Date();
-                const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-                const daysToMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
-                const mondayDate = new Date(today);
-                mondayDate.setDate(today.getDate() - daysToMonday);
-                
-                const dayIndexMap = {
-                    'Monday': 0,
-                    'Tuesday': 1,
-                    'Wednesday': 2,
-                    'Thursday': 3,
-                    'Friday': 4,
-                    'Saturday': 5
-                };
-                const dayOffset = dayIndexMap[day.id] || 0;
-                const targetDate = new Date(mondayDate);
-                targetDate.setDate(mondayDate.getDate() + dayOffset);
-                
-                const dayEvents = events.filter(event => {
-                    if (!event.start) return false;
-                    const eventDate = new Date(event.start);
-                    return eventDate.getFullYear() === targetDate.getFullYear() &&
-                           eventDate.getMonth() === targetDate.getMonth() &&
-                           eventDate.getDate() === targetDate.getDate();
-                });
-                
-                dayEvents.forEach(event => {
-                    // Get event details
-                    const startTime = event.start;
-                    const endTime = event.end;
-                    const subject = event.extendedProps.subject;
-                    const course = event.extendedProps.course;
-                    const faculty = event.extendedProps.faculty;
-                    const room = event.extendedProps.room;
-                    
-                    // Calculate cell positions for this event
-                    const startHour = startTime.getHours();
-                    const startMinute = startTime.getMinutes();
-                    const endHour = endTime.getHours();
-                    const endMinute = endTime.getMinutes();
-                    
-                    // Calculate start and end column indices
-                    const startColIndex = ((startHour - 7) * 2) + (startMinute === 30 ? 1 : 0) + 1; // +1 because column 0 is the day name
-                    const endColIndex = ((endHour - 7) * 2) + (endMinute === 30 ? 1 : 0) + 1;
-                    
-                    // Fill in the cells for this event
-                    for (let col = startColIndex; col < endColIndex; col++) {
-                        if (col < dayRow.length) {
-                            dayRow[col] = `${subject}\n${room}\n${faculty}`;
-                        }
-                    }
-                });
-                
-                // Add the day row to the worksheet
-                wsData.push(dayRow);
+            // Create a grid to store events: [dayIndex][timeSlotIndex] = event data
+            const eventGrid = {};
+            days.forEach((day, dayIdx) => {
+                eventGrid[dayIdx] = {};
             });
+            
+            // Process each visible event
+            visibleEvents.forEach(event => {
+                if (!event.start || !event.end) return;
+                
+                const extendedProps = event.extendedProps || {};
+                const subject = extendedProps.subject || event.title || '';
+                const course = extendedProps.course || '';
+                const classType = extendedProps.classType || '';
+                const room = extendedProps.room || '';
+                const faculty = extendedProps.faculty || '';
+                
+                // Determine day of week
+                const eventDate = new Date(event.start);
+                const dayOfWeek = eventDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to 0-5 (Mon-Sat)
+                
+                if (dayIndex < 0 || dayIndex > 5) return; // Skip Sunday
+                
+                // Calculate time slot indices
+                const startHour = eventDate.getHours();
+                const startMinute = eventDate.getMinutes();
+                const endDate = new Date(event.end);
+                const endHour = endDate.getHours();
+                const endMinute = endDate.getMinutes();
+                
+                // Convert to 15-minute slot indices (starting from 7:00 AM)
+                const startSlot = ((startHour - 7) * 4) + Math.floor(startMinute / 15);
+                const endSlot = ((endHour - 7) * 4) + Math.ceil(endMinute / 15);
+                
+                // Format event content (matching sample format)
+                const classTypeLabel = classType ? (classType.toUpperCase() === 'LECTURE' ? 'LEC' : classType.toUpperCase() === 'LABORATORY' ? 'LAB' : classType.toUpperCase()) : '';
+                const sectionInfo = course ? `${course}${classTypeLabel ? ' ' + classTypeLabel : ''}` : classTypeLabel;
+                
+                // Create cell content: Subject, Section/Type, Room, Faculty
+                const cellContent = [
+                    subject,
+                    sectionInfo,
+                    room,
+                    faculty
+                ].filter(Boolean).join('\n');
+                
+                // Store event in grid for all time slots it spans
+                for (let slot = startSlot; slot < endSlot && slot < timeSlots.length && slot >= 0; slot++) {
+                    // Only set if not already set (to handle overlapping events)
+                    if (!eventGrid[dayIndex][slot]) {
+                        eventGrid[dayIndex][slot] = cellContent;
+                    }
+                }
+            });
+            
+            // Create rows for each time slot
+            timeSlots.forEach((timeSlot, slotIndex) => {
+                const row = [timeSlot.label]; // First column is the time range
+                
+                // Add event data for each day
+                days.forEach((day, dayIndex) => {
+                    const eventContent = eventGrid[dayIndex][slotIndex] || '';
+                    row.push(eventContent);
+                });
+                
+                wsData.push(row);
+            });
+            
+            // Debug: Check if we have data
+            console.log('Export data:', {
+                visibleEventsCount: visibleEvents.length,
+                wsDataRows: wsData.length,
+                timeSlotsCount: timeSlots.length
+            });
+            
+            // Ensure we have at least header row
+            if (wsData.length === 0) {
+                throw new Error('No data to export. The schedule appears to be empty.');
+            }
             
             // Create the worksheet
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             
-            // Set column widths
-            const colWidth = { wch: 18 }; // Width for time slot columns
-            const dayColWidth = { wch: 10 }; // Width for day name column
-            
-            ws['!cols'] = [dayColWidth];
-            for (let i = 0; i < timeSlots.length; i++) {
-                ws['!cols'].push(colWidth);
+            // Ensure worksheet has a valid range
+            if (!ws['!ref']) {
+                // If no range, manually set it based on data
+                const maxRow = wsData.length - 1;
+                const maxCol = days.length; // TIME column + 6 day columns
+                ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: maxCol } });
             }
             
-            // Style and formatting
-            // Excel doesn't support as much styling through SheetJS, but we can set some properties
-            // Each cell is formatted as text to preserve line breaks
-            for (let r = 1; r < wsData.length; r++) {
-                for (let c = 1; c < wsData[r].length; c++) {
-                    const cell_ref = XLSX.utils.encode_cell({r: r, c: c});
-                    if (!ws[cell_ref]) continue;
-                    
-                    // Format cells with content
-                    if (ws[cell_ref].v !== '') {
-                        ws[cell_ref].s = {
-                            alignment: { wrapText: true, vertical: 'center', horizontal: 'center' },
-                            font: { bold: true }
-                        };
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 12 }, // TIME column
+                { wch: 20 }, // Monday
+                { wch: 20 }, // Tuesday
+                { wch: 20 }, // Wednesday
+                { wch: 20 }, // Thursday
+                { wch: 20 }, // Friday
+                { wch: 20 }  // Saturday
+            ];
+            
+            // Format cells
+            // Ensure worksheet has a valid range
+            if (!ws['!ref']) {
+                throw new Error('Worksheet has no data. Cannot export empty schedule.');
+            }
+            
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            
+            // Format header row
+            for (let c = 0; c <= range.e.c; c++) {
+                const cellRef = XLSX.utils.encode_cell({ r: 0, c: c });
+                if (!ws[cellRef]) continue;
+                ws[cellRef].s = {
+                    font: { bold: true, sz: 12 },
+                    alignment: { horizontal: 'center', vertical: 'center' },
+                    fill: { fgColor: { rgb: 'D3D3D3' } },
+                    border: {
+                        top: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        left: { style: 'thin' },
+                        right: { style: 'thin' }
                     }
+                };
+            }
+            
+            // Format time column
+            for (let r = 1; r <= range.e.r; r++) {
+                const cellRef = XLSX.utils.encode_cell({ r: r, c: 0 });
+                if (!ws[cellRef]) continue;
+                ws[cellRef].s = {
+                    font: { bold: true, sz: 10 },
+                    alignment: { horizontal: 'center', vertical: 'center' },
+                    border: {
+                        top: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        left: { style: 'thin' },
+                        right: { style: 'thin' }
+                    }
+                };
+            }
+            
+            // Format data cells with content
+            for (let r = 1; r <= range.e.r; r++) {
+                for (let c = 1; c <= range.e.c; c++) {
+                    const cellRef = XLSX.utils.encode_cell({ r: r, c: c });
+                    if (!ws[cellRef] || !ws[cellRef].v) continue;
+                    
+                    ws[cellRef].s = {
+                        alignment: { 
+                            wrapText: true, 
+                            vertical: 'center', 
+                            horizontal: 'center' 
+                        },
+                        font: { sz: 9 },
+                        border: {
+                            top: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            left: { style: 'thin' },
+                            right: { style: 'thin' }
+                        }
+                    };
                 }
             }
             
+            // Set row heights for better visibility
+            ws['!rows'] = [];
+            for (let r = 0; r <= range.e.r; r++) {
+                ws['!rows'][r] = { hpt: r === 0 ? 20 : 40 }; // Header row shorter, data rows taller
+            }
+            
+            // Check if worksheet has data
+            if (!ws['!ref']) {
+                throw new Error('No data to export. Please ensure there are visible events in the schedule.');
+            }
+            
             // Add the worksheet to the workbook
+            // XLSX requires both SheetNames array and Sheets object
+            if (!wb.SheetNames) {
+                wb.SheetNames = [];
+            }
+            if (!wb.Sheets) {
+                wb.Sheets = {};
+            }
+            wb.SheetNames.push("Schedule");
             wb.Sheets["Schedule"] = ws;
             
+            // Verify workbook structure before writing
+            if (!wb.SheetNames || wb.SheetNames.length === 0) {
+                throw new Error('Workbook has no sheets. Cannot export.');
+            }
+            if (!wb.Sheets || Object.keys(wb.Sheets).length === 0) {
+                throw new Error('Workbook has no sheet data. Cannot export.');
+            }
+            
+            console.log('Workbook structure:', {
+                sheetNames: wb.SheetNames,
+                sheets: Object.keys(wb.Sheets),
+                worksheetRef: ws['!ref']
+            });
+            
             // Convert the workbook to a binary string
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+            const wbout = XLSX.write(wb, { 
+                bookType: 'xlsx', 
+                type: 'binary'
+            });
             
             // Convert binary string to ArrayBuffer
             function s2ab(s) {
@@ -2372,11 +2638,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Create a Blob from the ArrayBuffer
-            const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
+            const blob = new Blob([s2ab(wbout)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            // Get filter info for filename
+            const filterDept = document.getElementById('filterDepartment')?.value || '';
+            const filterFaculty = document.getElementById('filterFaculty')?.value || '';
+            let fileName = 'schedule_timetable';
+            if (filterFaculty) {
+                fileName = `schedule_${filterFaculty.replace(/\s+/g, '_')}`;
+            } else if (filterDept) {
+                fileName = `schedule_${filterDept.replace(/\s+/g, '_')}`;
+            }
+            fileName += `_${new Date().toISOString().slice(0, 10)}.xlsx`;
             
             // Create a download link and trigger the download
-            const fileName = `class_schedule_${new Date().toISOString().slice(0, 10)}.xlsx`;
-            
             if (window.navigator && window.navigator.msSaveOrOpenBlob) {
                 // For IE
                 window.navigator.msSaveOrOpenBlob(blob, fileName);
@@ -4047,6 +4322,207 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     
+    /**
+     * Backup schedule to JSON file
+     * Excludes fixed schedules and allClasses data
+     */
+    function backupSchedule() {
+        const calendar = window.calendar;
+        if (!calendar) {
+            if (typeof showNotification === 'function') {
+                showNotification('Calendar not available for backup', 'error');
+            } else {
+                alert('Calendar not available for backup');
+            }
+            return;
+        }
+        
+        try {
+            // Get all events from calendar
+            const allEvents = calendar.getEvents();
+            
+            // Filter out fixed schedules (they're managed separately)
+            const scheduleEvents = allEvents.filter(event => {
+                return !(event.extendedProps?.isFixedSchedule);
+            });
+            
+            console.log('Backing up', scheduleEvents.length, 'schedule events (excluding fixed schedules)');
+            
+            // Format events for backup (similar to saveScheduleToLocalStorage)
+            const eventsData = scheduleEvents.map(event => {
+                let resourceId = null;
+                if (typeof event.getResources === 'function') {
+                    const resources = event.getResources();
+                    resourceId = resources && resources.length > 0 ? resources[0].id : null;
+                } else {
+                    if (event.extendedProps?.dayOfWeek) {
+                        resourceId = event.extendedProps.dayOfWeek;
+                    } else if (event.start) {
+                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        const eventDate = new Date(event.start);
+                        resourceId = dayNames[eventDate.getDay()];
+                    }
+                }
+                
+                return {
+                    id: event.id,
+                    title: event.title,
+                    resourceId: resourceId,
+                    start: event.start ? event.start.toISOString() : null,
+                    end: event.end ? event.end.toISOString() : null,
+                    backgroundColor: event.backgroundColor || null,
+                    borderColor: event.borderColor || null,
+                    classNames: Array.from(event.classNames || []),
+                    extendedProps: event.extendedProps || {}
+                };
+            });
+            
+            // Create backup object with metadata
+            const backupData = {
+                version: '1.0',
+                backupDate: new Date().toISOString(),
+                backupTimestamp: Date.now(),
+                eventCount: eventsData.length,
+                events: eventsData,
+                note: 'Schedule backup - excludes fixed schedules and class creation data (allClasses)'
+            };
+            
+            // Convert to JSON string
+            const jsonString = JSON.stringify(backupData, null, 2);
+            
+            // Create blob and download
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            document.body.appendChild(a);
+            a.href = url;
+            
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            a.download = `schedule-backup-${timestamp}.json`;
+            a.click();
+            
+            // Cleanup
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Show success notification
+            if (typeof showNotification === 'function') {
+                showNotification(`Schedule backup completed! ${eventsData.length} events backed up.`, 'success');
+            } else {
+                alert(`Schedule backup completed! ${eventsData.length} events backed up.`);
+            }
+            
+            console.log('Schedule backup completed:', backupData);
+        } catch (error) {
+            console.error('Error backing up schedule:', error);
+            if (typeof showNotification === 'function') {
+                showNotification('Failed to backup schedule: ' + error.message, 'error');
+            } else {
+                alert('Failed to backup schedule: ' + error.message);
+            }
+        }
+    }
+    
+    /**
+     * Import schedule from JSON file
+     * Replaces current schedule with imported data
+     */
+    async function importSchedule(file) {
+        try {
+            // Read file
+            const fileContent = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+            
+            // Parse JSON
+            let backupData;
+            try {
+                backupData = JSON.parse(fileContent);
+            } catch (e) {
+                throw new Error('Invalid JSON file format');
+            }
+            
+            // Validate backup data structure
+            if (!backupData.events || !Array.isArray(backupData.events)) {
+                throw new Error('Invalid backup file: missing events array');
+            }
+            
+            // Confirm import (this will replace current schedule)
+            const confirmMessage = `This will replace your current schedule with ${backupData.eventCount || backupData.events.length} events from the backup.\n\nBackup date: ${backupData.backupDate ? new Date(backupData.backupDate).toLocaleString() : 'Unknown'}\n\nDo you want to continue?`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            const calendar = window.calendar;
+            if (!calendar) {
+                throw new Error('Calendar not available');
+            }
+            
+            // Clear current schedule (except fixed schedules)
+            const currentEvents = calendar.getEvents();
+            currentEvents.forEach(event => {
+                if (!event.extendedProps?.isFixedSchedule) {
+                    event.remove();
+                }
+            });
+            
+            // Import events from backup
+            const importedEvents = [];
+            for (const eventData of backupData.events) {
+                try {
+                    // Create event object for FullCalendar
+                    const eventConfig = {
+                        id: eventData.id,
+                        title: eventData.title,
+                        start: eventData.start,
+                        end: eventData.end,
+                        backgroundColor: eventData.backgroundColor,
+                        borderColor: eventData.borderColor,
+                        classNames: eventData.classNames || [],
+                        extendedProps: eventData.extendedProps || {}
+                    };
+                    
+                    // Add resourceId if available (for resource views)
+                    if (eventData.resourceId) {
+                        eventConfig.resourceId = eventData.resourceId;
+                    }
+                    
+                    // Add event to calendar
+                    const event = calendar.addEvent(eventConfig);
+                    importedEvents.push(event);
+                } catch (e) {
+                    console.warn('Failed to import event:', eventData, e);
+                }
+            }
+            
+            // Save imported schedule to server
+            if (typeof window.saveScheduleToLocalStorage === 'function') {
+                await window.saveScheduleToLocalStorage();
+            }
+            
+            // Show success notification
+            if (typeof showNotification === 'function') {
+                showNotification(`Schedule imported successfully! ${importedEvents.length} events loaded.`, 'success');
+            } else {
+                alert(`Schedule imported successfully! ${importedEvents.length} events loaded.`);
+            }
+            
+            console.log('Schedule import completed:', importedEvents.length, 'events imported');
+        } catch (error) {
+            console.error('Error importing schedule:', error);
+            if (typeof showNotification === 'function') {
+                showNotification('Failed to import schedule: ' + error.message, 'error');
+            } else {
+                alert('Failed to import schedule: ' + error.message);
+            }
+        }
+    }
+    
     // Manual schedule loading function for debugging
     window.forceLoadSchedule = function() {
         console.log('Force loading schedule...');
@@ -4184,7 +4660,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const userFirstName = userData.firstName || '';
             const userLastName = userData.lastName || '';
             const userEmail = userData.email || '';
-            const userFullName = (userFirstName && userLastName) ? `${userFirstName} ${userLastName}`.trim() : (userData.name || '');
+            const userFullName = formatFullName(userFirstName, userData.middleName || '', userLastName) || (userData.name || '');
             const userName = userFullName || userEmail || '';
             
             // Create array of possible user identifiers for matching
@@ -5214,7 +5690,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Get user info
         const userRole = userData.role || 'user';
-        const userName = userData.firstName ? `${userData.firstName} ${userData.lastName}` : userData.email || 'User';
+        const userName = formatFullName(userData.firstName || '', userData.middleName || '', userData.lastName || '') || userData.email || 'User';
         
         // Check if user is pending approval
         if (userData.status === 'pending') {
@@ -5249,6 +5725,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 localStorage.removeItem('demoUserData');
                 window.location.href = 'login.html';
             });
+        }
+        
+        // Hide backup/import buttons for non-superadmin users
+        const backupMenu = document.querySelector('.schedule-backup-menu');
+        if (backupMenu && userRole !== 'superadmin') {
+            backupMenu.style.display = 'none';
         }
         
         // Modify UI based on role
@@ -5949,7 +6431,7 @@ function showSuperAdminNewUserNotification(user) {
         existing.remove();
     }
     
-    const userName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+    const userName = user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || '') || user.email;
     
     const notification = document.createElement('div');
     notification.className = 'superadmin-new-user-notification';

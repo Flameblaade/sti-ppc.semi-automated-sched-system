@@ -1,5 +1,202 @@
 /* Schedule Page Styles */
 
+/* Print Styles for Timetable */
+@media print {
+    @page {
+        margin: 0.5cm;
+        size: landscape;
+    }
+    
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    
+    body {
+        margin: 0;
+        padding: 0;
+        background: white !important;
+        font-size: 12px !important;
+    }
+    
+    /* Hide everything except the calendar */
+    .header,
+    .left-column,
+    .filter-panel,
+    .panel-actions,
+    .btn,
+    button:not(.fc-button),
+    .form-panel,
+    #unassignedSchedulesPanel,
+    .fixed-schedules-panel,
+    .notification-modal,
+    .modal,
+    .close-modal,
+    .close-btn,
+    .user-menu,
+    .dashboard-btn {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    
+    /* Show only the calendar container */
+    .main-content {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    .content-layout {
+        display: block !important;
+    }
+    
+    .right-column,
+    .schedule-panel,
+    .calendar-container {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        page-break-inside: avoid !important;
+    }
+    
+    .schedule-panel {
+        background: white !important;
+        border: none !important;
+    }
+    
+    .panel-header {
+        display: block !important;
+        padding: 15px 0 10px 0 !important;
+        border-bottom: 2px solid #000 !important;
+        margin-bottom: 15px !important;
+        page-break-after: avoid !important;
+    }
+    
+    .panel-title {
+        font-size: 20px !important;
+        font-weight: bold !important;
+        color: #000 !important;
+        margin: 0 !important;
+        text-align: center !important;
+    }
+    
+    /* Calendar styles for print */
+    #calendar {
+        width: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
+        max-width: 100% !important;
+        page-break-inside: avoid !important;
+    }
+    
+    .fc {
+        font-size: 11px !important;
+        font-family: Arial, sans-serif !important;
+    }
+    
+    .fc-header-toolbar,
+    .fc-toolbar {
+        display: none !important;
+    }
+    
+    .fc-view-harness {
+        height: auto !important;
+        min-height: 600px !important;
+    }
+    
+    .fc-timeGridWeek-view {
+        height: auto !important;
+    }
+    
+    /* Event styles for print - preserve colors but ensure readability */
+    .fc-event {
+        border: 1px solid #333 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        font-size: 10px !important;
+        padding: 2px 4px !important;
+    }
+    
+    .fc-event-title {
+        font-weight: 600 !important;
+        line-height: 1.3 !important;
+    }
+    
+    /* Ensure events are visible and readable */
+    .fc-event-main {
+        color: inherit !important;
+    }
+    
+    .fc-event-main-frame {
+        color: inherit !important;
+    }
+    
+    /* Time column */
+    .fc-timegrid-slot-label {
+        font-size: 10px !important;
+        color: #000 !important;
+        font-weight: 500 !important;
+    }
+    
+    .fc-timegrid-slot {
+        border-color: #ccc !important;
+    }
+    
+    /* Day headers */
+    .fc-col-header-cell {
+        background: #f5f5f5 !important;
+        border: 1px solid #000 !important;
+        font-weight: bold !important;
+        color: #000 !important;
+        padding: 8px 4px !important;
+    }
+    
+    .fc-col-header-cell-cushion {
+        color: #000 !important;
+        font-size: 12px !important;
+    }
+    
+    /* Time grid */
+    .fc-timegrid-col-frame {
+        border-color: #ccc !important;
+    }
+    
+    /* Remove shadows and effects */
+    * {
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+    
+    /* Ensure proper page breaks */
+    .fc-timegrid-col {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    
+    /* Print header with date */
+    body.printing-timetable::before {
+        content: "Schedule Timetable - Printed on: " attr(data-print-date);
+        display: block;
+        text-align: center;
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #ccc;
+    }
+    
+    /* Ensure calendar takes full width */
+    .fc-scroller {
+        overflow: visible !important;
+    }
+    
+    .fc-scroller-liquid-absolute {
+        position: relative !important;
+    }
+}
+
 /* Filter System Styles */
 .filtered-out {
     display: none !important;
@@ -1207,5 +1404,33 @@ label {
 .sync-status-close:hover {
     background: var(--neutral-gray);
     color: var(--text-color);
+}
+
+/* Schedule Backup/Import Menu Styles */
+.schedule-backup-menu {
+    position: relative;
+}
+
+.backup-dropdown {
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.backup-menu-item:hover {
+    background: #f1f5f9 !important;
+}
+
+.backup-menu-item:active {
+    background: #e2e8f0 !important;
 }
 
