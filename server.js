@@ -643,6 +643,182 @@ This is an automated message. Please do not reply to this email.
   }
 };
 
+// Send verification link email to faculty
+const sendFacultyVerificationLink = async (email, link, firstName) => {
+  const emailHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 20px 0; text-align: center;">
+            <table role="presentation" style="width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <tr>
+                <td style="padding: 40px 30px; text-align: center; background-color: #1A609B; border-radius: 8px 8px 0 0;">
+                  <h1 style="margin: 0; color: #ffffff; font-size: 24px;">Verify Your Account</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 40px 30px;">
+                  <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    Hello ${firstName || 'there'},
+                  </p>
+                  <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    You have been added as a faculty member to our Scheduling System. Please click the button below to verify your account and set up your password.
+                  </p>
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="${link}" style="
+                      display: inline-block;
+                      padding: 12px 30px;
+                      background-color: #1A609B;
+                      color: #ffffff;
+                      text-decoration: none;
+                      border-radius: 5px;
+                      font-weight: bold;
+                      font-size: 16px;
+                    ">Verify Account</a>
+                  </div>
+                  <p style="margin: 20px 0 0 0; color: #666666; font-size: 14px; line-height: 1.5;">
+                    Or copy and paste this link into your browser:
+                  </p>
+                  <p style="margin: 10px 0 0 0; color: #1A609B; font-size: 12px; word-break: break-all;">
+                    ${link}
+                  </p>
+                  <p style="margin: 20px 0 0 0; color: #666666; font-size: 14px; line-height: 1.5;">
+                    This verification link will expire in <strong>7 days</strong>.
+                  </p>
+                  <p style="margin: 20px 0 0 0; color: #666666; font-size: 14px; line-height: 1.5;">
+                    If you did not expect this email, please ignore it or contact support if you have concerns.
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 20px 30px; text-align: center; background-color: #f8f9fa; border-radius: 0 0 8px 8px;">
+                  <p style="margin: 0; color: #999999; font-size: 12px;">
+                    This is an automated message. Please do not reply to this email.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+  
+  const emailText = `
+Verify Your Account
+
+Hello ${firstName || 'there'},
+
+You have been added as a faculty member to our Scheduling System. Please click the link below to verify your account and set up your password.
+
+${link}
+
+This verification link will expire in 7 days.
+
+If you did not expect this email, please ignore it or contact support if you have concerns.
+
+---
+This is an automated message. Please do not reply to this email.
+  `;
+
+  // Use SendGrid if configured
+  if (useSendGrid && sgMail) {
+    try {
+      console.log(`📧 Attempting to send faculty verification email via SendGrid:`);
+      console.log(`   From: ${process.env.SENDGRID_FROM_EMAIL}`);
+      console.log(`   To: ${email}`);
+      console.log(`   Link: ${link}`);
+      console.log(`   API Key configured: ${!!process.env.SENDGRID_API_KEY}`);
+
+      const msg = {
+        to: email,
+        from: {
+          email: process.env.SENDGRID_FROM_EMAIL,
+          name: 'Scheduling System'
+        },
+        replyTo: process.env.SENDGRID_FROM_EMAIL,
+        subject: 'Verify Your Faculty Account - Scheduling System',
+        text: emailText,
+        html: emailHtml,
+        categories: ['faculty-verification']
+      };
+
+      const result = await sgMail.send(msg);
+      console.log('✅ Faculty verification email sent successfully via SendGrid!');
+      console.log('   Status Code:', result[0]?.statusCode);
+      if (result[0]?.body) {
+        console.log('   Response:', JSON.stringify(result[0].body, null, 2));
+      }
+      return true;
+    } catch (error) {
+      console.error('❌ SendGrid error:', error.message);
+      if (error.response) {
+        console.error('   Status Code:', error.response.statusCode);
+        if (error.response.body) {
+          console.error('   Response Body:', JSON.stringify(error.response.body, null, 2));
+        }
+        if (error.response.headers) {
+          console.error('   Response Headers:', JSON.stringify(error.response.headers, null, 2));
+        }
+      }
+      if (error.code) {
+        console.error('   Error Code:', error.code);
+      }
+      // Log full error for debugging
+      console.error('   Full error:', error);
+      return false;
+    }
+  }
+
+  // Fallback to Gmail SMTP
+  if (!transporter) {
+    console.error('❌ Email transporter not configured');
+    console.error('💡 To fix: Set EMAIL_USER and EMAIL_PASS environment variables, or use SENDGRID_API_KEY');
+    return false;
+  }
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error('❌ Cannot send email: EMAIL_USER or EMAIL_PASS not set');
+    console.error('💡 To fix: Set EMAIL_USER and EMAIL_PASS environment variables in your .env file');
+    return false;
+  }
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: 'Verify Your Faculty Account - Scheduling System',
+    html: emailHtml,
+    text: emailText
+  };
+
+  try {
+    console.log(`📧 Attempting to send faculty verification email via Gmail SMTP:`);
+    console.log(`   From: ${process.env.EMAIL_USER}`);
+    console.log(`   To: ${email}`);
+    console.log(`   Link: ${link}`);
+    
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Faculty verification email sent successfully!');
+    console.log(`   Message ID: ${info.messageId}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error sending faculty verification email:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   Error command:', error.command);
+    if (error.response) {
+      console.error('   Error response:', error.response);
+    }
+    return false;
+  }
+};
+
 // Email availability check
 app.post('/api/auth/check-email', (req, res) => {
     try {
@@ -1029,19 +1205,31 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     // Check if user is verified
-    if (user.role !== 'superadmin' && !user.emailVerified) {
+    // For faculty members added by superadmin, they are verified via the verification link
+    // So we check both emailVerified (for signup flow) and verified (for faculty verification flow)
+    const isVerified = user.emailVerified === true || user.verified === true;
+    
+    if (user.role !== 'superadmin' && !isVerified) {
       return res.status(401).json({ 
         message: 'Your account is pending approval. Please wait for an administrator to approve your account.',
         requiresApproval: true
       });
     }
     
-    // Check user status
-    if (user.status === 'pending') {
+    // Check user status - but allow verified faculty to proceed even if status is pending
+    // (they need to set password and complete verification first)
+    if (user.status === 'pending' && !isVerified) {
       return res.status(401).json({ 
         message: 'Your account is pending approval. Please wait for an administrator to approve your account.',
         requiresApproval: true
       });
+    }
+    
+    // If user is verified but status is still pending, they should be able to login
+    // (This handles the case where faculty completes verification but status hasn't been updated)
+    if (user.status === 'pending' && isVerified) {
+      // Allow them to proceed - they've verified their email
+      console.log('User is verified but status is pending - allowing login');
     }
     
     if (user.status === 'rejected') {
@@ -1057,7 +1245,9 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
-    if (user.status !== 'approved') {
+    // Allow verified users to login even if status is pending (they've completed email verification)
+    // This handles faculty members who were added by superadmin and verified via link
+    if (user.status !== 'approved' && !isVerified) {
       return res.status(403).json({ 
         message: 'Your account is not active. Please contact the administrator.'
       });
@@ -1990,8 +2180,9 @@ app.get('/api/faculty', isAuthenticated, (req, res) => {
   try {
     const { departmentId } = req.query;
     
-    // Faculty are approved users assigned to a real department (not the 'pending' placeholder)
-    const isFacultyUser = (u) => String(u.status || '').toLowerCase() === 'approved' && !!u.departmentId && String(u.departmentId) !== 'pending';
+    // Faculty are users assigned to a real department (not the 'pending' placeholder)
+    // Include both 'pending' and 'approved' status users
+    const isFacultyUser = (u) => !!u.departmentId && String(u.departmentId) !== 'pending' && (String(u.status || '').toLowerCase() === 'approved' || String(u.status || '').toLowerCase() === 'pending');
 
     if (departmentId) {
       const department = departments.find(dept => dept.id === departmentId);
@@ -2009,6 +2200,30 @@ app.get('/api/faculty', isAuthenticated, (req, res) => {
   } catch (error) {
     console.error('Error fetching faculty:', error);
     res.status(500).json({ error: 'Failed to fetch faculty' });
+  }
+});
+
+// Get verified users without department (removed faculty members)
+app.get('/api/faculty/removed', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
+  try {
+    // Find verified users who don't have a department assigned (were removed from faculty)
+    const removedFaculty = users.filter(user => {
+      const isVerified = user.verified === true || user.emailVerified === true;
+      const hasNoDepartment = !user.departmentId || String(user.departmentId) === 'pending';
+      const isApproved = (user.status || '').toLowerCase() === 'approved';
+      return isVerified && hasNoDepartment && isApproved;
+    });
+
+    // Return sanitized user data (without password)
+    const sanitizedUsers = removedFaculty.map(user => {
+      const { password, ...userData } = user;
+      return userData;
+    });
+
+    res.status(200).json(sanitizedUsers);
+  } catch (error) {
+    console.error('Error fetching removed faculty:', error);
+    res.status(500).json({ error: 'Failed to fetch removed faculty' });
   }
 });
 
@@ -2100,12 +2315,504 @@ app.post('/api/faculty', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   }
 });
 
-// Update a faculty member (update department assignment)
+// Create a new faculty member (create new user as faculty)
+app.post('/api/faculty/create', isAuthenticated, isAdminOrSuperAdmin, async (req, res) => {
+  console.log('POST /api/faculty/create - Route hit');
+  try {
+    const { firstName, lastName, email, departmentId } = req.body;
+    console.log('Request body:', { firstName, lastName, email, departmentId });
+    
+    // Validate required fields (email is optional)
+    if (!firstName || !lastName || !departmentId) {
+      return res.status(400).json({ 
+        error: 'First name, last name, and department ID are required' 
+      });
+    }
+    
+    // Check if email already exists (only if provided)
+    if (email) {
+      const existingUser = users.find(user => user.email && user.email.toLowerCase() === email.toLowerCase());
+      if (existingUser) {
+        return res.status(400).json({ 
+          error: 'Email already exists in the system' 
+        });
+      }
+    }
+    
+    // Check if department exists
+    const department = departments.find(dept => dept.id === departmentId);
+    if (!department) {
+      return res.status(404).json({ 
+        error: 'Department not found' 
+      });
+    }
+    
+    // Generate a temporary password
+    const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
+    
+    // Create new user with status 'pending' and verified = false
+    // Email is optional - can be added later
+    const newUser = {
+      id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email ? email.toLowerCase().trim() : null,
+      password: require('crypto').createHash('sha256').update(tempPassword).digest('hex'),
+      role: 'user',
+      status: 'pending',
+      verified: false,
+      departmentId: departmentId,
+      department: department.name,
+      title: 'Instructor',
+      createdAt: new Date().toISOString(),
+      createdBy: req.user.id,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user.id
+    };
+    
+    // Add to users array
+    users.push(newUser);
+    saveData();
+    
+    // Return the created user (without password)
+    const { password: _, ...facultyData } = newUser;
+    
+    res.status(201).json({
+      message: email 
+        ? 'Faculty member created successfully. Send verification email to activate their account.'
+        : 'Faculty member created successfully. You can send verification email later when the teacher email is available.',
+      faculty: facultyData
+    });
+    
+  } catch (error) {
+    console.error('Error creating faculty:', error);
+    res.status(500).json({ error: 'Failed to create faculty member' });
+  }
+});
+
+// Send verification email to faculty member
+app.post('/api/faculty/:id/send-verification', isAuthenticated, isAdminOrSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+    
+    // Validate email is provided
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required to send verification' });
+    }
+    
+    // Find the faculty member
+    const facultyIndex = users.findIndex(user => user.id === id);
+    if (facultyIndex === -1) {
+      return res.status(404).json({ error: 'Faculty member not found' });
+    }
+    
+    const faculty = users[facultyIndex];
+    
+    // Check if already verified
+    if (faculty.verified === true) {
+      return res.status(400).json({ error: 'Faculty member is already verified' });
+    }
+    
+    // Generate verification token
+    const verificationToken = require('crypto').randomBytes(32).toString('hex');
+    const verificationExpires = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+    
+    // Store verification token
+    faculty.verificationToken = verificationToken;
+    faculty.verificationExpires = verificationExpires;
+    saveData();
+    
+    // Create verification link
+    const baseUrl = process.env.BASE_URL || req.protocol + '://' + req.get('host');
+    const verificationLink = `${baseUrl}/api/faculty/verify/${verificationToken}`;
+    
+    // Send verification email with link
+    // Always allow in development mode (when NODE_ENV is not 'production')
+    const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV !== 'production';
+    
+    // Log verification link for development
+    console.log('\n═══════════════════════════════════════════════════════════');
+    console.log('📧 VERIFICATION LINK GENERATED');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log(`To: ${email}`);
+    console.log(`Verification Link: ${verificationLink}`);
+    console.log(`Token: ${verificationToken}`);
+    console.log('═══════════════════════════════════════════════════════════\n');
+    
+    try {
+      const emailSent = await sendFacultyVerificationLink(email, verificationLink, faculty.firstName || '');
+      
+      if (!emailSent) {
+        // In development mode, log the link and still return success
+        if (isDevelopment) {
+          console.log('⚠️  Email not sent (email not configured), but verification link is available above');
+          return res.status(200).json({
+            message: 'Verification link generated (email not configured - check server console for link)',
+            developmentMode: true,
+            verificationLink: verificationLink
+          });
+        } else {
+          console.error('❌ Email sending returned false. Check email configuration.');
+          return res.status(500).json({ 
+            error: 'Failed to send verification email. Please check server email configuration (EMAIL_USER, EMAIL_PASS, or SENDGRID_API_KEY).' 
+          });
+        }
+      }
+      
+      res.status(200).json({
+        message: 'Verification email sent successfully'
+      });
+    } catch (emailError) {
+      console.error('❌ Error in sendFacultyVerificationLink:', emailError);
+      
+      // In development, still return success even if there's an error
+      if (isDevelopment) {
+        console.log('⚠️  Email error occurred, but verification link is available above');
+        return res.status(200).json({
+          message: 'Verification link generated (email error - check server console for link)',
+          developmentMode: true,
+          verificationLink: verificationLink,
+          error: emailError.message
+        });
+      }
+      
+      return res.status(500).json({ 
+        error: `Failed to send verification email: ${emailError.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+    
+    // In development mode, still return the link even if there's an error
+    const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV !== 'production';
+    if (isDevelopment) {
+      // Try to get the verification link if it was created
+      const facultyIndex = users.findIndex(user => user.id === req.params.id);
+      if (facultyIndex !== -1 && users[facultyIndex].verificationToken) {
+        const baseUrl = process.env.BASE_URL || req.protocol + '://' + req.get('host');
+        const verificationLink = `${baseUrl}/api/faculty/verify/${users[facultyIndex].verificationToken}`;
+        
+        console.log('\n═══════════════════════════════════════════════════════════');
+        console.log('📧 ERROR OCCURRED - VERIFICATION LINK (DEV MODE)');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log(`Verification Link: ${verificationLink}`);
+        console.log(`Error: ${error.message}`);
+        console.log('═══════════════════════════════════════════════════════════\n');
+        
+        return res.status(200).json({
+          message: 'Verification link generated (error occurred - check server console for link)',
+          developmentMode: true,
+          verificationLink: verificationLink,
+          error: error.message
+        });
+      }
+    }
+    
+    res.status(500).json({ error: 'Failed to send verification email' });
+  }
+});
+
+// Verify faculty account via link - Show verification page
+app.get('/api/faculty/verify/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    // Find user with matching verification token
+    const userIndex = users.findIndex(user => 
+      user.verificationToken === token && 
+      user.verificationExpires && 
+      user.verificationExpires > Date.now()
+    );
+    
+    if (userIndex === -1) {
+      return res.status(400).send(`
+        <html>
+          <head><title>Verification Failed</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1 style="color: #d9534f;">Verification Failed</h1>
+            <p>The verification link is invalid or has expired.</p>
+            <p>Please contact your administrator for assistance.</p>
+          </body>
+        </html>
+      `);
+    }
+    
+    const user = users[userIndex];
+    
+    // Check if already verified
+    if (user.verified === true) {
+      return res.status(400).send(`
+        <html>
+          <head><title>Already Verified</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1 style="color: #5cb85c;">Already Verified</h1>
+            <p>Your account has already been verified.</p>
+            <p><a href="login.html">Click here to login</a></p>
+          </body>
+        </html>
+      `);
+    }
+    
+    // Redirect to verification page with token in query string
+    res.redirect(`/faculty-verification.html?token=${token}`);
+    
+  } catch (error) {
+    console.error('Error in verification link:', error);
+    res.status(500).send(`
+      <html>
+        <head><title>Error</title></head>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+          <h1 style="color: #d9534f;">Error</h1>
+          <p>An error occurred during verification.</p>
+          <p>Please contact your administrator for assistance.</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// Complete verification and set password
+app.post('/api/faculty/verify/:token/complete', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+    
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    // Find user with matching verification token
+    const userIndex = users.findIndex(user => 
+      user.verificationToken === token && 
+      user.verificationExpires && 
+      user.verificationExpires > Date.now()
+    );
+    
+    if (userIndex === -1) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+    
+    const user = users[userIndex];
+    
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Update user: set password, mark as verified and approved
+    users[userIndex].password = hashedPassword;
+    users[userIndex].verified = true;
+    users[userIndex].emailVerified = true; // Also set emailVerified for consistency with login checks
+    users[userIndex].status = 'approved';
+    users[userIndex].verificationToken = undefined;
+    users[userIndex].verificationExpires = undefined;
+    users[userIndex].updatedAt = new Date().toISOString();
+    saveData();
+    
+    // Generate JWT token for automatic login
+    const authToken = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+    
+    res.json({
+      success: true,
+      message: 'Account verified and password set successfully',
+      token: authToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error completing verification:', error);
+    res.status(500).json({ error: 'Failed to complete verification' });
+  }
+});
+
+// Get user info for verification page (before password is set)
+app.get('/api/faculty/verify/:token/info', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    // Find user with matching verification token
+    const userIndex = users.findIndex(user => 
+      user.verificationToken === token && 
+      user.verificationExpires && 
+      user.verificationExpires > Date.now()
+    );
+    
+    if (userIndex === -1) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+    
+    const user = users[userIndex];
+    
+    // Return user info (without sensitive data)
+    res.json({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim()
+    });
+    
+  } catch (error) {
+    console.error('Error getting verification info:', error);
+    res.status(500).json({ error: 'Failed to get verification information' });
+  }
+});
+
+// Old verification endpoint (kept for backward compatibility but redirects)
+app.get('/api/faculty/verify-old/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    // Find user with matching verification token
+    const userIndex = users.findIndex(user => 
+      user.verificationToken === token && 
+      user.verificationExpires && 
+      user.verificationExpires > Date.now()
+    );
+    
+    if (userIndex === -1) {
+      return res.status(400).send(`
+        <html>
+          <head><title>Verification Failed</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1 style="color: #d9534f;">Verification Failed</h1>
+            <p>The verification link is invalid or has expired.</p>
+            <p>Please contact your administrator for assistance.</p>
+          </body>
+        </html>
+      `);
+    }
+    
+    // Mark user as verified and approved
+    users[userIndex].verified = true;
+    users[userIndex].status = 'approved';
+    users[userIndex].verificationToken = undefined;
+    users[userIndex].verificationExpires = undefined;
+    users[userIndex].updatedAt = new Date().toISOString();
+    saveData();
+    
+    // Generate JWT token for automatic login
+    const verificationToken = jwt.sign(
+      { id: users[userIndex].id, email: users[userIndex].email, role: users[userIndex].role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+    
+    // Create HTML page that stores token and redirects
+    const baseUrl = process.env.BASE_URL || req.protocol + '://' + req.get('host');
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Verification Successful</title>
+          <meta charset="UTF-8">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              text-align: center;
+              padding: 50px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin: 0;
+            }
+            .container {
+              background: white;
+              padding: 40px;
+              border-radius: 10px;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+              max-width: 500px;
+            }
+            .success-icon {
+              font-size: 60px;
+              color: #5cb85c;
+              margin-bottom: 20px;
+            }
+            h1 {
+              color: #5cb85c;
+              margin-bottom: 20px;
+            }
+            p {
+              color: #666;
+              margin-bottom: 15px;
+              line-height: 1.6;
+            }
+            .loading {
+              color: #1A609B;
+              margin-top: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✓</div>
+            <h1>Verification Successful!</h1>
+            <p>Your account has been verified successfully.</p>
+            <p>You are being automatically logged in...</p>
+            <p class="loading">Redirecting...</p>
+          </div>
+          <script>
+            // Store token in localStorage
+            localStorage.setItem('authToken', '${verificationToken}');
+            localStorage.setItem('userData', JSON.stringify({
+              id: '${users[userIndex].id}',
+              firstName: '${users[userIndex].firstName || ''}',
+              lastName: '${users[userIndex].lastName || ''}',
+              email: '${users[userIndex].email || ''}',
+              role: '${users[userIndex].role || 'user'}',
+              status: 'approved'
+            }));
+            
+            // Redirect based on role
+            setTimeout(function() {
+              const role = '${users[userIndex].role || 'user'}';
+              if (role === 'superadmin') {
+                window.location.href = '/superadmin.html';
+              } else if (role === 'admin') {
+                window.location.href = '/admin.html';
+              } else {
+                window.location.href = '/index.html';
+              }
+            }, 2000);
+          </script>
+        </body>
+      </html>
+    `);
+    
+  } catch (error) {
+    console.error('Error verifying faculty:', error);
+    res.status(500).send(`
+      <html>
+        <head><title>Verification Error</title></head>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+          <h1 style="color: #d9534f;">Verification Error</h1>
+          <p>An error occurred during verification. Please contact your administrator.</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// Update a faculty member (update department assignment or email)
 app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   try {
     const { id } = req.params;
     const { 
-      departmentId
+      departmentId,
+      email,
+      firstName,
+      lastName
     } = req.body;
     
     // Find the faculty member
@@ -2125,11 +2832,35 @@ app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
       }
     }
     
+    // Update firstName if provided
+    if (firstName !== undefined && firstName !== null) {
+      users[facultyIndex].firstName = firstName.trim();
+    }
+    
+    // Update lastName if provided
+    if (lastName !== undefined && lastName !== null) {
+      users[facultyIndex].lastName = lastName.trim();
+    }
+    
     // Update faculty department assignment
     if (departmentId) {
       const department = departments.find(dept => dept.id === departmentId);
       users[facultyIndex].departmentId = departmentId;
       users[facultyIndex].department = department.name;
+    }
+    
+    // Update email if provided
+    if (email) {
+      // Check if email already exists (excluding current user)
+      const existingUser = users.find(user => 
+        user.id !== id && 
+        user.email && 
+        user.email.toLowerCase() === email.toLowerCase()
+      );
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already exists in the system' });
+      }
+      users[facultyIndex].email = email.toLowerCase().trim();
     }
     
     users[facultyIndex].updatedAt = new Date().toISOString();
@@ -3516,6 +4247,92 @@ app.post('/api/schedule', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   } catch (error) {
     console.error('Error saving schedule:', error);
     res.status(500).json({ message: 'Failed to save schedule' });
+  }
+});
+
+// Get unassigned schedules (schedules without valid faculty members)
+app.get('/api/schedule/unassigned', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
+  try {
+    // Get all current faculty member IDs
+    const facultyIds = new Set();
+    users.forEach(user => {
+      if (user.departmentId && user.departmentId !== 'pending') {
+        facultyIds.add(user.id);
+      }
+    });
+    
+    // Find schedules that don't have a valid faculty member
+    const unassignedSchedules = schedule.filter(event => {
+      const extendedProps = event.extendedProps || {};
+      const facultyId = extendedProps.facultyId;
+      const faculty = extendedProps.faculty;
+      
+      // Schedule is unassigned if:
+      // 1. No facultyId, OR
+      // 2. facultyId doesn't match any current faculty member, OR
+      // 3. Has faculty name but no matching facultyId
+      if (!facultyId) {
+        return true; // No faculty ID assigned
+      }
+      
+      if (!facultyIds.has(facultyId)) {
+        return true; // Faculty ID doesn't exist anymore
+      }
+      
+      return false;
+    });
+    
+    res.status(200).json(unassignedSchedules);
+  } catch (error) {
+    console.error('Error fetching unassigned schedules:', error);
+    res.status(500).json({ message: 'Failed to fetch unassigned schedules' });
+  }
+});
+
+// Update schedule faculty assignment
+app.put('/api/schedule/assign-faculty', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
+  try {
+    const { scheduleIds, facultyId } = req.body;
+    
+    if (!Array.isArray(scheduleIds) || scheduleIds.length === 0) {
+      return res.status(400).json({ error: 'Schedule IDs array is required' });
+    }
+    
+    if (!facultyId) {
+      return res.status(400).json({ error: 'Faculty ID is required' });
+    }
+    
+    // Find the faculty member
+    const facultyMember = users.find(user => user.id === facultyId && user.departmentId);
+    if (!facultyMember) {
+      return res.status(404).json({ error: 'Faculty member not found' });
+    }
+    
+    const facultyName = `${facultyMember.firstName || ''} ${facultyMember.lastName || ''}`.trim() || facultyMember.email || 'Faculty';
+    
+    // Update schedules
+    let updatedCount = 0;
+    schedule.forEach(event => {
+      if (scheduleIds.includes(event.id)) {
+        if (!event.extendedProps) {
+          event.extendedProps = {};
+        }
+        event.extendedProps.facultyId = facultyId;
+        event.extendedProps.faculty = facultyName;
+        updatedCount++;
+      }
+    });
+    
+    // Save changes
+    saveData();
+    
+    res.status(200).json({
+      message: `Successfully assigned ${updatedCount} schedule(s) to faculty member`,
+      updatedCount
+    });
+  } catch (error) {
+    console.error('Error assigning faculty to schedules:', error);
+    res.status(500).json({ message: 'Failed to assign faculty to schedules' });
   }
 });
 

@@ -916,6 +916,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function validateForm() {
         let isValid = true;
         
+        // Check user role - superadmin can create schedule without faculty
+        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const userRole = userData.role || 'user';
+        const isSuperAdmin = userRole === 'superadmin';
+        
         if (departmentSelect && !departmentSelect.value) {
             departmentSelect.parentElement.classList.add('error');
             isValid = false;
@@ -923,7 +928,8 @@ document.addEventListener('DOMContentLoaded', function() {
             departmentSelect.parentElement.classList.remove('error');
         }
         
-        if (facultySelect && !facultySelect.value) {
+        // Faculty is optional for superadmin
+        if (facultySelect && !facultySelect.value && !isSuperAdmin) {
             facultySelect.parentElement.classList.add('error');
             isValid = false;
         } else if (facultySelect) {

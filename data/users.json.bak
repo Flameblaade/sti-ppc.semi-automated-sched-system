@@ -1,0 +1,249 @@
+{
+  "users": [
+    {
+      "id": "superadmin-1",
+      "email": "superadmin@school.edu",
+      "password": "$2b$10$FlREFAR/OekfC9u8fu4SO.3INsU4Y.FZ48GTOVMOdHsSNXJhfkqX6",
+      "firstName": "Super",
+      "middleName": "",
+      "lastName": "Admin",
+      "role": "superadmin",
+      "status": "approved",
+      "isVerified": true,
+      "departmentId": "admin-dept",
+      "createdAt": "2025-11-19T02:17:49.249Z",
+      "lastLogin": "2025-11-19T02:17:49.249Z"
+    },
+    {
+      "id": "user_1763519010978_hwxs2nss1",
+      "firstName": "Anthony",
+      "lastName": "Gozo",
+      "email": "jomann.gozo@gmail.com",
+      "password": "$2b$10$Fu5RoKAZqwVqt/mSBAItu.VFb.dxieRI65kOxSyJWElhKS3t.n56q",
+      "role": "user",
+      "status": "approved",
+      "verified": true,
+      "departmentId": null,
+      "department": null,
+      "title": "Instructor",
+      "createdAt": "2025-11-19T02:23:30.986Z",
+      "createdBy": "superadmin-1",
+      "updatedAt": "2025-11-21T08:29:49.864Z",
+      "updatedBy": "superadmin-1"
+    },
+    {
+      "id": "user_1763519456475_6haoqijg8",
+      "firstName": "Dela",
+      "lastName": "Sis",
+      "email": null,
+      "password": "e2426bfc4df0761b9418fe7baedd60ec0d7cda6426d9a807d1b7ea55ad8168ab",
+      "role": "user",
+      "status": "pending",
+      "verified": false,
+      "departmentId": "dept2",
+      "department": "TM Department",
+      "title": "Instructor",
+      "createdAt": "2025-11-19T02:30:56.476Z",
+      "createdBy": "superadmin-1",
+      "updatedAt": "2025-11-19T02:30:56.476Z",
+      "updatedBy": "superadmin-1"
+    }
+  ],
+  "departments": [
+    {
+      "id": "dept1",
+      "code": "IT",
+      "name": "IT Department",
+      "color": "#3b82f6",
+      "createdAt": "2025-11-19T02:18:13.870Z",
+      "createdBy": "superadmin-1"
+    },
+    {
+      "id": "dept2",
+      "code": "TM",
+      "name": "TM Department",
+      "color": "#10b981",
+      "createdAt": "2025-11-19T02:30:49.155Z",
+      "createdBy": "superadmin-1"
+    }
+  ],
+  "subjects": [
+    {
+      "id": "subj1763519414056",
+      "name": "Computer Programming 1",
+      "code": "COMPROG1",
+      "departmentId": "dept1",
+      "department": "IT Department",
+      "units": 3,
+      "lectureHours": 2,
+      "labHours": 3,
+      "createdAt": "2025-11-19T02:30:14.056Z",
+      "createdBy": "superadmin-1"
+    },
+    {
+      "id": "subj1763519473820",
+      "name": "Foreign Language",
+      "code": "FOREIGNLANG1",
+      "departmentId": "dept2",
+      "department": "TM Department",
+      "units": 3,
+      "lectureHours": 3,
+      "labHours": 0,
+      "createdAt": "2025-11-19T02:31:13.820Z",
+      "createdBy": "superadmin-1"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "d33a42f9-22af-471b-96c6-0309b0072f57",
+      "name": "Com Lab 1",
+      "capacity": 12,
+      "departmentId": "dept1",
+      "department": "IT Department",
+      "priority": true,
+      "exclusive": false,
+      "status": "active",
+      "createdAt": "2025-11-19T02:30:29.519Z",
+      "updatedAt": "2025-11-19T02:30:29.519Z"
+    },
+    {
+      "id": "00ccbc51-a4a1-4312-b810-387c58d337e7",
+      "name": "Suite Room",
+      "capacity": 12,
+      "departmentId": null,
+      "department": null,
+      "priority": false,
+      "exclusive": false,
+      "status": "active",
+      "createdAt": "2025-11-19T02:30:34.389Z",
+      "updatedAt": "2025-11-19T02:30:34.389Z"
+    }
+  ],
+  "schedule": [
+    {
+      "id": "class-1763712452556-lec-1763712485258-y9w9mca5l",
+      "title": "Computer Programming 1 (Lecture)",
+      "resourceId": "Tuesday",
+      "start": "2025-11-18T02:45:00.000Z",
+      "end": "2025-11-18T04:45:00.000Z",
+      "backgroundColor": "#3b82f6",
+      "borderColor": "#3b82f6",
+      "classNames": [
+        "bsit1 - bachelor of science in information technology-event",
+        "lecture-type",
+        "department-colored-event"
+      ],
+      "extendedProps": {
+        "originalClassId": "class-1763712452556-lec",
+        "subject": "Computer Programming 1",
+        "course": "BSIT1 - Bachelor of Science in Information Technology",
+        "courseId": "course-1763519421625",
+        "faculty": "Anthony Gozo",
+        "unitLoad": 2,
+        "classType": "lecture",
+        "lectureHours": 2,
+        "labHours": 0,
+        "room": "Com Lab 1",
+        "roomId": "d33a42f9-22af-471b-96c6-0309b0072f57",
+        "department": "IT",
+        "departmentId": "dept1",
+        "dayOfWeek": "Tuesday",
+        "departmentColor": "#3b82f6"
+      }
+    },
+    {
+      "id": "class-1763712452556-lab-1763712485268-spfsksgf4",
+      "title": "Computer Programming 1 (Lab)",
+      "resourceId": "Wednesday",
+      "start": "2025-11-19T00:30:00.000Z",
+      "end": "2025-11-19T03:30:00.000Z",
+      "backgroundColor": "#3b82f6",
+      "borderColor": "#3b82f6",
+      "classNames": [
+        "bsit1 - bachelor of science in information technology-event",
+        "laboratory-type",
+        "department-colored-event"
+      ],
+      "extendedProps": {
+        "originalClassId": "class-1763712452556-lab",
+        "subject": "Computer Programming 1",
+        "course": "BSIT1 - Bachelor of Science in Information Technology",
+        "courseId": "course-1763519421625",
+        "faculty": "Anthony Gozo",
+        "unitLoad": 3,
+        "classType": "laboratory",
+        "lectureHours": 0,
+        "labHours": 3,
+        "room": "Suite Room",
+        "roomId": "00ccbc51-a4a1-4312-b810-387c58d337e7",
+        "department": "IT",
+        "departmentId": "dept1",
+        "dayOfWeek": "Wednesday",
+        "departmentColor": "#3b82f6"
+      }
+    },
+    {
+      "id": "class-1763712477234-lec-1763712485276-sr2uiza4d",
+      "title": "Computer Programming 1 (Lecture)",
+      "resourceId": "Monday",
+      "start": "2025-11-16T23:00:00.000Z",
+      "end": "2025-11-17T01:00:00.000Z",
+      "backgroundColor": "#3b82f6",
+      "borderColor": "#3b82f6",
+      "classNames": [
+        "bsit1 - bachelor of science in information technology-event",
+        "lecture-type",
+        "department-colored-event"
+      ],
+      "extendedProps": {
+        "originalClassId": "class-1763712477234-lec",
+        "subject": "Computer Programming 1",
+        "course": "BSIT1 - Bachelor of Science in Information Technology",
+        "courseId": "course-1763519421625",
+        "faculty": "Select Faculty",
+        "unitLoad": 2,
+        "classType": "lecture",
+        "lectureHours": 2,
+        "labHours": 0,
+        "room": "Com Lab 1",
+        "roomId": "d33a42f9-22af-471b-96c6-0309b0072f57",
+        "department": "IT",
+        "departmentId": "dept1",
+        "dayOfWeek": "Monday",
+        "departmentColor": "#3b82f6"
+      }
+    },
+    {
+      "id": "class-1763712477234-lab-1763712485288-40u1e56is",
+      "title": "Computer Programming 1 (Lab)",
+      "resourceId": "Thursday",
+      "start": "2025-11-19T23:00:00.000Z",
+      "end": "2025-11-20T02:00:00.000Z",
+      "backgroundColor": "#3b82f6",
+      "borderColor": "#3b82f6",
+      "classNames": [
+        "bsit1 - bachelor of science in information technology-event",
+        "laboratory-type",
+        "department-colored-event"
+      ],
+      "extendedProps": {
+        "originalClassId": "class-1763712477234-lab",
+        "subject": "Computer Programming 1",
+        "course": "BSIT1 - Bachelor of Science in Information Technology",
+        "courseId": "course-1763519421625",
+        "faculty": "Select Faculty",
+        "unitLoad": 3,
+        "classType": "laboratory",
+        "lectureHours": 0,
+        "labHours": 3,
+        "room": "Suite Room",
+        "roomId": "00ccbc51-a4a1-4312-b810-387c58d337e7",
+        "department": "IT",
+        "departmentId": "dept1",
+        "dayOfWeek": "Thursday",
+        "departmentColor": "#3b82f6"
+      }
+    }
+  ],
+  "fixedSchedules": []
+}

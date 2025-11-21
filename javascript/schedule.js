@@ -618,7 +618,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const userData = JSON.parse(localStorage.getItem('userData') || '{}');
         const userRole = userData.role || 'user';
         const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+        const isSuperAdmin = userRole === 'superadmin';
         const isUser = userRole === 'user';
+        
+        // Hide filter panel for non-superadmin users
+        const filterPanel = document.querySelector('.filter-panel');
+        if (filterPanel) {
+            if (!isSuperAdmin) {
+                filterPanel.style.display = 'none';
+            } else {
+                filterPanel.style.display = 'block';
+            }
+        }
         
         // Hide/disable form panel and action buttons for regular users
         if (isUser) {
@@ -1288,11 +1299,79 @@ document.addEventListener('DOMContentLoaded', function() {
             eventDetailType.textContent = typeDisplay;
         }
         
+        // Load faculty for the dropdown (only if user can edit)
+        const facultySelectContainer = document.getElementById('eventFacultySelect')?.parentElement;
+        const facultySelect = document.getElementById('eventFacultySelect');
+        const saveFacultyBtn = document.getElementById('saveFacultyBtn');
+        
         // Load rooms for the dropdown (only if user can edit)
         const roomSelectContainer = document.getElementById('eventRoomSelect')?.parentElement;
         const roomSelect = document.getElementById('eventRoomSelect');
         const saveRoomBtn = document.getElementById('saveRoomBtn');
         const deleteEventBtn = document.getElementById('deleteEventBtn');
+        
+        // Load verified faculty members for assignment
+        if (allowEdit && facultySelect && eventData.departmentId) {
+            facultySelect.innerHTML = '<option value="">Loading faculty...</option>';
+            facultySelect.disabled = true;
+            
+            try {
+                // Load faculty for the event's department
+                const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(eventData.departmentId)}`);
+                if (response && response.ok) {
+                    const faculty = await response.json();
+                    
+                    // Filter to only verified faculty
+                    const verifiedFaculty = faculty.filter(f => f.verified === true);
+                    
+                    facultySelect.innerHTML = '<option value="">Select a faculty member...</option>';
+                    
+                    if (verifiedFaculty.length > 0) {
+                        verifiedFaculty.forEach(member => {
+                            const option = document.createElement('option');
+                            option.value = member.id;
+                            const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'Faculty';
+                            option.textContent = name;
+                            
+                            // Mark current faculty as selected
+                            const currentFacultyId = eventData.eventId ? (() => {
+                                const calendar = window.calendar;
+                                if (calendar) {
+                                    const event = calendar.getEventById(eventData.eventId);
+                                    if (event && event.extendedProps) {
+                                        return event.extendedProps.facultyId;
+                                    }
+                                }
+                                return null;
+                            })() : null;
+                            
+                            if (member.id === currentFacultyId) {
+                                option.selected = true;
+                            }
+                            
+                            facultySelect.appendChild(option);
+                        });
+                    } else {
+                        facultySelect.innerHTML = '<option value="">No verified faculty available</option>';
+                    }
+                    
+                    facultySelect.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error loading faculty:', error);
+                if (facultySelect) {
+                    facultySelect.innerHTML = '<option value="">Error loading faculty</option>';
+                }
+            }
+        } else {
+            // Hide faculty editing for regular users or if no department
+            if (facultySelectContainer) {
+                facultySelectContainer.style.display = allowEdit ? 'block' : 'none';
+            }
+            if (saveFacultyBtn) {
+                saveFacultyBtn.style.display = allowEdit ? '' : 'none';
+            }
+        }
         
         if (allowEdit && roomSelect) {
             roomSelect.innerHTML = '<option value="">Loading rooms...</option>';
@@ -1364,6 +1443,65 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Store event ID for handlers
         if (roomSelect) roomSelect.dataset.eventId = eventData.eventId || '';
+        if (facultySelect) facultySelect.dataset.eventId = eventData.eventId || '';
+        
+        // Handle save faculty button
+        if (saveFacultyBtn && allowEdit) {
+            saveFacultyBtn.onclick = async function() {
+                try {
+                    const calendar = window.calendar;
+                    const eventId = eventData.eventId;
+                    if (!calendar || !eventId || !facultySelect) return;
+                    
+                    const selectedFacultyId = facultySelect.value;
+                    if (!selectedFacultyId) {
+                        if (typeof showNotification === 'function') {
+                            showNotification('Please select a faculty member', 'error');
+                        }
+                        return;
+                    }
+                    
+                    const event = calendar.getEventById(eventId);
+                    if (!event) return;
+                    
+                    // Get faculty member details
+                    const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(eventData.departmentId)}`);
+                    if (response && response.ok) {
+                        const faculty = await response.json();
+                        const selectedFaculty = faculty.find(f => f.id === selectedFacultyId);
+                        
+                        if (selectedFaculty) {
+                            const facultyName = `${selectedFaculty.firstName || ''} ${selectedFaculty.lastName || ''}`.trim() || selectedFaculty.email || 'Faculty';
+                            
+                            // Update the event
+                            event.setExtendedProp('facultyId', selectedFacultyId);
+                            event.setExtendedProp('faculty', facultyName);
+                            
+                            // Update the display in the modal
+                            const teacherElement = document.getElementById('eventDetailTeacher');
+                            if (teacherElement) {
+                                teacherElement.textContent = facultyName;
+                            }
+                            
+                            // Save to server
+                            if (typeof window.saveScheduleToLocalStorage === 'function') {
+                                await window.saveScheduleToLocalStorage();
+                            }
+                            
+                            if (typeof showNotification === 'function') {
+                                showNotification('Faculty assigned successfully!', 'success');
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error assigning faculty:', error);
+                    if (typeof showNotification === 'function') {
+                        showNotification('Failed to assign faculty', 'error');
+                    }
+                }
+            };
+        }
+        
         if (deleteEventBtn) {
             // Only show delete button for superadmin users
             const isSuperAdmin = userRole === 'superadmin';
@@ -1819,4 +1957,593 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // ========== FILTER SYSTEM ==========
+    // Initialize filter functionality (only for superadmin)
+    function initializeFilters() {
+        // Check if user is superadmin
+        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const userRole = userData.role || 'user';
+        const isSuperAdmin = userRole === 'superadmin';
+        
+        if (!isSuperAdmin) {
+            console.log('Filter system is only available for superadmin');
+            return;
+        }
+        
+        const filterDepartment = document.getElementById('filterDepartment');
+        const filterFaculty = document.getElementById('filterFaculty');
+        const filterRoom = document.getElementById('filterRoom');
+        const filterCourse = document.getElementById('filterCourse');
+        const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+        const filterStatus = document.getElementById('filterStatus');
+        
+        if (!filterDepartment || !filterFaculty || !filterRoom || !filterCourse) {
+            console.warn('Filter elements not found');
+            return;
+        }
+        
+        // Load filter options from calendar events
+        function loadFilterOptions() {
+            const calendar = window.calendar;
+            if (!calendar) return;
+            
+            const events = calendar.getEvents();
+            const departments = new Set();
+            const faculties = new Set();
+            const rooms = new Set();
+            const courses = new Set();
+            
+            // Get departments list to resolve IDs to names
+            const deptsList = window.departments || JSON.parse(localStorage.getItem('departments') || '[]');
+            
+            events.forEach(event => {
+                const props = event.extendedProps || {};
+                
+                // Skip fixed schedules
+                if (props.isFixedSchedule) return;
+                
+                // For departments, prefer department name, but resolve departmentId if needed
+                if (props.department) {
+                    departments.add(props.department);
+                } else if (props.departmentId) {
+                    // Try to resolve departmentId to department name
+                    const dept = deptsList.find(d => String(d.id) === String(props.departmentId) || String(d.code) === String(props.departmentId));
+                    if (dept && dept.name) {
+                        departments.add(dept.name);
+                    } else if (dept && dept.code) {
+                        departments.add(dept.code);
+                    } else {
+                        // Fallback: use departmentId only if we can't resolve it
+                        // But try to avoid adding raw IDs like "dept1", "dept2"
+                        const deptIdStr = String(props.departmentId);
+                        if (!deptIdStr.match(/^dept\d+$/i)) {
+                            departments.add(deptIdStr);
+                        }
+                    }
+                }
+                
+                if (props.faculty) faculties.add(props.faculty);
+                if (props.room) rooms.add(props.room);
+                if (props.course) courses.add(props.course);
+            });
+            
+            // Populate department filter
+            const deptOptions = filterDepartment.querySelectorAll('option:not(:first-child)');
+            deptOptions.forEach(opt => opt.remove());
+            departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept;
+                option.textContent = dept;
+                filterDepartment.appendChild(option);
+            });
+            
+            // Populate faculty filter
+            const facOptions = filterFaculty.querySelectorAll('option:not(:first-child)');
+            facOptions.forEach(opt => opt.remove());
+            faculties.forEach(fac => {
+                const option = document.createElement('option');
+                option.value = fac;
+                option.textContent = fac;
+                filterFaculty.appendChild(option);
+            });
+            
+            // Populate room filter
+            const roomOptions = filterRoom.querySelectorAll('option:not(:first-child)');
+            roomOptions.forEach(opt => opt.remove());
+            rooms.forEach(room => {
+                const option = document.createElement('option');
+                option.value = room;
+                option.textContent = room;
+                filterRoom.appendChild(option);
+            });
+            
+            // Populate course filter
+            const courseOptions = filterCourse.querySelectorAll('option:not(:first-child)');
+            courseOptions.forEach(opt => opt.remove());
+            courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course;
+                option.textContent = course;
+                filterCourse.appendChild(option);
+            });
+        }
+        
+        // Apply filters to calendar events
+        function applyFilters() {
+            const calendar = window.calendar;
+            if (!calendar) return;
+            
+            const selectedDept = filterDepartment.value;
+            const selectedFaculty = filterFaculty.value;
+            const selectedRoom = filterRoom.value;
+            const selectedCourse = filterCourse.value;
+            
+            const events = calendar.getEvents();
+            let visibleCount = 0;
+            let totalCount = 0;
+            
+            events.forEach(event => {
+                const props = event.extendedProps || {};
+                
+                // Always show fixed schedules
+                if (props.isFixedSchedule) {
+                    event.setProp('classNames', (event.classNames || []).filter(c => c !== 'filtered-out'));
+                    if (event.el) {
+                        event.el.classList.remove('filtered-out');
+                        event.el.style.display = '';
+                    }
+                    return;
+                }
+                
+                totalCount++;
+                
+                // Check if event matches all selected filters
+                let matches = true;
+                
+                if (selectedDept) {
+                    const deptMatch = props.department === selectedDept || 
+                                     props.departmentId === selectedDept ||
+                                     String(props.department || '').toLowerCase() === String(selectedDept).toLowerCase();
+                    if (!deptMatch) matches = false;
+                }
+                
+                if (selectedFaculty && matches) {
+                    const facMatch = props.faculty === selectedFaculty ||
+                                    String(props.faculty || '').toLowerCase() === String(selectedFaculty).toLowerCase();
+                    if (!facMatch) matches = false;
+                }
+                
+                if (selectedRoom && matches) {
+                    const roomMatch = props.room === selectedRoom ||
+                                     props.roomId === selectedRoom ||
+                                     String(props.room || '').toLowerCase() === String(selectedRoom).toLowerCase();
+                    if (!roomMatch) matches = false;
+                }
+                
+                if (selectedCourse && matches) {
+                    const courseMatch = props.course === selectedCourse ||
+                                      props.courseId === selectedCourse ||
+                                      String(props.course || '').toLowerCase() === String(selectedCourse).toLowerCase();
+                    if (!courseMatch) matches = false;
+                }
+                
+                // Show or hide event using CSS class
+                if (matches) {
+                    event.setProp('classNames', (event.classNames || []).filter(c => c !== 'filtered-out'));
+                    if (event.el) {
+                        event.el.classList.remove('filtered-out');
+                        event.el.style.display = '';
+                    }
+                    visibleCount++;
+                } else {
+                    const classNames = event.classNames || [];
+                    if (!classNames.includes('filtered-out')) {
+                        event.setProp('classNames', [...classNames, 'filtered-out']);
+                    }
+                    if (event.el) {
+                        event.el.classList.add('filtered-out');
+                        event.el.style.display = 'none';
+                    }
+                }
+            });
+            
+            // Update filter status
+            if (filterStatus) {
+                const hasFilters = selectedDept || selectedFaculty || selectedRoom || selectedCourse;
+                if (hasFilters) {
+                    const filterParts = [];
+                    if (selectedDept) filterParts.push(`Department: ${selectedDept}`);
+                    if (selectedFaculty) filterParts.push(`Faculty: ${selectedFaculty}`);
+                    if (selectedRoom) filterParts.push(`Room: ${selectedRoom}`);
+                    if (selectedCourse) filterParts.push(`Course: ${selectedCourse}`);
+                    filterStatus.textContent = `Showing ${visibleCount} of ${totalCount} schedules (${filterParts.join(', ')})`;
+                } else {
+                    filterStatus.textContent = `Showing all ${totalCount} schedules`;
+                }
+            }
+        }
+        
+        // Clear all filters
+        function clearFilters() {
+            filterDepartment.value = '';
+            filterFaculty.value = '';
+            filterRoom.value = '';
+            filterCourse.value = '';
+            applyFilters();
+            updateFilterVisuals();
+        }
+        
+        // Add visual feedback for active filters
+        function updateFilterVisuals() {
+            const filters = [
+                { element: filterDepartment, labelId: 'filterDepartment' },
+                { element: filterFaculty, labelId: 'filterFaculty' },
+                { element: filterRoom, labelId: 'filterRoom' },
+                { element: filterCourse, labelId: 'filterCourse' }
+            ];
+            
+            filters.forEach(({ element, labelId }) => {
+                if (element) {
+                    const label = document.querySelector(`label[for="${labelId}"]`);
+                    if (element.value) {
+                        element.classList.add('filter-active');
+                        if (label && label.querySelector('span')) {
+                            label.querySelector('span').style.color = '#1A609B';
+                        }
+                    } else {
+                        element.classList.remove('filter-active');
+                        if (label && label.querySelector('span')) {
+                            label.querySelector('span').style.color = '';
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Event listeners
+        filterDepartment.addEventListener('change', () => {
+            updateFilterVisuals();
+            applyFilters();
+        });
+        filterFaculty.addEventListener('change', () => {
+            updateFilterVisuals();
+            applyFilters();
+        });
+        filterRoom.addEventListener('change', () => {
+            updateFilterVisuals();
+            applyFilters();
+        });
+        filterCourse.addEventListener('change', () => {
+            updateFilterVisuals();
+            applyFilters();
+        });
+        
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', () => {
+                clearFilters();
+                updateFilterVisuals();
+            });
+        }
+        
+        // Load filter options when calendar events change
+        const originalAddEvent = calendar.addEvent.bind(calendar);
+        calendar.addEvent = function(...args) {
+            const result = originalAddEvent(...args);
+            setTimeout(loadFilterOptions, 100);
+            setTimeout(applyFilters, 100);
+            return result;
+        };
+        
+        // Monitor for event changes
+        const observer = new MutationObserver(() => {
+            setTimeout(loadFilterOptions, 500);
+            setTimeout(applyFilters, 500);
+        });
+        
+        // Initial load
+        setTimeout(() => {
+            loadFilterOptions();
+            applyFilters();
+            updateFilterVisuals();
+        }, 1000);
+        
+        // Re-load filters when schedule is loaded
+        if (window.loadScheduleFromLocalStorage) {
+            const originalLoad = window.loadScheduleFromLocalStorage;
+            window.loadScheduleFromLocalStorage = function(...args) {
+                const result = originalLoad.apply(this, args);
+                setTimeout(() => {
+                    loadFilterOptions();
+                    applyFilters();
+                }, 1500);
+                return result;
+            };
+        }
+    }
+    
+    // Initialize filters after calendar is ready
+    setTimeout(() => {
+        initializeFilters();
+    }, 1500);
+    
+    // Initialize unassigned schedules functionality
+    initializeUnassignedSchedules();
 });
+
+/**
+ * Initialize unassigned schedules functionality
+ */
+function initializeUnassignedSchedules() {
+    const unassignedPanel = document.getElementById('unassignedSchedulesPanel');
+    const assignFacultySelect = document.getElementById('assignFacultySelect');
+    const assignSchedulesBtn = document.getElementById('assignSchedulesBtn');
+    const unassignedSchedulesList = document.getElementById('unassignedSchedulesList');
+    const unassignedCountBadge = document.getElementById('unassignedCountBadge');
+    
+    if (!unassignedPanel || !assignFacultySelect || !assignSchedulesBtn || !unassignedSchedulesList) {
+        return; // Elements not found, skip initialization
+    }
+    
+    // Load unassigned schedules on page load
+    loadUnassignedSchedules();
+    
+    // Load faculty members for assignment dropdown
+    loadFacultyForAssignment();
+    
+    // Handle faculty selection change
+    assignFacultySelect.addEventListener('change', function() {
+        assignSchedulesBtn.disabled = !this.value;
+        updateSelectedSchedules();
+    });
+    
+    // Handle assign button click
+    assignSchedulesBtn.addEventListener('click', async function() {
+        const facultyId = assignFacultySelect.value;
+        if (!facultyId) {
+            if (typeof showNotification === 'function') {
+                showNotification('Please select a faculty member', 'error');
+            } else {
+                alert('Please select a faculty member');
+            }
+            return;
+        }
+        
+        const selectedCheckboxes = unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:checked');
+        if (selectedCheckboxes.length === 0) {
+            if (typeof showNotification === 'function') {
+                showNotification('Please select at least one schedule to assign', 'error');
+            } else {
+                alert('Please select at least one schedule to assign');
+            }
+            return;
+        }
+        
+        const scheduleIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+        
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch('/api/schedule/assign-faculty', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    scheduleIds,
+                    facultyId
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to assign schedules');
+            }
+            
+            const result = await response.json();
+            if (typeof showNotification === 'function') {
+                showNotification(result.message || 'Schedules assigned successfully', 'success');
+            } else {
+                alert(result.message || 'Schedules assigned successfully');
+            }
+            
+            // Reload unassigned schedules and refresh calendar
+            loadUnassignedSchedules();
+            if (window.loadScheduleFromLocalStorage) {
+                window.loadScheduleFromLocalStorage();
+            }
+        } catch (error) {
+            console.error('Error assigning schedules:', error);
+            if (typeof showNotification === 'function') {
+                showNotification(error.message || 'Failed to assign schedules', 'error');
+            } else {
+                alert(error.message || 'Failed to assign schedules');
+            }
+        }
+    });
+    
+    /**
+     * Load unassigned schedules
+     */
+    async function loadUnassignedSchedules() {
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetchWithAuth('/api/schedule/unassigned', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response || !response.ok) {
+                throw new Error('Failed to fetch unassigned schedules');
+            }
+            
+            const unassignedSchedules = await response.json();
+            
+            // Update badge
+            if (unassignedCountBadge) {
+                unassignedCountBadge.textContent = unassignedSchedules.length;
+            }
+            
+            // Show/hide panel
+            if (unassignedSchedules.length > 0) {
+                unassignedPanel.style.display = 'block';
+            } else {
+                unassignedPanel.style.display = 'none';
+                return;
+            }
+            
+            // Display schedules
+            if (unassignedSchedules.length === 0) {
+                unassignedSchedulesList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <p>No unassigned schedules</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            unassignedSchedulesList.innerHTML = unassignedSchedules.map(schedule => {
+                const extendedProps = schedule.extendedProps || {};
+                const subject = extendedProps.subject || schedule.title || 'Unknown Subject';
+                const department = extendedProps.department || extendedProps.course || 'Unknown Department';
+                const day = extendedProps.dayOfWeek || (schedule.start ? new Date(schedule.start).toLocaleDateString('en-US', { weekday: 'long' }) : 'Unknown Day');
+                const startTime = schedule.start ? new Date(schedule.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Unknown';
+                const endTime = schedule.end ? new Date(schedule.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Unknown';
+                const room = extendedProps.room || 'No room';
+                
+                return `
+                    <div style="padding: 10px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" value="${schedule.id}" style="cursor: pointer;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #1e293b;">${subject}</div>
+                            <div style="font-size: 0.85rem; color: #64748b;">
+                                <span><i class="fas fa-building"></i> ${department}</span> | 
+                                <span><i class="fas fa-calendar-day"></i> ${day}</span> | 
+                                <span><i class="fas fa-clock"></i> ${startTime} - ${endTime}</span> | 
+                                <span><i class="fas fa-door-open"></i> ${room}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Add select all checkbox
+            const selectAllHtml = `
+                <div style="padding: 10px; border-bottom: 2px solid #e0e0e0; background: #f8fafc;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                        <input type="checkbox" id="selectAllUnassigned" style="cursor: pointer;">
+                        <span>Select All</span>
+                    </label>
+                </div>
+            `;
+            unassignedSchedulesList.innerHTML = selectAllHtml + unassignedSchedulesList.innerHTML;
+            
+            // Handle select all
+            const selectAllCheckbox = document.getElementById('selectAllUnassigned');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    const checkboxes = unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:not(#selectAllUnassigned)');
+                    checkboxes.forEach(cb => cb.checked = this.checked);
+                    updateSelectedSchedules();
+                });
+            }
+            
+            // Handle individual checkbox changes
+            unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:not(#selectAllUnassigned)').forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelectedSchedules);
+            });
+            
+        } catch (error) {
+            console.error('Error loading unassigned schedules:', error);
+            unassignedPanel.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Update selected schedules count and button state
+     */
+    function updateSelectedSchedules() {
+        const selectedCheckboxes = unassignedSchedulesList.querySelectorAll('input[type="checkbox"]:not(#selectAllUnassigned):checked');
+        const facultyId = assignFacultySelect.value;
+        assignSchedulesBtn.disabled = !facultyId || selectedCheckboxes.length === 0;
+        
+        if (selectedCheckboxes.length > 0) {
+            assignSchedulesBtn.textContent = `Assign ${selectedCheckboxes.length} Schedule(s)`;
+        } else {
+            assignSchedulesBtn.textContent = 'Assign Selected Schedules';
+        }
+    }
+    
+    /**
+     * Load faculty members for assignment dropdown
+     */
+    async function loadFacultyForAssignment() {
+        try {
+            const deptSelect = document.getElementById('departmentSelect');
+            if (!deptSelect || !deptSelect.value) {
+                // Load all faculty if no department selected
+                const response = await fetchWithAuth('/api/faculty');
+                if (response && response.ok) {
+                    const faculty = await response.json();
+                    populateFacultyAssignmentDropdown(faculty);
+                }
+            } else {
+                // Load faculty for selected department
+                if (typeof loadFaculty === 'function') {
+                    const faculty = await loadFacultyForDept(deptSelect.value);
+                    populateFacultyAssignmentDropdown(faculty);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading faculty for assignment:', error);
+        }
+    }
+    
+    /**
+     * Load faculty for a specific department
+     */
+    async function loadFacultyForDept(departmentId) {
+        try {
+            const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(departmentId)}`);
+            if (response && response.ok) {
+                return await response.json();
+            }
+        } catch (error) {
+            console.error('Error loading faculty for department:', error);
+        }
+        return [];
+    }
+    
+    /**
+     * Populate faculty assignment dropdown
+     */
+    function populateFacultyAssignmentDropdown(faculty) {
+        assignFacultySelect.innerHTML = '<option value="">Select Faculty Member</option>';
+        
+        if (faculty && faculty.length > 0) {
+            faculty.forEach(member => {
+                const option = document.createElement('option');
+                option.value = member.id;
+                const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'Faculty';
+                option.textContent = `${name}${member.department ? ' - ' + member.department : ''}`;
+                assignFacultySelect.appendChild(option);
+            });
+        }
+    }
+    
+    // Reload unassigned schedules when department changes
+    const deptSelect = document.getElementById('departmentSelect');
+    if (deptSelect) {
+        deptSelect.addEventListener('change', function() {
+            loadFacultyForAssignment();
+            loadUnassignedSchedules();
+        });
+    }
+    
+    // Reload unassigned schedules periodically (every 30 seconds)
+    setInterval(() => {
+        loadUnassignedSchedules();
+    }, 30000);
+}

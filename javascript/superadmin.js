@@ -703,6 +703,17 @@ function setupEventListeners() {
                 case 'delete-faculty':
                     deleteFaculty(id);
                     break;
+                case 'restore-faculty':
+                    restoreFaculty(id);
+                    break;
+                case 'send-verification':
+                    const email = button.getAttribute('data-email');
+                    // Always show modal to enter/confirm email
+                    showSendVerificationModal(id, email);
+                    break;
+                case 'add-email-verification':
+                    showAddEmailVerificationModal(id);
+                    break;
                 case 'edit-subject':
                     editSubject(id);
                     break;
@@ -1148,7 +1159,7 @@ async function loadFaculty() {
         if (!faculty || faculty.length === 0) {
             tbody.innerHTML = `
                 <tr class="empty-row">
-                    <td colspan="4">
+                    <td colspan="5">
                         <div class="empty-state">
                             <i class="fas fa-user-tie"></i>
                             <p>No faculty found</p>
@@ -1159,12 +1170,25 @@ async function loadFaculty() {
             return;
         }
         
-        tbody.innerHTML = faculty.map(member => `
+        tbody.innerHTML = faculty.map(member => {
+            const isVerified = member.verified === true;
+            const statusBadge = isVerified 
+                ? `<span style="color: #5cb85c; font-weight: bold;"><i class="fas fa-check-circle"></i> Verified</span>`
+                : `<span style="color: #f0ad4e; font-weight: bold;"><i class="fas fa-clock"></i> Pending</span>`;
+            const verificationButton = isVerified 
+                ? ``
+                : `<button class="btn btn-sm" data-action="send-verification" data-id="${member.id}" data-email="${member.email || ''}" style="background: #e0e7ff; color: #3730a3;">
+                        <i class="fas fa-envelope"></i> Send
+                    </button>`;
+            
+            return `
             <tr>
                 <td>${member.firstName || ''} ${member.lastName || ''}</td>
                 <td>${member.email || ''}</td>
                 <td>${member.department || ''}</td>
+                <td>${statusBadge}</td>
                 <td>
+                    ${verificationButton}
                     <button class="btn btn-sm btn-primary" data-action="edit-faculty" data-id="${member.id}">
                         <i class="fas fa-edit"></i> Edit
                     </button>
@@ -1173,10 +1197,209 @@ async function loadFaculty() {
                     </button>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
+        
+        // Also load removed verified faculty
+        loadRemovedFaculty();
     } catch (error) {
         console.error('Error loading faculty:', error);
         showNotification('Failed to load faculty', 'error');
+    }
+}
+
+/**
+ * Load removed verified faculty members
+ */
+async function loadRemovedFaculty() {
+    try {
+        const removedFaculty = await fetchData('/api/faculty/removed');
+        const section = document.getElementById('removedFacultySection');
+        const tbody = document.getElementById('removedFacultyTableBody');
+        
+        if (!removedFaculty || removedFaculty.length === 0) {
+            if (section) section.style.display = 'none';
+            return;
+        }
+        
+        // Show the section
+        if (section) section.style.display = 'block';
+        
+        tbody.innerHTML = removedFaculty.map(member => {
+            return `
+            <tr>
+                <td>${member.firstName || ''} ${member.lastName || ''}</td>
+                <td>${member.email || 'No email'}</td>
+                <td>${member.department || 'Not assigned'}</td>
+                <td>
+                    <button class="btn btn-sm" data-action="restore-faculty" data-id="${member.id}" style="background: #10b981; color: white;">
+                        <i class="fas fa-undo"></i> Restore
+                    </button>
+                </td>
+            </tr>
+        `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading removed faculty:', error);
+        // Don't show error notification, just hide the section
+        const section = document.getElementById('removedFacultySection');
+        if (section) section.style.display = 'none';
+    }
+}
+
+/**
+ * Restore a removed verified faculty member
+ */
+async function restoreFaculty(id) {
+    try {
+        // Show modal to select department
+        const departments = await fetchData('/api/departments');
+        if (!departments || departments.length === 0) {
+            showNotification('No departments available. Please create a department first.', 'error');
+            return;
+        }
+        
+        const modal = document.createElement('div');
+        modal.className = 'custom-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        modal.innerHTML = `
+            <div style="
+                background: white;
+                border-radius: 8px;
+                padding: 0;
+                max-width: 500px;
+                width: 90%;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            ">
+                <div style="
+                    padding: 20px;
+                    border-bottom: 1px solid #e2e8f0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                ">
+                    <h5 style="margin: 0; color: #1e293b;"><i class="fas fa-undo"></i> Restore Faculty Member</h5>
+                    <button type="button" class="close-btn" style="
+                        background: none;
+                        border: none;
+                        font-size: 24px;
+                        cursor: pointer;
+                        color: #64748b;
+                    ">&times;</button>
+                </div>
+                <div style="padding: 20px;">
+                    <p style="margin-bottom: 20px; color: #374151;">Select a department to restore this verified faculty member:</p>
+                    <div>
+                        <label for="restoreDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department <span style="color: red;">*</span></label>
+                        <select id="restoreDepartment" required style="
+                            width: 100%;
+                            padding: 8px 12px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 4px;
+                            font-size: 14px;
+                            box-sizing: border-box;
+                        ">
+                            <option value="">Select a department...</option>
+                            ${departments.map(dept => `<option value="${dept.id}">${dept.name}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div style="
+                    padding: 20px;
+                    border-top: 1px solid #e2e8f0;
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                ">
+                    <button type="button" class="btn btn-secondary" id="cancelRestore" style="
+                        background: #6b7280;
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    ">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmRestore" style="
+                        background: #3b82f6;
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    ">Restore</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Handle restore button
+        document.getElementById('confirmRestore').addEventListener('click', async () => {
+            const departmentId = document.getElementById('restoreDepartment').value;
+            if (!departmentId) {
+                showNotification('Please select a department', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/faculty', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId: id,
+                        departmentId: departmentId
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to restore faculty member');
+                }
+                
+                showNotification('Faculty member restored successfully', 'success');
+                document.body.removeChild(modal);
+                loadFaculty(); // Refresh both lists
+                loadRemovedFaculty();
+            } catch (error) {
+                console.error('Error restoring faculty:', error);
+                showNotification(error.message || 'Failed to restore faculty member', 'error');
+            }
+        });
+        
+        // Handle cancel button
+        document.getElementById('cancelRestore').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Handle close button
+        modal.querySelector('.close-btn').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Handle backdrop click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+    } catch (error) {
+        console.error('Error showing restore modal:', error);
+        showNotification('Failed to load departments', 'error');
     }
 }
 
@@ -2488,7 +2711,7 @@ function showAddFacultyModal() {
                 justify-content: space-between;
                 align-items: center;
             ">
-                <h5 style="margin: 0; color: #1e293b;">Assign Faculty Member</h5>
+                <h5 style="margin: 0; color: #1e293b;">Add Faculty Member</h5>
                 <button type="button" class="close-btn" style="
                     background: none;
                     border: none;
@@ -2499,19 +2722,40 @@ function showAddFacultyModal() {
             </div>
             <div style="padding: 20px;">
                 <div style="margin-bottom: 20px;">
-                    <label for="facultyUserSelect" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Select User to Assign as Faculty</label>
-                    <select id="facultyUserSelect" required style="
+                    <label for="facultyFirstName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">First Name <span style="color: red;">*</span></label>
+                    <input type="text" id="facultyFirstName" required style="
                         width: 100%;
                         padding: 8px 12px;
                         border: 1px solid #d1d5db;
                         border-radius: 4px;
                         font-size: 14px;
-                    ">
-                        <option value="">Loading users...</option>
-                    </select>
+                        box-sizing: border-box;
+                    " placeholder="Enter first name">
                 </div>
                 <div style="margin-bottom: 20px;">
-                    <label for="facultyDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department</label>
+                    <label for="facultyLastName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Last Name <span style="color: red;">*</span></label>
+                    <input type="text" id="facultyLastName" required style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter last name">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="facultyEmail" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Email <span style="color: #999; font-size: 12px;">(Optional - for existing teachers)</span></label>
+                    <input type="email" id="facultyEmail" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter email (optional)">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="facultyDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department <span style="color: red;">*</span></label>
                     <select id="facultyDepartment" required style="
                         width: 100%;
                         padding: 8px 12px;
@@ -2545,15 +2789,14 @@ function showAddFacultyModal() {
                     padding: 8px 16px;
                     border-radius: 4px;
                     cursor: pointer;
-                ">Assign as Faculty</button>
+                ">Add Faculty</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
     
-    // Load users and departments
-    loadUsersForFaculty(modal);
+    // Load departments
     loadDepartmentsForFaculty(modal);
     
     // Handle save button
@@ -2714,35 +2957,50 @@ async function loadDepartmentsForFaculty(modal) {
 }
 
 /**
- * Save new faculty member (assign existing user as faculty)
+ * Save new faculty member (create new faculty)
  */
 async function saveFaculty(modal) {
     try {
         // Get form values before removing modal
-        const userSelect = modal.querySelector('#facultyUserSelect');
+        const firstNameInput = modal.querySelector('#facultyFirstName');
+        const lastNameInput = modal.querySelector('#facultyLastName');
+        const emailInput = modal.querySelector('#facultyEmail');
         const departmentInput = modal.querySelector('#facultyDepartment');
         
-        if (!userSelect || !departmentInput) {
+        if (!firstNameInput || !lastNameInput || !emailInput || !departmentInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
         
-        const userId = userSelect.value;
+        const firstName = firstNameInput.value.trim();
+        const lastName = lastNameInput.value.trim();
+        const email = emailInput.value.trim().toLowerCase() || null;
         const departmentId = departmentInput.value;
         
-        if (!userId || !departmentId) {
-            showNotification('Please select a user and department', 'error');
+        if (!firstName || !lastName || !departmentId) {
+            showNotification('Please fill in all required fields (First Name, Last Name, Department)', 'error');
             return;
         }
         
-        const response = await fetch('/api/faculty', {
+        // Validate email format if provided
+        if (email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showNotification('Please enter a valid email address or leave it empty', 'error');
+                return;
+            }
+        }
+        
+        const response = await fetch('/api/faculty/create', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                userId,
+                firstName,
+                lastName,
+                email,
                 departmentId
             })
         });
@@ -2752,12 +3010,12 @@ async function saveFaculty(modal) {
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
         
-        showNotification('User assigned to department successfully', 'success');
+        showNotification('Faculty member added successfully', 'success');
         document.body.removeChild(modal);
         loadFaculty(); // Refresh the faculty list
     } catch (error) {
-        console.error('Error assigning faculty:', error);
-        showNotification('Failed to assign user as faculty', 'error');
+        console.error('Error creating faculty:', error);
+        showNotification(error.message || 'Failed to create faculty member', 'error');
     }
 }
 
@@ -2807,20 +3065,40 @@ function showEditFacultyModal(faculty) {
             </div>
             <div style="padding: 20px;">
                 <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Current Faculty Member</label>
-                    <div style="
-                        padding: 12px;
-                        background: #f8fafc;
-                        border: 1px solid #e2e8f0;
+                    <label for="editFacultyFirstName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">First Name <span style="color: red;">*</span></label>
+                    <input type="text" id="editFacultyFirstName" required value="${faculty.firstName || ''}" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
                         border-radius: 4px;
                         font-size: 14px;
-                    ">
-                        <strong>${faculty.firstName || ''} ${faculty.lastName || ''}</strong><br>
-                        <span style="color: #64748b;">${faculty.email || ''}</span>
-                    </div>
+                        box-sizing: border-box;
+                    " placeholder="Enter first name">
                 </div>
                 <div style="margin-bottom: 20px;">
-                    <label for="editFacultyDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department</label>
+                    <label for="editFacultyLastName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Last Name <span style="color: red;">*</span></label>
+                    <input type="text" id="editFacultyLastName" required value="${faculty.lastName || ''}" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter last name">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="editFacultyEmail" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Email</label>
+                    <input type="email" id="editFacultyEmail" value="${faculty.email || ''}" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter email">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="editFacultyDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department <span style="color: red;">*</span></label>
                     <select id="editFacultyDepartment" required style="
                         width: 100%;
                         padding: 8px 12px;
@@ -2901,18 +3179,38 @@ function showEditFacultyModal(faculty) {
 async function saveFacultyChanges(facultyId, modal) {
     try {
         // Get form values before removing modal
+        const firstNameInput = modal.querySelector('#editFacultyFirstName');
+        const lastNameInput = modal.querySelector('#editFacultyLastName');
+        const emailInput = modal.querySelector('#editFacultyEmail');
         const departmentInput = modal.querySelector('#editFacultyDepartment');
         
-        if (!departmentInput) {
+        if (!firstNameInput || !lastNameInput || !departmentInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
         
+        const firstName = firstNameInput.value.trim();
+        const lastName = lastNameInput.value.trim();
+        const email = emailInput ? emailInput.value.trim() : '';
         const departmentId = departmentInput.value;
+        
+        if (!firstName || !lastName) {
+            showNotification('Please fill in first name and last name', 'error');
+            return;
+        }
         
         if (!departmentId) {
             showNotification('Please select a department', 'error');
             return;
+        }
+        
+        // Validate email format if provided
+        if (email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showNotification('Please enter a valid email address or leave it empty', 'error');
+                return;
+            }
         }
         
         const response = await fetch(`/api/faculty/${facultyId}`, {
@@ -2922,6 +3220,9 @@ async function saveFacultyChanges(facultyId, modal) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
+                firstName,
+                lastName,
+                email: email || null,
                 departmentId
             })
         });
@@ -3791,6 +4092,330 @@ async function deleteFaculty(id) {
     } catch (error) {
         console.error('Error deleting faculty:', error);
         showNotification('Failed to delete faculty member', 'error');
+    }
+}
+
+/**
+ * Show modal to enter email and send verification
+ */
+function showSendVerificationModal(facultyId, existingEmail = null) {
+    const modal = document.createElement('div');
+    modal.className = 'custom-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 8px;
+            padding: 0;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        ">
+            <div style="
+                padding: 20px;
+                border-bottom: 1px solid #e2e8f0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            ">
+                <h5 style="margin: 0; color: #1e293b;">Send Verification Email</h5>
+                <button type="button" class="close-btn" style="
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    cursor: pointer;
+                    color: #64748b;
+                ">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <div style="margin-bottom: 20px;">
+                    <label for="verificationEmailInput" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Teacher Email <span style="color: red;">*</span></label>
+                    <input type="email" id="verificationEmailInput" required style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter teacher email address" value="${existingEmail || ''}">
+                    <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">The teacher will receive a verification link to activate their account.</p>
+                </div>
+            </div>
+            <div style="
+                padding: 20px;
+                border-top: 1px solid #e2e8f0;
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            ">
+                <button type="button" class="btn btn-secondary" style="
+                    background: #6b7280;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmSendVerification" style="
+                    background: #3b82f6;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Send Verification</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Handle send button
+    document.getElementById('confirmSendVerification').addEventListener('click', async () => {
+        const emailInput = modal.querySelector('#verificationEmailInput');
+        const email = emailInput.value.trim().toLowerCase();
+        
+        if (!email) {
+            showNotification('Please enter an email address', 'error');
+            return;
+        }
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            showNotification('Please enter a valid email address', 'error');
+            return;
+        }
+        
+        // Update faculty email if it's different, then send verification
+        try {
+            // First, update the faculty member's email if needed
+            const updateResponse = await fetch(`/api/faculty/${facultyId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email })
+            });
+            
+            if (!updateResponse.ok) {
+                const errorData = await updateResponse.json();
+                throw new Error(errorData.error || 'Failed to update email');
+            }
+            
+            // Now send verification
+            await sendFacultyVerification(facultyId, email);
+            document.body.removeChild(modal);
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification(error.message || 'Failed to send verification', 'error');
+        }
+    });
+    
+    // Handle cancel button
+    modal.querySelector('.btn-secondary').addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+    
+    // Handle close button
+    modal.querySelector('.close-btn').addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+    
+    // Handle backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+}
+
+/**
+ * Show modal to add email and send verification (for faculty without email)
+ */
+function showAddEmailVerificationModal(facultyId) {
+    const modal = document.createElement('div');
+    modal.className = 'custom-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 8px;
+            padding: 0;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        ">
+            <div style="
+                padding: 20px;
+                border-bottom: 1px solid #e2e8f0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            ">
+                <h5 style="margin: 0; color: #1e293b;">Add Email & Send Verification</h5>
+                <button type="button" class="close-btn" style="
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    cursor: pointer;
+                    color: #64748b;
+                ">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <div style="margin-bottom: 20px;">
+                    <label for="verificationEmail" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Teacher Email <span style="color: red;">*</span></label>
+                    <input type="email" id="verificationEmail" required style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " placeholder="Enter teacher email address">
+                    <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">The teacher will receive a verification link to activate their account.</p>
+                </div>
+            </div>
+            <div style="
+                padding: 20px;
+                border-top: 1px solid #e2e8f0;
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            ">
+                <button type="button" class="btn btn-secondary" style="
+                    background: #6b7280;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Cancel</button>
+                <button type="button" class="btn btn-primary" id="sendVerificationWithEmail" style="
+                    background: #3b82f6;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Send Verification</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Handle send button
+    document.getElementById('sendVerificationWithEmail').addEventListener('click', async () => {
+        const emailInput = modal.querySelector('#verificationEmail');
+        const email = emailInput.value.trim().toLowerCase();
+        
+        if (!email) {
+            showNotification('Please enter an email address', 'error');
+            return;
+        }
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            showNotification('Please enter a valid email address', 'error');
+            return;
+        }
+        
+        // Update faculty email first, then send verification
+        try {
+            // Update the faculty member's email
+            const updateResponse = await fetch(`/api/faculty/${facultyId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email })
+            });
+            
+            if (!updateResponse.ok) {
+                const errorData = await updateResponse.json();
+                throw new Error(errorData.error || 'Failed to update email');
+            }
+            
+            // Now send verification
+            await sendFacultyVerification(facultyId, email);
+            document.body.removeChild(modal);
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification(error.message || 'Failed to send verification', 'error');
+        }
+    });
+    
+    // Handle cancel button
+    modal.querySelector('.btn-secondary').addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+    
+    // Handle close button
+    modal.querySelector('.close-btn').addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+    
+    // Handle backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+}
+
+/**
+ * Send verification email to faculty member
+ */
+async function sendFacultyVerification(facultyId, email) {
+    try {
+        const response = await fetch(`/api/faculty/${facultyId}/send-verification`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        showNotification(data.message || 'Verification email sent successfully', 'success');
+        loadFaculty(); // Refresh the faculty list
+    } catch (error) {
+        console.error('Error sending verification email:', error);
+        showNotification(error.message || 'Failed to send verification email', 'error');
     }
 }
 
