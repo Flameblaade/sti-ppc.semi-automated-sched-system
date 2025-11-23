@@ -5412,16 +5412,11 @@ async function saveCourseChanges(courseId, modal, course) {
         const colorInput = modal.querySelector('#editCourseColor');
         const color = colorInput ? colorInput.value.trim() : '#3b82f6';
         
-        // Get departmentId from the original course object
-        const departmentId = course?.departmentId;
+        // Get departmentId from the original course object (optional)
+        const departmentId = course?.departmentId || null;
         
         if (!code || !name || !type) {
             showNotification('Please fill in all required fields', 'error');
-            return;
-        }
-        
-        if (!departmentId) {
-            showNotification('Department information is missing. Please refresh and try again.', 'error');
             return;
         }
         
@@ -5435,7 +5430,7 @@ async function saveCourseChanges(courseId, modal, course) {
                 code,
                 name,
                 type,
-                departmentId,
+                departmentId: departmentId || null,
                 color
             })
         });
