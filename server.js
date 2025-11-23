@@ -3845,14 +3845,17 @@ app.post('/api/courses', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
         const { code, name, type, departmentId, color } = req.body;
         
         // Validate input
-        if (!code || !name || !type || !departmentId) {
-            return res.status(400).json({ message: 'Code, name, type, and department are required' });
+        if (!code || !name || !type) {
+            return res.status(400).json({ message: 'Code, name, and type are required' });
         }
 
-        // Check if department exists
-        const department = departments.find(dept => dept.id === departmentId);
-        if (!department) {
-            return res.status(400).json({ message: 'Department not found' });
+        // Department is optional - if provided, validate it exists
+        let department = null;
+        if (departmentId) {
+            department = departments.find(dept => dept.id === departmentId);
+            if (!department) {
+                return res.status(400).json({ message: 'Department not found' });
+            }
         }
 
         const courses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
@@ -3871,8 +3874,8 @@ app.post('/api/courses', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
             code,
             name,
             type,
-            departmentId,
-            department: department.name,
+            departmentId: departmentId || null,
+            department: department ? department.name : null,
             color: courseColor,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
