@@ -6537,6 +6537,70 @@ function initializeCreatedClasses() {
     // Update the created classes list on page load
     updateCreatedClassesList();
     
+    // Set up search functionality for created classes
+    const createdClassesSearch = document.getElementById('createdClassesSearch');
+    if (createdClassesSearch) {
+        createdClassesSearch.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            const classesList = document.getElementById('createdClasses');
+            if (!classesList) return;
+            
+            const classItems = classesList.querySelectorAll('.class-item');
+            let visibleCount = 0;
+            
+            classItems.forEach(item => {
+                const subject = (item.querySelector('h3')?.textContent || '').toLowerCase();
+                const department = (item.querySelector('.class-info')?.textContent || '').toLowerCase();
+                const faculty = (Array.from(item.querySelectorAll('.class-info')).find(el => el.textContent.includes('chalkboard'))?.textContent || '').toLowerCase();
+                
+                const matches = searchTerm === '' || 
+                    subject.includes(searchTerm) || 
+                    department.includes(searchTerm) || 
+                    faculty.includes(searchTerm);
+                
+                if (matches) {
+                    item.style.display = '';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            // Show/hide empty state
+            const emptyState = classesList.querySelector('.empty-state');
+            if (emptyState) {
+                if (visibleCount === 0 && searchTerm !== '') {
+                    emptyState.style.display = 'block';
+                    emptyState.innerHTML = `
+                        <i class="fas fa-search"></i>
+                        <h4>No classes found</h4>
+                        <p>Try adjusting your search</p>
+                    `;
+                } else if (visibleCount === 0 && searchTerm === '') {
+                    emptyState.style.display = 'block';
+                    emptyState.innerHTML = `
+                        <i class="fas fa-calendar-plus"></i>
+                        <h4>No classes created yet</h4>
+                        <p>Start by filling the form above to create your first class</p>
+                    `;
+                } else {
+                    emptyState.style.display = 'none';
+                }
+            }
+        });
+        
+        // Add focus styles
+        createdClassesSearch.addEventListener('focus', function() {
+            this.style.borderColor = '#4a90e2';
+            this.style.boxShadow = '0 0 0 3px rgba(74, 144, 226, 0.1)';
+        });
+        
+        createdClassesSearch.addEventListener('blur', function() {
+            this.style.borderColor = '#e2e8f0';
+            this.style.boxShadow = 'none';
+        });
+    }
+    
     // Set up view classes details button
     const viewClassesDetailsBtn = document.getElementById('viewClassesDetailsBtn');
     const classesDetailsModal = document.getElementById('createdClassesDetailsModal');
@@ -6552,6 +6616,11 @@ function initializeCreatedClasses() {
             btn.addEventListener('click', function() {
                 classesDetailsModal.style.display = 'none';
                 document.body.style.overflow = 'auto';
+                // Clear search when modal closes
+                const searchInput = document.getElementById('classesDetailsSearch');
+                if (searchInput) {
+                    searchInput.value = '';
+                }
             });
         });
         
@@ -6559,6 +6628,11 @@ function initializeCreatedClasses() {
             if (e.target === classesDetailsModal) {
                 classesDetailsModal.style.display = 'none';
                 document.body.style.overflow = 'auto';
+                // Clear search when modal closes
+                const searchInput = document.getElementById('classesDetailsSearch');
+                if (searchInput) {
+                    searchInput.value = '';
+                }
             }
         });
     }
@@ -6795,20 +6869,6 @@ function showClassesDetailsModal() {
     // Set up search functionality
     const searchInput = document.getElementById('classesDetailsSearch');
     if (searchInput) {
-        // Clear search when modal is closed
-        searchInput.value = '';
-        
-        // Add focus styles
-        searchInput.addEventListener('focus', function() {
-            this.style.borderColor = '#4a90e2';
-            this.style.boxShadow = '0 0 0 3px rgba(74, 144, 226, 0.1)';
-        });
-        
-        searchInput.addEventListener('blur', function() {
-            this.style.borderColor = '#e2e8f0';
-            this.style.boxShadow = 'none';
-        });
-        
         searchInput.addEventListener('input', function(e) {
             const searchTerm = e.target.value.toLowerCase().trim();
             if (searchTerm === '') {
@@ -6816,26 +6876,33 @@ function showClassesDetailsModal() {
             } else {
                 const filtered = classes.filter(cls => {
                     const subject = (cls.subject || '').toLowerCase();
-                    const subjectCode = (cls.subjectCode || '').toLowerCase();
                     const faculty = (cls.faculty || '').toLowerCase();
                     const course = (cls.course || '').toLowerCase();
                     const department = (cls.department || '').toLowerCase();
-                    const classType = (cls.classType || '').toLowerCase();
-                    
                     return subject.includes(searchTerm) || 
-                           subjectCode.includes(searchTerm) ||
                            faculty.includes(searchTerm) || 
                            course.includes(searchTerm) || 
-                           department.includes(searchTerm) ||
-                           classType.includes(searchTerm);
+                           department.includes(searchTerm);
                 });
                 renderClassesList(filtered);
             }
         });
     }
     
-    // Show modal
+    // Show modal with proper positioning
     modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // Scroll to top to ensure header is visible after a brief delay
+    setTimeout(() => {
+        modal.scrollTop = 0;
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+            modalContent.scrollTop = 0;
+        }
+        // Also scroll the window to top if needed
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 10);
     document.body.style.overflow = 'hidden';
 }
 

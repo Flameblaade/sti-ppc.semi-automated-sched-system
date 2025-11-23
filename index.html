@@ -125,6 +125,19 @@
                             <button type="button" id="clearClassesBtn" class="btn btn-danger" style="width: 100%; margin-bottom: 15px;">
                                 <i class="fas fa-trash-alt"></i> Clear All Classes
                             </button>
+                            <!-- Search Bar for Created Classes -->
+                            <div style="margin-bottom: 15px; position: relative;">
+                                <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; z-index: 1;"></i>
+                                <input type="text" id="createdClassesSearch" placeholder="Search classes..." style="
+                                    width: 100%;
+                                    padding: 10px 12px 10px 40px;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 14px;
+                                    box-sizing: border-box;
+                                    transition: border-color 0.2s ease;
+                                ">
+                            </div>
                             <div id="createdClasses" class="classes-list" style="max-height: 300px; overflow-y: auto;">
                                 <div class="empty-state">
                                     <i class="fas fa-calendar-plus"></i>
@@ -418,15 +431,15 @@
     </div>
     
     <!-- Created Classes Details Modal -->
-    <div id="createdClassesDetailsModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 800px;">
-            <div class="modal-header">
+    <div id="createdClassesDetailsModal" class="modal" style="display: none; align-items: flex-start; padding-top: 40px;">
+        <div class="modal-content" style="max-width: 800px; margin: 0 auto; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="flex-shrink: 0; position: sticky; top: 0; background: white; z-index: 10; border-bottom: 1px solid #e2e8f0;">
                 <h3><i class="fas fa-list-check"></i> Created Classes Details</h3>
                 <button type="button" class="close-modal" data-close-modal="createdClassesDetailsModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="flex: 1; overflow-y: auto;">
                 <!-- Stats Section -->
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px;">
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; color: white; text-align: center;">
@@ -440,16 +453,14 @@
                 </div>
                 
                 <!-- Search Bar -->
-                <div style="margin-bottom: 20px; position: relative;">
-                    <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; z-index: 1;"></i>
+                <div style="margin-bottom: 20px;">
                     <input type="text" id="classesDetailsSearch" placeholder="Search classes by subject, faculty, program, or department..." style="
                         width: 100%;
-                        padding: 12px 16px 12px 44px;
+                        padding: 12px 16px;
                         border: 2px solid #e2e8f0;
                         border-radius: 8px;
                         font-size: 14px;
                         box-sizing: border-box;
-                        transition: border-color 0.2s ease;
                     ">
                 </div>
                 
