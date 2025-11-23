@@ -660,6 +660,11 @@ async function loadAllPrograms() {
             if (respCourses && respCourses.ok) {
                 courses = await respCourses.json();
                 console.log('Loaded courses from API:', courses.length);
+                // Store courses in localStorage and global for color lookup
+                if (Array.isArray(courses) && courses.length > 0) {
+                    localStorage.setItem('courses', JSON.stringify(courses));
+                    window.courses = courses;
+                }
             }
         } catch (e) { 
             console.log('API call for courses failed, using localStorage:', e);
@@ -993,13 +998,31 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             // Handle when events are dropped onto the calendar
             eventReceive: function(info) {
-                // Ensure the department color is applied when event is dropped
+                // Ensure the course/department color is applied when event is dropped
                 const event = info.event;
                 const isMerged = event.extendedProps?.isMerged || false;
-                const deptColor = isMerged ? '#000000' : 
-                                (event.extendedProps?.departmentColor || 
-                                (event.backgroundColor) || 
-                                '#6b7280');
+                
+                // Get color - prioritize course color, then department color, then existing color
+                let deptColor;
+                if (isMerged) {
+                    deptColor = '#000000';
+                } else if (event.extendedProps?.departmentColor) {
+                    deptColor = event.extendedProps.departmentColor;
+                } else if (event.backgroundColor) {
+                    deptColor = event.backgroundColor;
+                } else {
+                    // Use getDepartmentColorForClass if available (from main.js)
+                    if (typeof window.getDepartmentColorForClass === 'function') {
+                        deptColor = window.getDepartmentColorForClass({
+                            course: event.extendedProps?.course || '',
+                            courseId: event.extendedProps?.courseId || event.extendedProps?.programId,
+                            department: event.extendedProps?.department || '',
+                            departmentId: event.extendedProps?.departmentId
+                        });
+                    } else {
+                        deptColor = '#6b7280'; // Default gray
+                    }
+                }
                 
                 console.log('Event received, applying color:', deptColor, isMerged ? '[MERGED]' : '');
                 
@@ -1007,6 +1030,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 event.setProp('backgroundColor', deptColor);
                 event.setProp('borderColor', deptColor);
                 event.setProp('textColor', '#ffffff');
+                
+                // Update extendedProps to store the color for future reference
+                if (!isMerged) {
+                    event.setExtendedProp('departmentColor', deptColor);
+                }
                 
                 // Add merged class if needed
                 if (isMerged) {
@@ -1555,8 +1583,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load ALL programs/strands after Choices.js is initialized (Program/Strand is now first in the form)
         loadAllPrograms();
         
-        // Load ALL subjects on page load (no program requirement)
-        loadSubjects();
+        // Subject select should be disabled initially until program is selected
+        const subjectSelect = document.getElementById('subjectSelect');
+        if (subjectSelect) {
+            if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                window.choicesInstances['subjectSelect'].setChoices(
+                    [{value: '', label: 'Select Program/Strand First', disabled: true}], 
+                    'value', 
+                    'label', 
+                    true
+                );
+                if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
+                    window.choicesInstances['subjectSelect'].disable();
+                }
+            } else {
+                subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+            }
+            subjectSelect.disabled = true;
+        }
     }, 100);
     
     // Load departments when the page loads
@@ -1607,12 +1651,36 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Error loading faculty:', err);
                 });
                 
-                // Load ALL subjects (no filtering by program)
-                loadSubjects(programId);
+                // Load ALL subjects (no filtering by program) and enable subject select
+                loadSubjects(programId).then(() => {
+                    // Enable subject select after loading
+                    if (subjSel) {
+                        subjSel.disabled = false;
+                        if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                            if (typeof window.choicesInstances['subjectSelect'].enable === 'function') {
+                                window.choicesInstances['subjectSelect'].enable();
+                            }
+                        }
+                    }
+                });
             } else {
-                // No program selected, but subjects should still be available
-                // Load all subjects even without program selection
-                loadSubjects();
+                // No program selected - disable and reset subject dropdown
+                if (subjSel) {
+                    if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                        window.choicesInstances['subjectSelect'].setChoices(
+                            [{value: '', label: 'Select Program/Strand First', disabled: true}], 
+                            'value', 
+                            'label', 
+                            true
+                        );
+                        if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
+                            window.choicesInstances['subjectSelect'].disable();
+                        }
+                    } else {
+                        subjSel.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+                    }
+                    subjSel.disabled = true;
+                }
                 
                 // Reset faculty dropdown (still requires program selection)
                 if (facSel) {
@@ -1623,7 +1691,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     facSel.disabled = true;
                 }
-                // Subjects are now independent - no need to disable them
             }
         });
     }

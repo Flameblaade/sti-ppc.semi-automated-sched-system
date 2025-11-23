@@ -260,6 +260,53 @@ document.addEventListener('DOMContentLoaded', function() {
       // Initialize empty rooms (to be created by superadmin)
     let rooms = [];
     
+    // Load courses from server and store in localStorage
+    async function loadCourses() {
+        try {
+            const authToken = localStorage.getItem('authToken');
+            if (!authToken) {
+                console.warn('No auth token, skipping course load');
+                return;
+            }
+            
+            const response = await fetch('/api/courses', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+            
+            if (response.ok) {
+                const courses = await response.json();
+                if (Array.isArray(courses)) {
+                    localStorage.setItem('courses', JSON.stringify(courses));
+                    window.courses = courses;
+                    console.log('Loaded', courses.length, 'courses and stored in localStorage');
+                }
+            } else {
+                console.warn('Failed to load courses from server:', response.status);
+                // Try to use existing localStorage data
+                const existingCourses = JSON.parse(localStorage.getItem('courses') || '[]');
+                if (Array.isArray(existingCourses) && existingCourses.length > 0) {
+                    window.courses = existingCourses;
+                    console.log('Using existing courses from localStorage:', existingCourses.length);
+                }
+            }
+        } catch (error) {
+            console.warn('Error loading courses:', error);
+            // Try to use existing localStorage data
+            const existingCourses = JSON.parse(localStorage.getItem('courses') || '[]');
+            if (Array.isArray(existingCourses) && existingCourses.length > 0) {
+                window.courses = existingCourses;
+                console.log('Using existing courses from localStorage:', existingCourses.length);
+            }
+        }
+    }
+    
+    // Load courses on page initialization
+    loadCourses();
+    
     // Load rooms from server
     async function loadRooms() {
         try {
@@ -966,41 +1013,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
       // Reset form fields but keep program selection
     function resetFormFieldsPartial() {
-        // Keep program selection
+        // Keep program/strand AND faculty member selected, only clear subject/course
         const programSelect = document.getElementById('programSelect');
+        const facultySelect = document.getElementById('facultySelect');
+        const subjectSelect = document.getElementById('subjectSelect');
         
-        // Reset Choices.js instances
+        // Only reset subject/course - keep program and faculty selected
         if (window.choicesInstances) {
-            if (window.choicesInstances['facultySelect']) {
-                window.choicesInstances['facultySelect'].setChoiceByValue('');
-            }
             if (window.choicesInstances['subjectSelect']) {
                 window.choicesInstances['subjectSelect'].setChoiceByValue('');
             }
-            // Don't reset programSelect - keep it selected
-        }
-        
-        // Reset faculty select - reload all faculty if program is selected
-        if (facultySelect && programSelect && programSelect.value) {
-            // Reload all faculty when program is selected
-            if (typeof loadAllFaculty === 'function') {
-                loadAllFaculty();
-            } else {
-                // Fallback: just reset to initial state
-                if (window.choicesInstances && window.choicesInstances['facultySelect']) {
-                    window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
-                } else {
-                    facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-                }
-                facultySelect.disabled = true;
-            }
-        } else if (facultySelect) {
-            if (window.choicesInstances && window.choicesInstances['facultySelect']) {
-                window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
-            } else {
-                facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-            }
-            facultySelect.disabled = true;
+            // Don't reset programSelect or facultySelect - keep them selected
         }
         
         // Reset subject select - load all subjects (no program requirement)
@@ -1018,20 +1041,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Reset program select - reload all programs
-        if (programSelect) {
-            // Reload all programs
-            if (typeof loadAllPrograms === 'function') {
-                loadAllPrograms();
-            } else {
-                // Fallback: just reset to initial state
-                if (window.choicesInstances && window.choicesInstances['programSelect']) {
-                    window.choicesInstances['programSelect'].setChoiceByValue('');
-                } else {
-                    programSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand</option>';
-                }
-                programSelect.disabled = false;
-            }
+        // Hide subject details if visible
+        const subjectDetails = document.getElementById('subjectDetails');
+        if (subjectDetails) {
+            subjectDetails.style.display = 'none';
         }
         
         // Reset class type to default (lecture)
@@ -1045,50 +1058,122 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Reset all form fields
-    function resetFormFieldsFull() {
-        // Reset Choices.js instances
+    async function resetFormFieldsFull() {
+        const programSelect = document.getElementById('programSelect');
+        const facultySelect = document.getElementById('facultySelect');
+        const subjectSelect = document.getElementById('subjectSelect');
+        
+        // Reset Choices.js instances to initial state with placeholders
         if (window.choicesInstances) {
-            if (window.choicesInstances['programSelect']) {
-                window.choicesInstances['programSelect'].setChoiceByValue('');
+            // Reset program select to initial state
+            if (window.choicesInstances['programSelect'] && programSelect) {
+                try {
+                    // Clear selection first
+                    programSelect.value = '';
+                    window.choicesInstances['programSelect'].setChoiceByValue('');
+                } catch (e) {
+                    console.warn('Error clearing programSelect:', e);
+                    if (programSelect) programSelect.value = '';
+                }
             }
-            if (window.choicesInstances['facultySelect']) {
-                window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+            
+            // Reset faculty select to initial state
+            if (window.choicesInstances['facultySelect'] && facultySelect) {
+                try {
+                    // Reset to initial placeholder state
+                    window.choicesInstances['facultySelect'].setChoices(
+                        [{value: '', label: 'Select Program/Strand First', disabled: true}], 
+                        'value', 
+                        'label', 
+                        true
+                    );
+                    window.choicesInstances['facultySelect'].setChoiceByValue('');
+                    // Disable the select
+                    facultySelect.disabled = true;
+                    if (typeof window.choicesInstances['facultySelect'].disable === 'function') {
+                        window.choicesInstances['facultySelect'].disable();
+                    }
+                } catch (e) {
+                    console.warn('Error resetting facultySelect:', e);
+                    if (facultySelect) {
+                        facultySelect.value = '';
+                        facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+                        facultySelect.disabled = true;
+                    }
+                }
             }
-            if (window.choicesInstances['subjectSelect']) {
-                // Load all subjects (no program requirement)
-                if (typeof loadSubjects === 'function') {
-                    loadSubjects();
-                } else {
-                    window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Subject', disabled: true}], 'value', 'label', true);
+            
+            // Reset subject select to initial state
+            if (window.choicesInstances['subjectSelect'] && subjectSelect) {
+                try {
+                    // Reset to initial placeholder state
+                    window.choicesInstances['subjectSelect'].setChoices(
+                        [{value: '', label: 'Select Program/Strand First', disabled: true}], 
+                        'value', 
+                        'label', 
+                        true
+                    );
+                    window.choicesInstances['subjectSelect'].setChoiceByValue('');
+                    // Disable the select
+                    subjectSelect.disabled = true;
+                    if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
+                        window.choicesInstances['subjectSelect'].disable();
+                    }
+                } catch (e) {
+                    console.warn('Error resetting subjectSelect:', e);
+                    if (subjectSelect) {
+                        subjectSelect.value = '';
+                        subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+                        subjectSelect.disabled = true;
+                    }
                 }
             }
         }
         
-        if (facultySelect) {
-            // Reset and disable faculty dropdown
-            if (!window.choicesInstances || !window.choicesInstances['facultySelect']) {
-                facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-            }
+        // Reset native select values to initial state (fallback if Choices.js not used)
+        if (programSelect && (!window.choicesInstances || !window.choicesInstances['programSelect'])) {
+            programSelect.value = '';
+        }
+        
+        if (facultySelect && (!window.choicesInstances || !window.choicesInstances['facultySelect'])) {
+            facultySelect.value = '';
+            facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
             facultySelect.disabled = true;
         }
         
-        if (subjectSelect) {
-            // Load all subjects (no program requirement)
-            if (typeof loadSubjects === 'function') {
-                loadSubjects();
-            } else if (!window.choicesInstances || !window.choicesInstances['subjectSelect']) {
-                subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
-            }
+        if (subjectSelect && (!window.choicesInstances || !window.choicesInstances['subjectSelect'])) {
+            subjectSelect.value = '';
+            subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
             subjectSelect.disabled = true;
         }
         
-        // Reload all programs
-        const programSelect = document.getElementById('programSelect');
-        if (programSelect && typeof loadAllPrograms === 'function') {
-            loadAllPrograms();
+        // Hide subject details if visible
+        const subjectDetails = document.getElementById('subjectDetails');
+        if (subjectDetails) {
+            subjectDetails.style.display = 'none';
         }
         
-        // Unit load removed from form
+        // Reload all programs to reset the dropdown to initial state
+        if (programSelect && typeof loadAllPrograms === 'function') {
+            try {
+                await loadAllPrograms();
+                // After reloading, ensure selection is cleared and shows placeholder
+                if (programSelect) {
+                    programSelect.value = '';
+                    if (window.choicesInstances && window.choicesInstances['programSelect']) {
+                        setTimeout(() => {
+                            try {
+                                window.choicesInstances['programSelect'].setChoiceByValue('');
+                            } catch (e) {
+                                console.warn('Error clearing programSelect after reload:', e);
+                            }
+                        }, 100);
+                    }
+                }
+            } catch (e) {
+                console.warn('Error reloading programs:', e);
+            }
+        }
         
         // Reset class type to default (lecture)
         const classTypeRadio = document.querySelector('input[name="classType"][value="lecture"]');
@@ -2097,7 +2182,68 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Get department color for a class based on its course/program
     function getDepartmentColorForClass(classItem) {
-        // Get departments from global or localStorage
+        // FIRST: Try to get course color by courseId (highest priority)
+        const courseId = classItem.courseId || classItem.programId || '';
+        if (courseId) {
+            try {
+                // Get courses from localStorage or global
+                const courses = (Array.isArray(window.courses) && window.courses.length)
+                    ? window.courses
+                    : JSON.parse(localStorage.getItem('courses') || '[]');
+                
+                if (Array.isArray(courses) && courses.length > 0) {
+                    // Try to find course by ID
+                    const course = courses.find(c => 
+                        c.id && String(c.id) === String(courseId)
+                    );
+                    
+                    // If not found by ID, try by code
+                    const courseByCode = !course ? courses.find(c => 
+                        c.code && String(c.code).toLowerCase() === String(courseId).toLowerCase()
+                    ) : null;
+                    
+                    const foundCourse = course || courseByCode;
+                    
+                    if (foundCourse?.color) {
+                        console.log('Found course color by courseId:', foundCourse.color, 'for course:', foundCourse.code || foundCourse.name);
+                        return foundCourse.color;
+                    }
+                }
+            } catch (e) {
+                console.warn('Error looking up course color:', e);
+            }
+        }
+        
+        // SECOND: Try to get course color by course name/code
+        const courseValue = classItem.course || '';
+        if (courseValue) {
+            try {
+                const courses = (Array.isArray(window.courses) && window.courses.length)
+                    ? window.courses
+                    : JSON.parse(localStorage.getItem('courses') || '[]');
+                
+                if (Array.isArray(courses) && courses.length > 0) {
+                    const courseLc = String(courseValue).toLowerCase().trim();
+                    const foundCourse = courses.find(c => {
+                        const codeLc = String(c.code || '').toLowerCase();
+                        const nameLc = String(c.name || '').toLowerCase();
+                        return codeLc === courseLc || 
+                               nameLc === courseLc ||
+                               (codeLc && courseLc.includes(codeLc)) ||
+                               (codeLc && codeLc.includes(courseLc));
+                    });
+                    
+                    if (foundCourse?.color) {
+                        console.log('Found course color by course name/code:', foundCourse.color, 'for course:', foundCourse.code || foundCourse.name);
+                        return foundCourse.color;
+                    }
+                }
+            } catch (e) {
+                console.warn('Error looking up course color by name:', e);
+            }
+        }
+        
+        // THIRD: Fall back to department color lookup (original logic)
         const departments = (Array.isArray(window.departments) && window.departments.length)
             ? window.departments
             : JSON.parse(localStorage.getItem('departments') || '[]');
@@ -2105,56 +2251,52 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Looking up color for classItem:', classItem);
         console.log('Available departments:', departments);
         
-        if (!Array.isArray(departments) || departments.length === 0) {
-            console.warn('No departments available for color lookup');
-            return '#6b7280'; // Default gray
-        }
-        
-        // 1) Try to match by department ID first (most accurate)
-        if (classItem.departmentId) {
-            const deptById = departments.find(dept => 
-                dept.id && String(dept.id) === String(classItem.departmentId)
-            );
-            if (deptById?.color) {
-                console.log('Found color by departmentId:', deptById.color, 'for dept:', deptById.code);
-                return deptById.color;
+        if (Array.isArray(departments) && departments.length > 0) {
+            // 1) Try to match by department ID first (most accurate)
+            if (classItem.departmentId) {
+                const deptById = departments.find(dept => 
+                    dept.id && String(dept.id) === String(classItem.departmentId)
+                );
+                if (deptById?.color) {
+                    console.log('Found color by departmentId:', deptById.color, 'for dept:', deptById.code);
+                    return deptById.color;
+                }
+            }
+            
+            // 2) Try to match by department CODE (this is what's stored in classItem.department)
+            const departmentCode = classItem.department || '';
+            if (departmentCode) {
+                const deptByCode = departments.find(dept => {
+                    const deptCode = String(dept.code || '').toLowerCase();
+                    const searchCode = String(departmentCode).toLowerCase();
+                    return deptCode === searchCode || deptCode === searchCode.trim();
+                });
+                if (deptByCode?.color) {
+                    console.log('Found color by department code:', deptByCode.color, 'for dept:', deptByCode.code);
+                    return deptByCode.color;
+                }
+            }
+            
+            // 3) Try to match by course value against department code
+            if (courseValue) {
+                const courseLc = String(courseValue).toLowerCase().trim();
+                const deptByCourse = departments.find(dept => {
+                    const codeLc = String(dept.code || '').toLowerCase();
+                    const nameLc = String(dept.name || '').toLowerCase();
+                    return codeLc === courseLc || 
+                           nameLc === courseLc ||
+                           (codeLc && courseLc.includes(codeLc)) ||
+                           (codeLc && codeLc.includes(courseLc));
+                });
+                if (deptByCourse?.color) {
+                    console.log('Found color by course match:', deptByCourse.color, 'for dept:', deptByCourse.code);
+                    return deptByCourse.color;
+                }
             }
         }
         
-        // 2) Try to match by department CODE (this is what's stored in classItem.department)
-        const departmentCode = classItem.department || '';
-        if (departmentCode) {
-            const deptByCode = departments.find(dept => {
-                const deptCode = String(dept.code || '').toLowerCase();
-                const searchCode = String(departmentCode).toLowerCase();
-                return deptCode === searchCode || deptCode === searchCode.trim();
-            });
-            if (deptByCode?.color) {
-                console.log('Found color by department code:', deptByCode.color, 'for dept:', deptByCode.code);
-                return deptByCode.color;
-            }
-        }
-        
-        // 3) Try to match by course value against department code
-        const courseValue = classItem.course || classItem.courseId || '';
-        if (courseValue) {
-            const courseLc = String(courseValue).toLowerCase().trim();
-            const deptByCourse = departments.find(dept => {
-                const codeLc = String(dept.code || '').toLowerCase();
-                const nameLc = String(dept.name || '').toLowerCase();
-                return codeLc === courseLc || 
-                       nameLc === courseLc ||
-                       (codeLc && courseLc.includes(codeLc)) ||
-                       (codeLc && codeLc.includes(courseLc));
-            });
-            if (deptByCourse?.color) {
-                console.log('Found color by course match:', deptByCourse.color, 'for dept:', deptByCourse.code);
-                return deptByCourse.color;
-            }
-        }
-        
-        // 4) Fallback to default colors (only if no department found)
-        console.warn('No department color found, using default');
+        // 4) Fallback to default colors (only if no course or department found)
+        console.warn('No course or department color found, using default');
         const defaultColors = {
             'bsit': '#10b981',
             'it': '#10b981',
@@ -2166,7 +2308,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'tm': '#8b5cf6',
             'default': '#6b7280'
         };
-        const courseLc = String(courseValue).toLowerCase();
+        const courseLc = String(courseValue || courseId).toLowerCase();
         for (const [key, color] of Object.entries(defaultColors)) {
             if (courseLc.includes(key)) {
                 console.log('Using default color for:', key);
@@ -2176,6 +2318,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return defaultColors.default;
     }
+    
+    // Expose getDepartmentColorForClass globally for use in other files
+    window.getDepartmentColorForClass = getDepartmentColorForClass;
 
     // Resolve department object for a given course/program
     function getDepartmentForCourse(courseOrClassItem) {
@@ -5176,10 +5321,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                                 console.log(`Applied stored color: ${eventData.backgroundColor} for event: ${eventData.title}${isMerged ? ' [MERGED]' : ''}`);
                             } else if (!eventData.backgroundColor) {
-                                // Try to get department color for existing events
+                                // Try to get course/department color for existing events
                                 const departmentColor = isMerged ? '#000000' : getDepartmentColorForClass({
                                     course: eventData.extendedProps?.course || '',
-                                    courseId: eventData.extendedProps?.courseId
+                                    courseId: eventData.extendedProps?.courseId || eventData.extendedProps?.programId,
+                                    department: eventData.extendedProps?.department || '',
+                                    departmentId: eventData.extendedProps?.departmentId
                                 });
                                 eventData.backgroundColor = departmentColor;
                                 eventData.borderColor = departmentColor;

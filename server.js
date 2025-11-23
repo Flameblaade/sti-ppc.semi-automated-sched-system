@@ -2056,7 +2056,7 @@ app.get('/api/departments/:id', isAuthenticated, (req, res) => {
 // Create a new department
 app.post('/api/departments', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   try {
-    const { code, name, color } = req.body;
+    const { code, name } = req.body;
     
     // Validate input
     if (!code || !name) {
@@ -2073,16 +2073,11 @@ app.post('/api/departments', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
       return res.status(409).json({ error: 'A department with this code or name already exists' });
     }
     
-    // Default color if not provided
-    const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'];
-    const departmentColor = color || defaultColors[departments.length % defaultColors.length];
-    
     // Create new department
     const newDept = {
       id: `dept${departments.length + 1}`,
       code: code.trim(),
       name: name.trim(),
-      color: departmentColor,
       createdAt: new Date().toISOString(),
       createdBy: req.user.id
     };
@@ -2107,7 +2102,7 @@ app.post('/api/departments', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
 app.put('/api/departments/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   try {
     const { id } = req.params;
-    const { code, name, color } = req.body;
+    const { code, name } = req.body;
     
     // Validate input
     if (!code || !name) {
@@ -2137,7 +2132,6 @@ app.put('/api/departments/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res)
       ...departments[deptIndex],
       code: code.trim(),
       name: name.trim(),
-      color: color || departments[deptIndex].color || '#3b82f6', // Keep existing color if not provided
       updatedAt: new Date().toISOString(),
       updatedBy: req.user.id
     };
@@ -3848,7 +3842,7 @@ app.get('/api/courses/:id', isAuthenticated, (req, res) => {
 
 app.post('/api/courses', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
     try {
-        const { code, name, type, departmentId } = req.body;
+        const { code, name, type, departmentId, color } = req.body;
         
         // Validate input
         if (!code || !name || !type || !departmentId) {
@@ -3868,6 +3862,10 @@ app.post('/api/courses', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
             return res.status(409).json({ message: 'A course with this code already exists' });
         }
 
+        // Default color if not provided
+        const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'];
+        const courseColor = color || defaultColors[courses.length % defaultColors.length];
+
         const newCourse = {
             id: `course-${Date.now()}`,
             code,
@@ -3875,7 +3873,7 @@ app.post('/api/courses', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
             type,
             departmentId,
             department: department.name,
-            departmentColor: department.color,
+            color: courseColor,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -3893,7 +3891,7 @@ app.post('/api/courses', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
 app.put('/api/courses/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
     try {
         const { id } = req.params;
-        const { code, name, type, departmentId } = req.body;
+        const { code, name, type, departmentId, color } = req.body;
         
         // Validate input
         if (!code || !name || !type || !departmentId) {
@@ -3925,7 +3923,7 @@ app.put('/api/courses/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
             type,
             departmentId,
             department: department.name,
-            departmentColor: department.color,
+            color: color || courses[courseIndex].color || '#3b82f6',
             updatedAt: new Date().toISOString()
         };
 

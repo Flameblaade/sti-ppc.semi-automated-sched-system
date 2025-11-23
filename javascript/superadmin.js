@@ -487,6 +487,275 @@ function initializeDashboard() {
     loadSubjects();
     loadCourses();
     loadRooms();
+    
+    // Initialize search functionality
+    initializeSearch();
+}
+
+/**
+ * Initialize search functionality for all academic management tabs
+ */
+function initializeSearch() {
+    // Store original data for filtering
+    window.originalData = {
+        departments: [],
+        faculty: [],
+        subjects: [],
+        courses: [],
+        rooms: []
+    };
+    
+    // Departments search
+    const searchDepartments = document.getElementById('searchDepartments');
+    if (searchDepartments) {
+        searchDepartments.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            filterTable('departmentsTableBody', window.originalData.departments, searchTerm, (dept) => 
+                `${dept.code || ''} ${dept.name || ''} ${dept.description || ''}`.toLowerCase(),
+                (filtered) => {
+                    const tbody = document.getElementById('departmentsTableBody');
+                    if (!tbody) return;
+                    tbody.innerHTML = filtered.map(dept => `
+                        <tr>
+                            <td>${dept.code || ''}</td>
+                            <td>${dept.name || ''}</td>
+                            <td>${dept.description || 'No description'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" data-action="edit-department" data-id="${dept.id}">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" data-action="delete-department" data-id="${dept.id}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            );
+        });
+    }
+    
+    // Faculty search
+    const searchFaculty = document.getElementById('searchFaculty');
+    if (searchFaculty) {
+        searchFaculty.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            filterTable('facultyTableBody', window.originalData.faculty, searchTerm, (fac) => {
+                const name = formatFullName(fac.firstName || '', fac.middleName || '', fac.lastName || '') || fac.email || '';
+                return `${name} ${fac.email || ''} ${fac.department || ''}`.toLowerCase();
+            }, (filtered) => {
+                const tbody = document.getElementById('facultyTableBody');
+                if (!tbody) return;
+                tbody.innerHTML = filtered.map(member => {
+                    const isVerified = member.verified === true || member.emailVerified === true;
+                    const statusBadge = isVerified 
+                        ? `<span style="color: #5cb85c; font-weight: bold;"><i class="fas fa-check-circle"></i> Verified</span>`
+                        : `<span style="color: #f0ad4e; font-weight: bold;"><i class="fas fa-clock"></i> Pending</span>`;
+                    const verificationButton = isVerified 
+                        ? ``
+                        : `<button class="btn btn-sm" data-action="send-verification" data-id="${member.id}" data-email="${member.email || ''}" style="background: #e0e7ff; color: #3730a3;">
+                                <i class="fas fa-envelope"></i> Send
+                            </button>`;
+                    const employmentTypeBadge = member.employmentType 
+                        ? `<span style="color: #64748b; font-size: 12px; display: block; margin-top: 3px;">
+                            <i class="fas fa-briefcase"></i> ${member.employmentType === 'full-time' ? 'Full-time' : 'Part-time'}
+                            ${member.mixedTeaching === true ? ' <span style="color: #8b5cf6;">(Mixed Teaching)</span>' : ''}
+                           </span>`
+                        : '';
+                    
+                    return `
+                    <tr>
+                        <td>${formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || ''}</td>
+                        <td>${member.email || ''}</td>
+                        <td>${member.department || ''}</td>
+                        <td>${statusBadge}${employmentTypeBadge}</td>
+                        <td>
+                            ${verificationButton}
+                            <button class="btn btn-sm btn-primary" data-action="edit-faculty" data-id="${member.id}">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-sm btn-danger" data-action="delete-faculty" data-id="${member.id}">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                }).join('');
+            });
+        });
+    }
+    
+    // Subjects search
+    const searchSubjects = document.getElementById('searchSubjects');
+    if (searchSubjects) {
+        searchSubjects.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            filterTable('subjectsTableBody', window.originalData.subjects, searchTerm, (sub) => 
+                `${sub.code || ''} ${sub.name || ''}`.toLowerCase(),
+                (filtered) => {
+                    const tbody = document.getElementById('subjectsTableBody');
+                    if (!tbody) return;
+                    tbody.innerHTML = filtered.map(subject => `
+                        <tr>
+                            <td>${subject.code || ''}</td>
+                            <td>${subject.name || ''}</td>
+                            <td>${subject.units || ''}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" data-action="edit-subject" data-id="${subject.id}">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" data-action="delete-subject" data-id="${subject.id}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            );
+        });
+    }
+    
+    // Courses search
+    const searchCourses = document.getElementById('searchCourses');
+    if (searchCourses) {
+        searchCourses.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            filterTable('coursesTableBody', window.originalData.courses, searchTerm, (course) => 
+                `${course.code || ''} ${course.name || ''} ${course.type || ''}`.toLowerCase(),
+                (filtered) => {
+                    const tbody = document.getElementById('coursesTableBody');
+                    if (!tbody) return;
+                    tbody.innerHTML = filtered.map(course => `
+                        <tr>
+                            <td>${course.code || ''}</td>
+                            <td>${course.name || ''}</td>
+                            <td>${course.type || ''}</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="
+                                        width: 20px; 
+                                        height: 20px; 
+                                        background-color: ${course.color || '#3b82f6'}; 
+                                        border-radius: 4px; 
+                                        border: 1px solid #e5e7eb;
+                                    "></div>
+                                    <span style="font-family: monospace; font-size: 12px; color: #6b7280;">
+                                        ${course.color || '#3b82f6'}
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" data-action="edit-course" data-id="${course.id}">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" data-action="delete-course" data-id="${course.id}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            );
+        });
+    }
+    
+    // Rooms search
+    const searchRooms = document.getElementById('searchRooms');
+    if (searchRooms) {
+        searchRooms.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            filterTable('roomsTableBody', window.originalData.rooms, searchTerm, (room) => 
+                `${room.name || ''} ${room.department || ''} ${room.capacity || ''}`.toLowerCase(),
+                (filtered) => {
+                    const tbody = document.getElementById('roomsTableBody');
+                    if (!tbody) return;
+                    tbody.innerHTML = filtered.map(room => {
+                        const isExclusive = room.exclusive === true || room.exclusive === 'true' || room.exclusive === 1;
+                        const hasPriority = room.priority === true || room.priority === 'true' || room.priority === 1;
+                        
+                        let priorityStatus = 'Shared';
+                        let priorityClass = 'normal';
+                        if (isExclusive) {
+                            priorityStatus = 'Exclusive';
+                            priorityClass = 'priority';
+                        } else if (hasPriority) {
+                            priorityStatus = 'Priority';
+                            priorityClass = 'priority';
+                        } else {
+                            priorityStatus = 'Shared';
+                            priorityClass = 'normal';
+                        }
+                        
+                        let departmentDisplay = room.department || '';
+                        if (!departmentDisplay) {
+                            if (isExclusive || hasPriority) {
+                                departmentDisplay = 'No Department Assigned';
+                            } else {
+                                departmentDisplay = 'No Room Priority';
+                            }
+                        }
+                        
+                        return `
+                        <tr>
+                            <td>${room.name || ''}</td>
+                            <td>${room.capacity || ''}</td>
+                            <td>${departmentDisplay}</td>
+                            <td>
+                                <span class="status-badge ${priorityClass}">
+                                    ${priorityStatus}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" data-action="edit-room" data-id="${room.id}">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" data-action="delete-room" data-id="${room.id}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    }).join('');
+                }
+            );
+        });
+    }
+}
+
+/**
+ * Filter table rows based on search term
+ */
+function filterTable(tbodyId, data, searchTerm, getSearchText, renderFunction) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    
+    if (!searchTerm) {
+        // If no search term, restore original data
+        if (data.length > 0 && renderFunction) {
+            renderFunction(data);
+        }
+        return;
+    }
+    
+    const filtered = data.filter(item => getSearchText(item).includes(searchTerm));
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = `
+            <tr class="empty-row">
+                <td colspan="10">
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <p>No results found for "${searchTerm}"</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    if (renderFunction) {
+        renderFunction(filtered);
+    }
 }
 
 /**
@@ -1114,7 +1383,7 @@ async function loadDepartments() {
         if (!departments || departments.length === 0) {
             tbody.innerHTML = `
                 <tr class="empty-row">
-                    <td colspan="5">
+                    <td colspan="4">
                         <div class="empty-state">
                             <i class="fas fa-building"></i>
                             <p>No departments found</p>
@@ -1125,24 +1394,13 @@ async function loadDepartments() {
             return;
         }
         
+        // Store original data for search
+        window.originalData.departments = departments;
+        
         tbody.innerHTML = departments.map(dept => `
             <tr>
                 <td>${dept.code || ''}</td>
                 <td>${dept.name || ''}</td>
-                <td>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="
-                            width: 20px; 
-                            height: 20px; 
-                            background-color: ${dept.color || '#3b82f6'}; 
-                            border-radius: 4px; 
-                            border: 1px solid #e5e7eb;
-                        "></div>
-                        <span style="font-family: monospace; font-size: 12px; color: #6b7280;">
-                            ${dept.color || '#3b82f6'}
-                        </span>
-                    </div>
-                </td>
                 <td>${dept.description || 'No description'}</td>
                 <td>
                     <button class="btn btn-sm btn-primary" data-action="edit-department" data-id="${dept.id}">
@@ -1174,6 +1432,9 @@ async function loadFaculty() {
             member.role !== 'superadmin' &&
             String(member.role || '').toLowerCase() !== 'superadmin'
         );
+        
+        // Store original data for search
+        window.originalData.faculty = filteredFaculty || [];
         
         if (!filteredFaculty || filteredFaculty.length === 0) {
             tbody.innerHTML = `
@@ -1441,6 +1702,9 @@ async function loadSubjects() {
         const tbody = document.getElementById('subjectsTableBody');
         console.log('Table body element:', tbody);
         
+        // Store original data for search
+        window.originalData.subjects = subjects || [];
+        
         if (!subjects || subjects.length === 0) {
             console.log('No subjects found, showing empty state');
             tbody.innerHTML = `
@@ -1488,7 +1752,7 @@ async function loadCourses() {
         if (!courses || courses.length === 0) {
             tbody.innerHTML = `
                 <tr class="empty-row">
-                    <td colspan="4">
+                    <td colspan="5">
                         <div class="empty-state">
                             <i class="fas fa-graduation-cap"></i>
                             <p>No courses found</p>
@@ -1499,11 +1763,28 @@ async function loadCourses() {
             return;
         }
         
+        // Store original data for search
+        window.originalData.courses = courses;
+        
         tbody.innerHTML = courses.map(course => `
             <tr>
                 <td>${course.code || ''}</td>
                 <td>${course.name || ''}</td>
                 <td>${course.type || ''}</td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="
+                            width: 20px; 
+                            height: 20px; 
+                            background-color: ${course.color || '#3b82f6'}; 
+                            border-radius: 4px; 
+                            border: 1px solid #e5e7eb;
+                        "></div>
+                        <span style="font-family: monospace; font-size: 12px; color: #6b7280;">
+                            ${course.color || '#3b82f6'}
+                        </span>
+                    </div>
+                </td>
                 <td>
                     <button class="btn btn-sm btn-primary" data-action="edit-course" data-id="${course.id}">
                         <i class="fas fa-edit"></i> Edit
@@ -1535,6 +1816,9 @@ async function loadRooms() {
         });
         
         const tbody = document.getElementById('roomsTableBody');
+        
+        // Store original data for search
+        window.originalData.rooms = rooms || [];
         
         if (!rooms || rooms.length === 0) {
             tbody.innerHTML = `
@@ -2250,60 +2534,6 @@ function showAddDepartmentModal() {
                             font-size: 14px;
                         " placeholder="e.g., Computer Science">
                     </div>
-                    <div style="margin-bottom: 20px;">
-                        <label for="departmentColor" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department Color</label>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <input type="color" id="departmentColor" value="#3b82f6" style="
-                                width: 50px;
-                                height: 40px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                cursor: pointer;
-                            ">
-                            <input type="text" id="departmentColorText" value="#3b82f6" style="
-                                flex: 1;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                                font-family: monospace;
-                            " placeholder="#3b82f6">
-                        </div>
-                        <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="color-preset" data-color="#3b82f6" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #3b82f6; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#10b981" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #10b981; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#f59e0b" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #f59e0b; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#ef4444" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #ef4444; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#8b5cf6" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #8b5cf6; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#06b6d4" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #06b6d4; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#84cc16" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #84cc16; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#f97316" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #f97316; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                        </div>
-                    </div>
                 </form>
             </div>
             <div style="
@@ -2334,34 +2564,6 @@ function showAddDepartmentModal() {
     `;
     
     document.body.appendChild(modal);
-    
-    // Color picker functionality
-    const colorInput = modal.querySelector('#departmentColor');
-    const colorTextInput = modal.querySelector('#departmentColorText');
-    const colorPresets = modal.querySelectorAll('.color-preset');
-    
-    // Sync color picker with text input
-    colorInput.addEventListener('input', () => {
-        colorTextInput.value = colorInput.value;
-    });
-    
-    colorTextInput.addEventListener('input', () => {
-        if (/^#[0-9A-F]{6}$/i.test(colorTextInput.value)) {
-            colorInput.value = colorTextInput.value;
-        }
-    });
-    
-    // Color preset buttons
-    colorPresets.forEach(preset => {
-        preset.addEventListener('click', () => {
-            const color = preset.dataset.color;
-            colorInput.value = color;
-            colorTextInput.value = color;
-            // Update preset selection
-            colorPresets.forEach(p => p.style.borderColor = '#e5e7eb');
-            preset.style.borderColor = '#3b82f6';
-        });
-    });
     
     // Handle save button
     document.getElementById('saveDepartment').addEventListener('click', async () => {
@@ -2452,60 +2654,6 @@ function showEditDepartmentModal(department) {
                             font-size: 14px;
                         ">
                     </div>
-                    <div style="margin-bottom: 20px;">
-                        <label for="editDepartmentColor" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department Color</label>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <input type="color" id="editDepartmentColor" value="${department.color || '#3b82f6'}" style="
-                                width: 50px;
-                                height: 40px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                cursor: pointer;
-                            ">
-                            <input type="text" id="editDepartmentColorText" value="${department.color || '#3b82f6'}" style="
-                                flex: 1;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                                font-family: monospace;
-                            " placeholder="#3b82f6">
-                        </div>
-                        <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="color-preset" data-color="#3b82f6" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #3b82f6; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#10b981" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #10b981; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#f59e0b" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #f59e0b; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#ef4444" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #ef4444; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#8b5cf6" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #8b5cf6; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#06b6d4" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #06b6d4; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#84cc16" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #84cc16; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                            <button type="button" class="color-preset" data-color="#f97316" style="
-                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
-                                background: #f97316; cursor: pointer; transition: all 0.2s;
-                            "></button>
-                        </div>
-                    </div>
                 </form>
             </div>
             <div style="
@@ -2538,41 +2686,6 @@ function showEditDepartmentModal(department) {
     document.body.appendChild(modal);
     
     // Color picker functionality for edit modal
-    const colorInput = modal.querySelector('#editDepartmentColor');
-    const colorTextInput = modal.querySelector('#editDepartmentColorText');
-    const colorPresets = modal.querySelectorAll('.color-preset');
-    
-    // Sync color picker with text input
-    colorInput.addEventListener('input', () => {
-        colorTextInput.value = colorInput.value;
-    });
-    
-    colorTextInput.addEventListener('input', () => {
-        if (/^#[0-9A-F]{6}$/i.test(colorTextInput.value)) {
-            colorInput.value = colorTextInput.value;
-        }
-    });
-    
-    // Color preset buttons
-    colorPresets.forEach(preset => {
-        preset.addEventListener('click', () => {
-            const color = preset.dataset.color;
-            colorInput.value = color;
-            colorTextInput.value = color;
-            // Update preset selection
-            colorPresets.forEach(p => p.style.borderColor = '#e5e7eb');
-            preset.style.borderColor = '#3b82f6';
-        });
-    });
-    
-    // Highlight current color preset
-    const currentColor = department.color || '#3b82f6';
-    colorPresets.forEach(preset => {
-        if (preset.dataset.color === currentColor) {
-            preset.style.borderColor = '#3b82f6';
-        }
-    });
-    
     // Handle save button
     document.getElementById('saveDepartmentChanges').addEventListener('click', async () => {
         await saveDepartmentChanges(department.id, modal);
@@ -2604,16 +2717,14 @@ async function saveDepartment(modal) {
         // Get form values before removing modal
         const codeInput = modal.querySelector('#departmentCode');
         const nameInput = modal.querySelector('#departmentName');
-        const colorInput = modal.querySelector('#departmentColor');
         
-        if (!codeInput || !nameInput || !colorInput) {
+        if (!codeInput || !nameInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
         
         const code = codeInput.value.trim().toUpperCase();
         const name = nameInput.value.trim();
-        const color = colorInput.value.trim();
         
         if (!code || !name) {
             showNotification('Please fill in all required fields', 'error');
@@ -2628,8 +2739,7 @@ async function saveDepartment(modal) {
             },
             body: JSON.stringify({
                 code,
-                name,
-                color
+                name
             })
         });
         
@@ -2655,16 +2765,14 @@ async function saveDepartmentChanges(departmentId, modal) {
         // Get form values before removing modal
         const codeInput = modal.querySelector('#editDepartmentCode');
         const nameInput = modal.querySelector('#editDepartmentName');
-        const colorInput = modal.querySelector('#editDepartmentColor');
         
-        if (!codeInput || !nameInput || !colorInput) {
+        if (!codeInput || !nameInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
         
         const code = codeInput.value.trim().toUpperCase();
         const name = nameInput.value.trim();
-        const color = colorInput.value.trim();
         
         if (!code || !name) {
             showNotification('Please fill in all required fields', 'error');
@@ -2679,8 +2787,7 @@ async function saveDepartmentChanges(departmentId, modal) {
             },
             body: JSON.stringify({
                 code,
-                name,
-                color
+                name
             })
         });
         
@@ -4877,6 +4984,60 @@ function showAddCourseModal() {
                             <option value="strand">Strand</option>
                         </select>
                     </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="courseColor" style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Program/Strand Color</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="courseColor" value="#3b82f6" style="
+                                width: 50px;
+                                height: 40px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                cursor: pointer;
+                            ">
+                            <input type="text" id="courseColorText" value="#3b82f6" style="
+                                flex: 1;
+                                padding: 8px 12px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                font-size: 14px;
+                                font-family: monospace;
+                            " placeholder="#3b82f6">
+                        </div>
+                        <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="color-preset-course" data-color="#3b82f6" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #3b82f6; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course" data-color="#10b981" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #10b981; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course" data-color="#f59e0b" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #f59e0b; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course" data-color="#ef4444" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #ef4444; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course" data-color="#8b5cf6" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #8b5cf6; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course" data-color="#06b6d4" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #06b6d4; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course" data-color="#84cc16" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #84cc16; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course" data-color="#f97316" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #f97316; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div style="
@@ -4907,6 +5068,38 @@ function showAddCourseModal() {
     `;
     
     document.body.appendChild(modal);
+    
+    // Color picker functionality
+    const colorInput = modal.querySelector('#courseColor');
+    const colorTextInput = modal.querySelector('#courseColorText');
+    const colorPresets = modal.querySelectorAll('.color-preset-course');
+    
+    // Sync color picker with text input
+    if (colorInput && colorTextInput) {
+        colorInput.addEventListener('input', () => {
+            colorTextInput.value = colorInput.value;
+        });
+        
+        colorTextInput.addEventListener('input', () => {
+            if (/^#[0-9A-F]{6}$/i.test(colorTextInput.value)) {
+                colorInput.value = colorTextInput.value;
+            }
+        });
+    }
+    
+    // Color preset buttons
+    if (colorPresets) {
+        colorPresets.forEach(preset => {
+            preset.addEventListener('click', () => {
+                const color = preset.dataset.color;
+                if (colorInput) colorInput.value = color;
+                if (colorTextInput) colorTextInput.value = color;
+                // Update preset selection
+                colorPresets.forEach(p => p.style.borderColor = '#e5e7eb');
+                preset.style.borderColor = '#3b82f6';
+            });
+        });
+    }
     
     // Handle save button
     document.getElementById('saveCourseBtn').addEventListener('click', () => saveCourse(modal));
@@ -5009,6 +5202,60 @@ function showEditCourseModal(course) {
                             <option value="strand" ${course.type === 'strand' ? 'selected' : ''}>Strand</option>
                         </select>
                     </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="editCourseColor" style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Program/Strand Color</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="editCourseColor" value="${course.color || '#3b82f6'}" style="
+                                width: 50px;
+                                height: 40px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                cursor: pointer;
+                            ">
+                            <input type="text" id="editCourseColorText" value="${course.color || '#3b82f6'}" style="
+                                flex: 1;
+                                padding: 8px 12px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                font-size: 14px;
+                                font-family: monospace;
+                            " placeholder="#3b82f6">
+                        </div>
+                        <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="color-preset-course-edit" data-color="#3b82f6" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #3b82f6; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course-edit" data-color="#10b981" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #10b981; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course-edit" data-color="#f59e0b" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #f59e0b; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course-edit" data-color="#ef4444" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #ef4444; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course-edit" data-color="#8b5cf6" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #8b5cf6; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course-edit" data-color="#06b6d4" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #06b6d4; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course-edit" data-color="#84cc16" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #84cc16; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                            <button type="button" class="color-preset-course-edit" data-color="#f97316" style="
+                                width: 30px; height: 30px; border-radius: 4px; border: 2px solid #e5e7eb; 
+                                background: #f97316; cursor: pointer; transition: all 0.2s;
+                            "></button>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div style="
@@ -5040,8 +5287,48 @@ function showEditCourseModal(course) {
     
     document.body.appendChild(modal);
     
+    // Color picker functionality for edit modal
+    const colorInput = modal.querySelector('#editCourseColor');
+    const colorTextInput = modal.querySelector('#editCourseColorText');
+    const colorPresets = modal.querySelectorAll('.color-preset-course-edit');
+    
+    // Sync color picker with text input
+    if (colorInput && colorTextInput) {
+        colorInput.addEventListener('input', () => {
+            colorTextInput.value = colorInput.value;
+        });
+        
+        colorTextInput.addEventListener('input', () => {
+            if (/^#[0-9A-F]{6}$/i.test(colorTextInput.value)) {
+                colorInput.value = colorTextInput.value;
+            }
+        });
+    }
+    
+    // Color preset buttons
+    if (colorPresets) {
+        colorPresets.forEach(preset => {
+            preset.addEventListener('click', () => {
+                const color = preset.dataset.color;
+                if (colorInput) colorInput.value = color;
+                if (colorTextInput) colorTextInput.value = color;
+                // Update preset selection
+                colorPresets.forEach(p => p.style.borderColor = '#e5e7eb');
+                preset.style.borderColor = '#3b82f6';
+            });
+        });
+        
+        // Highlight current color preset
+        const currentColor = course.color || '#3b82f6';
+        colorPresets.forEach(preset => {
+            if (preset.dataset.color === currentColor) {
+                preset.style.borderColor = '#3b82f6';
+            }
+        });
+    }
+    
     // Handle save button
-    document.getElementById('saveCourseChangesBtn').addEventListener('click', () => saveCourseChanges(course.id, modal));
+    document.getElementById('saveCourseChangesBtn').addEventListener('click', () => saveCourseChanges(course.id, modal, course));
     
     // Handle cancel button
     modal.querySelector('.btn-secondary').addEventListener('click', () => {
@@ -5069,6 +5356,8 @@ async function saveCourse(modal) {
         const code = modal.querySelector('#courseCode').value.trim();
         const name = modal.querySelector('#courseName').value.trim();
         const type = modal.querySelector('#courseType').value;
+        const colorInput = modal.querySelector('#courseColor');
+        const color = colorInput ? colorInput.value.trim() : '#3b82f6';
         
         if (!code || !name || !type) {
             showNotification('Please fill in all required fields', 'error');
@@ -5084,7 +5373,8 @@ async function saveCourse(modal) {
             body: JSON.stringify({
                 code,
                 name,
-                type
+                type,
+                color
             })
         });
         
@@ -5109,14 +5399,24 @@ async function saveCourse(modal) {
 /**
  * Save course changes
  */
-async function saveCourseChanges(courseId, modal) {
+async function saveCourseChanges(courseId, modal, course) {
     try {
         const code = modal.querySelector('#editCourseCode').value.trim();
         const name = modal.querySelector('#editCourseName').value.trim();
         const type = modal.querySelector('#editCourseType').value;
+        const colorInput = modal.querySelector('#editCourseColor');
+        const color = colorInput ? colorInput.value.trim() : '#3b82f6';
+        
+        // Get departmentId from the original course object
+        const departmentId = course?.departmentId;
         
         if (!code || !name || !type) {
             showNotification('Please fill in all required fields', 'error');
+            return;
+        }
+        
+        if (!departmentId) {
+            showNotification('Department information is missing. Please refresh and try again.', 'error');
             return;
         }
         
@@ -5129,17 +5429,21 @@ async function saveCourseChanges(courseId, modal) {
             body: JSON.stringify({
                 code,
                 name,
-                type
+                type,
+                departmentId,
+                color
             })
         });
         
         if (!response.ok) {
-            const errorData = await response.json();
+            const errorData = await response.json().catch(() => ({}));
             if (response.status === 409) {
                 showNotification(`Program/Strand with code "${code}" already exists. Please use a different code.`, 'error');
                 return;
             }
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            const errorMessage = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
+            showNotification(errorMessage, 'error');
+            throw new Error(errorMessage);
         }
         
         showNotification('Program/Strand updated successfully', 'success');
@@ -5147,7 +5451,10 @@ async function saveCourseChanges(courseId, modal) {
         loadCourses(); // Refresh the courses list
     } catch (error) {
         console.error('Error updating course:', error);
-        showNotification('Failed to update program/strand', 'error');
+        // Error notification is already shown above if response was not ok
+        if (!error.message || !error.message.includes('HTTP error')) {
+            showNotification('Failed to update program/strand', 'error');
+        }
     }
 }
 
