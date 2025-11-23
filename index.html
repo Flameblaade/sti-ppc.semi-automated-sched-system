@@ -430,7 +430,7 @@
             </div>
             <div class="modal-body">
                 <!-- Stats Section -->
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px;">
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; color: white; text-align: center;">
                         <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 5px;">Total Classes</div>
                         <div style="font-size: 2rem; font-weight: 700;" id="detailsTotalClasses">0</div>
@@ -439,9 +439,27 @@
                         <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 5px;">Total Hours</div>
                         <div style="font-size: 2rem; font-weight: 700;" id="detailsTotalHours">0</div>
                     </div>
-                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 8px; color: white; text-align: center;">
-                        <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 5px;">Conflicts</div>
-                        <div style="font-size: 2rem; font-weight: 700;" id="detailsConflicts">0</div>
+                </div>
+                
+                <!-- Search Bar -->
+                <div style="margin-bottom: 20px;">
+                    <input type="text" id="classesDetailsSearch" placeholder="Search classes by subject, faculty, program, or department..." style="
+                        width: 100%;
+                        padding: 12px 16px;
+                        border: 2px solid #e2e8f0;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    ">
+                </div>
+                
+                <!-- Teacher Unit Loads Section -->
+                <div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <h4 style="margin: 0 0 12px 0; color: #1e293b; font-size: 1rem;">
+                        <i class="fas fa-chalkboard-teacher"></i> Teacher Unit Loads
+                    </h4>
+                    <div id="teacherUnitLoads" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; font-size: 0.9rem;">
+                        <!-- Teacher unit loads will be populated here -->
                     </div>
                 </div>
                 

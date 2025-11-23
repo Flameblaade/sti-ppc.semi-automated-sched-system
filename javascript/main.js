@@ -705,6 +705,9 @@ document.addEventListener('DOMContentLoaded', function() {
             let subjectCode = '';
             let subjectName = selectedSubjectName;
             
+            // Declare subject variable outside try block so it's accessible later
+            let subject = null;
+            
             // Try to get subject data to find lecture/lab hours
             try {
                 let subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
@@ -734,7 +737,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Try multiple ways to find the subject
-                let subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
+                subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
                 
                 // If not found by ID/code, try by name
                 if (!subject) {
@@ -751,7 +754,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         code: subjectCode,
                         name: subjectName,
                         lectureHours: lectureHours,
-                        labHours: labHours
+                        labHours: labHours,
+                        units: subject.units
                     });
                 } else {
                     console.warn('Subject not found in data. Selected ID:', selectedSubjectId, 'Selected Name:', selectedSubjectName);
@@ -774,15 +778,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            // Get units from subject (preferred) or calculate from hours
+            let subjectUnits = 0;
+            if (subject && subject.units) {
+                subjectUnits = parseFloat(subject.units) || 0;
+            }
+            
             // Create ONE class with both lecture and lab hours (if any)
             // The generation logic will split it into separate schedules if both hours exist
-            const unitLoad = lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3);
+            // Use subject units if available, otherwise fall back to hours
+            const unitLoad = subjectUnits > 0 ? subjectUnits : (lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3));
             const classData = {
                 id: 'class-' + Date.now(),
                 subject: subjectName,
                 subjectCode: subjectCode,
                 subjectId: selectedSubjectId,
-                unitLoad: unitLoad, // Default unit load (will be overridden during generation if both hours exist)
+                unitLoad: unitLoad, // Use subject units (connected to subject)
+                units: subjectUnits > 0 ? subjectUnits : unitLoad, // Store units separately for clarity
                 classType: lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : (labHours > 0 ? 'laboratory' : classType)),
                 lectureHours: lectureHours,
                 labHours: labHours,
@@ -1509,11 +1521,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     if (hasLecture && hasLab) {
                         console.log('Class has both lecture and lab - will create two schedules');
+                        // Get subject units - count units only once (on lecture), lab gets 0 units for counting
+                        const subjectUnits = parseFloat(classItem.units || classItem.unitLoad || 0);
                         // Create two separate class items for scheduling
                         const lectureClass = {
                             ...classItem,
                             id: classItem.id + '-lec',
-                            unitLoad: classItem.lectureHours,
+                            unitLoad: subjectUnits, // Full subject units counted on lecture
+                            units: subjectUnits,
                             classType: 'lecture',
                             lectureHours: classItem.lectureHours,
                             labHours: 0
@@ -1522,7 +1537,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         const labClass = {
                             ...classItem,
                             id: classItem.id + '-lab',
-                            unitLoad: classItem.labHours,
+                            unitLoad: 0, // Lab doesn't count units separately (units already counted on lecture)
+                            units: 0,
                             classType: 'laboratory',
                             lectureHours: 0,
                             labHours: classItem.labHours
@@ -2177,10 +2193,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         extendedProps: {
                             originalClassId: classItem.id,
                             subject: classItem.subject,
+                            subjectId: classItem.subjectId || null,
                             course: classItem.course,
                             courseId: classItem.courseId || classItem.programId || null,
                             faculty: classItem.faculty,
-                            unitLoad: classItem.unitLoad,
+                            facultyId: classItem.facultyId || null,
+                            unitLoad: classItem.unitLoad || classItem.units || 0,
                             classType: classItem.classType,
                             lectureHours: classItem.lectureHours || 0,
                             labHours: classItem.labHours || 0,
@@ -6186,65 +6204,127 @@ function showClassesDetailsModal() {
             (parseInt(cls.unitLoad) || 3);
         return sum + hours;
     }, 0);
-    const conflicts = 0; // Can be implemented later
     
     // Update stats
     const totalClassesEl = document.getElementById('detailsTotalClasses');
     const totalHoursEl = document.getElementById('detailsTotalHours');
-    const conflictsEl = document.getElementById('detailsConflicts');
     
     if (totalClassesEl) totalClassesEl.textContent = totalClasses;
     if (totalHoursEl) totalHoursEl.textContent = totalHours;
-    if (conflictsEl) conflictsEl.textContent = conflicts;
     
-    // Update classes list
-    const classesListEl = document.getElementById('createdClassesDetailsList');
-    if (classesListEl) {
-        if (classes.length === 0) {
-            classesListEl.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-calendar-plus"></i>
-                    <h4>No classes created yet</h4>
-                    <p>Start by adding your first class</p>
-                </div>
-            `;
+    // Calculate teacher unit loads
+    const teacherUnitLoads = {};
+    classes.forEach(cls => {
+        const facultyName = cls.faculty || 'Unassigned';
+        const units = parseFloat(cls.units || cls.unitLoad || 0);
+        if (!teacherUnitLoads[facultyName]) {
+            teacherUnitLoads[facultyName] = 0;
+        }
+        teacherUnitLoads[facultyName] += units;
+    });
+    
+    // Display teacher unit loads
+    const teacherUnitLoadsEl = document.getElementById('teacherUnitLoads');
+    if (teacherUnitLoadsEl) {
+        const teachers = Object.keys(teacherUnitLoads).sort();
+        if (teachers.length === 0) {
+            teacherUnitLoadsEl.innerHTML = '<div style="color: #64748b; font-style: italic;">No teachers assigned</div>';
         } else {
-            classesListEl.innerHTML = classes.map(cls => {
-                const lectureHours = parseInt(cls.lectureHours) || 0;
-                const labHours = parseInt(cls.labHours) || 0;
-                const totalClassHours = lectureHours + labHours || (parseInt(cls.unitLoad) || 3);
-                const classType = cls.classType || (lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : 'laboratory'));
-                
+            teacherUnitLoadsEl.innerHTML = teachers.map(teacher => {
+                const totalUnits = teacherUnitLoads[teacher].toFixed(1);
                 return `
-                    <div style="padding: 16px; margin-bottom: 12px; background: white; border-radius: 8px; border-left: 4px solid #4a90e2; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #333;">${cls.subject || 'Unknown Subject'}</h3>
-                            <span style="background: #4a90e2; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
-                                ${classType}
-                            </span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.9rem; color: #666;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-graduation-cap" style="color: #4a90e2; width: 16px;"></i>
-                                <span><strong>Program:</strong> ${cls.course || 'N/A'}</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-chalkboard-teacher" style="color: #4a90e2; width: 16px;"></i>
-                                <span><strong>Faculty:</strong> ${cls.faculty || 'N/A'}</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-clock" style="color: #4a90e2; width: 16px;"></i>
-                                <span><strong>Hours:</strong> ${totalClassHours} ${lectureHours > 0 && labHours > 0 ? `(${lectureHours}L + ${labHours}Lab)` : ''}</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-building" style="color: #4a90e2; width: 16px;"></i>
-                                <span><strong>Department:</strong> ${cls.department || 'N/A'}</span>
-                            </div>
+                    <div style="padding: 8px 12px; background: white; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${teacher}</div>
+                        <div style="color: #64748b; font-size: 0.85rem;">
+                            <i class="fas fa-book"></i> ${totalUnits} units
                         </div>
                     </div>
                 `;
             }).join('');
         }
+    }
+    
+    // Function to render classes list
+    function renderClassesList(filteredClasses = classes) {
+        const classesListEl = document.getElementById('createdClassesDetailsList');
+        if (classesListEl) {
+            if (filteredClasses.length === 0) {
+                classesListEl.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h4>No classes found</h4>
+                        <p>Try adjusting your search</p>
+                    </div>
+                `;
+            } else {
+                classesListEl.innerHTML = filteredClasses.map(cls => {
+                    const lectureHours = parseInt(cls.lectureHours) || 0;
+                    const labHours = parseInt(cls.labHours) || 0;
+                    const totalClassHours = lectureHours + labHours || (parseInt(cls.unitLoad) || 3);
+                    const classType = cls.classType || (lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : 'laboratory'));
+                    const units = parseFloat(cls.units || cls.unitLoad || 0).toFixed(1);
+                    
+                    return `
+                        <div class="class-detail-item" style="padding: 16px; margin-bottom: 12px; background: white; border-radius: 8px; border-left: 4px solid #4a90e2; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #333;">${cls.subject || 'Unknown Subject'}</h3>
+                                <span style="background: #4a90e2; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                                    ${classType}
+                                </span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.9rem; color: #666;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-graduation-cap" style="color: #4a90e2; width: 16px;"></i>
+                                    <span><strong>Program:</strong> ${cls.course || 'N/A'}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-chalkboard-teacher" style="color: #4a90e2; width: 16px;"></i>
+                                    <span><strong>Faculty:</strong> ${cls.faculty || 'N/A'}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-book" style="color: #4a90e2; width: 16px;"></i>
+                                    <span><strong>Units:</strong> ${units}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-clock" style="color: #4a90e2; width: 16px;"></i>
+                                    <span><strong>Hours:</strong> ${totalClassHours} ${lectureHours > 0 && labHours > 0 ? `(${lectureHours}L + ${labHours}Lab)` : ''}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-building" style="color: #4a90e2; width: 16px;"></i>
+                                    <span><strong>Department:</strong> ${cls.department || 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+    }
+    
+    // Initial render
+    renderClassesList();
+    
+    // Set up search functionality
+    const searchInput = document.getElementById('classesDetailsSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            if (searchTerm === '') {
+                renderClassesList(classes);
+            } else {
+                const filtered = classes.filter(cls => {
+                    const subject = (cls.subject || '').toLowerCase();
+                    const faculty = (cls.faculty || '').toLowerCase();
+                    const course = (cls.course || '').toLowerCase();
+                    const department = (cls.department || '').toLowerCase();
+                    return subject.includes(searchTerm) || 
+                           faculty.includes(searchTerm) || 
+                           course.includes(searchTerm) || 
+                           department.includes(searchTerm);
+                });
+                renderClassesList(filtered);
+            }
+        });
     }
     
     // Show modal

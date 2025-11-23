@@ -2354,13 +2354,20 @@ app.post('/api/faculty', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
 app.post('/api/faculty/create', isAuthenticated, isAdminOrSuperAdmin, async (req, res) => {
   console.log('POST /api/faculty/create - Route hit');
   try {
-    const { firstName, middleName, lastName, email, departmentId } = req.body;
-    console.log('Request body:', { firstName, middleName, lastName, email, departmentId });
+    const { firstName, middleName, lastName, email, departmentId, employmentType, mixedTeaching } = req.body;
+    console.log('Request body:', { firstName, middleName, lastName, email, departmentId, employmentType, mixedTeaching });
     
     // Validate required fields (email is optional)
-    if (!firstName || !lastName || !departmentId) {
+    if (!firstName || !lastName || !departmentId || !employmentType) {
       return res.status(400).json({ 
-        error: 'First name, last name, and department ID are required' 
+        error: 'First name, last name, department ID, and employment type are required' 
+      });
+    }
+    
+    // Validate employment type
+    if (employmentType !== 'full-time' && employmentType !== 'part-time') {
+      return res.status(400).json({ 
+        error: 'Invalid employment type. Must be "full-time" or "part-time"' 
       });
     }
     
@@ -2400,6 +2407,8 @@ app.post('/api/faculty/create', isAuthenticated, isAdminOrSuperAdmin, async (req
       departmentId: departmentId,
       department: department.name,
       title: 'Instructor',
+      employmentType: employmentType,
+      mixedTeaching: mixedTeaching === true,
       createdAt: new Date().toISOString(),
       createdBy: req.user.id,
       updatedAt: new Date().toISOString(),
@@ -2849,7 +2858,9 @@ app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
       email,
       firstName,
       middleName,
-      lastName
+      lastName,
+      employmentType,
+      mixedTeaching
     } = req.body;
     
     // Find the faculty member
@@ -2903,6 +2914,20 @@ app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
         return res.status(400).json({ error: 'Email already exists in the system' });
       }
       users[facultyIndex].email = email.toLowerCase().trim();
+    }
+    
+    // Update employment type if provided
+    if (employmentType !== undefined && employmentType !== null) {
+      if (employmentType === 'full-time' || employmentType === 'part-time') {
+        users[facultyIndex].employmentType = employmentType;
+      } else {
+        return res.status(400).json({ error: 'Invalid employment type. Must be "full-time" or "part-time"' });
+      }
+    }
+    
+    // Update mixed teaching flag if provided
+    if (mixedTeaching !== undefined && mixedTeaching !== null) {
+      users[facultyIndex].mixedTeaching = mixedTeaching === true;
     }
     
     users[facultyIndex].updatedAt = new Date().toISOString();
@@ -4331,6 +4356,74 @@ app.get('/api/schedule/unassigned', isAuthenticated, isAdminOrSuperAdmin, (req, 
   }
 });
 
+// Helper function to detect if department is SHS
+function isSHSDepartment(department) {
+  if (!department) return false;
+  const deptName = String(department.name || '').toLowerCase();
+  const deptCode = String(department.code || '').toLowerCase();
+  return deptName.includes('shs') || 
+         deptName.includes('senior high') || 
+         deptCode.includes('shs') ||
+         deptName.includes('senior') && deptName.includes('high');
+}
+
+// Helper function to calculate current faculty units
+function calculateFacultyUnits(facultyId) {
+  let totalUnits = 0;
+  schedule.forEach(event => {
+    const extendedProps = event.extendedProps || {};
+    if (extendedProps.facultyId === facultyId) {
+      // Try to get units from extendedProps first
+      if (extendedProps.unitLoad) {
+        totalUnits += parseFloat(extendedProps.unitLoad) || 0;
+      } else if (extendedProps.subjectId) {
+        // If subjectId is available, look up the subject
+        const subject = subjects.find(s => s.id === extendedProps.subjectId);
+        if (subject && subject.units) {
+          totalUnits += parseFloat(subject.units) || 0;
+        }
+      } else if (extendedProps.subject) {
+        // Try to find subject by name
+        const subject = subjects.find(s => 
+          s.name && s.name.toLowerCase() === extendedProps.subject.toLowerCase()
+        );
+        if (subject && subject.units) {
+          totalUnits += parseFloat(subject.units) || 0;
+        }
+      }
+    }
+  });
+  return totalUnits;
+}
+
+// Helper function to get unit limit for a faculty member
+function getFacultyUnitLimit(facultyMember) {
+  // Part-time faculty: max 15 units (regardless of teaching type)
+  if (facultyMember.employmentType === 'part-time') {
+    return { max: 15, allowOverload: false };
+  }
+  
+  // Mixed teaching faculty (full-time): can teach both SHS and Tertiary, up to 30 units
+  if (facultyMember.mixedTeaching === true) {
+    return { max: 30, allowOverload: false };
+  }
+  
+  // Get department to determine if SHS or Tertiary
+  const department = departments.find(d => d.id === facultyMember.departmentId);
+  if (!department) {
+    // Default to tertiary if department not found
+    return { max: 24, allowOverload: true, overloadMax: 30 };
+  }
+  
+  if (isSHSDepartment(department)) {
+    // SHS teachers: 27 units, no overload
+    return { max: 27, allowOverload: false };
+  } else {
+    // Tertiary teachers: 24 units base, overload up to 30
+    return { max: 24, allowOverload: true, overloadMax: 30 };
+  }
+}
+
 // Update schedule faculty assignment
 app.put('/api/schedule/assign-faculty', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   try {
@@ -4348,6 +4441,66 @@ app.put('/api/schedule/assign-faculty', isAuthenticated, isAdminOrSuperAdmin, (r
     const facultyMember = users.find(user => user.id === facultyId && user.departmentId);
     if (!facultyMember) {
       return res.status(404).json({ error: 'Faculty member not found' });
+    }
+    
+    // Only validate unit limits for verified faculty
+    if (facultyMember.verified === true || facultyMember.emailVerified === true) {
+      // Calculate current units
+      const currentUnits = calculateFacultyUnits(facultyId);
+      
+      // Calculate units for new assignments
+      let newUnits = 0;
+      schedule.forEach(event => {
+        if (scheduleIds.includes(event.id)) {
+          const extendedProps = event.extendedProps || {};
+          // Only count if not already assigned to this faculty
+          if (extendedProps.facultyId !== facultyId) {
+            if (extendedProps.unitLoad) {
+              newUnits += parseFloat(extendedProps.unitLoad) || 0;
+            } else if (extendedProps.subjectId) {
+              const subject = subjects.find(s => s.id === extendedProps.subjectId);
+              if (subject && subject.units) {
+                newUnits += parseFloat(subject.units) || 0;
+              }
+            } else if (extendedProps.subject) {
+              const subject = subjects.find(s => 
+                s.name && s.name.toLowerCase() === extendedProps.subject.toLowerCase()
+              );
+              if (subject && subject.units) {
+                newUnits += parseFloat(subject.units) || 0;
+              }
+            }
+          }
+        }
+      });
+      
+      const totalUnits = currentUnits + newUnits;
+      const unitLimit = getFacultyUnitLimit(facultyMember);
+      
+      // Validate unit limits
+      if (unitLimit.allowOverload) {
+        // Tertiary: can go up to overloadMax
+        if (totalUnits > unitLimit.overloadMax) {
+          return res.status(400).json({ 
+            error: `Unit limit exceeded. Current: ${currentUnits.toFixed(1)} units, Adding: ${newUnits.toFixed(1)} units, Total: ${totalUnits.toFixed(1)} units. Maximum allowed (with overload): ${unitLimit.overloadMax} units.` 
+          });
+        }
+      } else {
+        // SHS, Part-time, or Mixed Teaching: strict limit
+        if (totalUnits > unitLimit.max) {
+          let facultyType = '';
+          if (facultyMember.employmentType === 'part-time') {
+            facultyType = 'Part-time';
+          } else if (facultyMember.mixedTeaching === true) {
+            facultyType = 'Mixed Teaching (Full-time)';
+          } else {
+            facultyType = 'SHS';
+          }
+          return res.status(400).json({ 
+            error: `Unit limit exceeded for ${facultyType} faculty. Current: ${currentUnits.toFixed(1)} units, Adding: ${newUnits.toFixed(1)} units, Total: ${totalUnits.toFixed(1)} units. Maximum allowed: ${unitLimit.max} units.` 
+          });
+        }
+      }
     }
     
     const facultyName = formatFullName(facultyMember.firstName || '', facultyMember.middleName || '', facultyMember.lastName || '') || facultyMember.email || 'Faculty';

@@ -1007,7 +1007,7 @@ async function loadPendingAccounts() {
         if (!filteredPendingUsers || filteredPendingUsers.length === 0) {
             tbody.innerHTML = `
                 <tr class="empty-row">
-                    <td colspan="6">
+                    <td colspan="5">
                         <div class="empty-state">
                             <i class="fas fa-clock"></i>
                             <p>No users awaiting verification</p>
@@ -1029,14 +1029,6 @@ async function loadPendingAccounts() {
                 <td>${user.department || ''}</td>
                 <td>${user.role || ''}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
-                <td>
-                    <button class="btn btn-sm btn-action-approve" data-action="approve" data-id="${user.id}">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                    <button class="btn btn-sm btn-action-reject" data-action="reject" data-id="${user.id}">
-                        <i class="fas fa-times"></i> Reject
-                    </button>
-                </td>
             </tr>
         `;
         }).join('');
@@ -1198,7 +1190,7 @@ async function loadFaculty() {
         }
         
         tbody.innerHTML = filteredFaculty.map(member => {
-            const isVerified = member.verified === true;
+            const isVerified = member.verified === true || member.emailVerified === true;
             const statusBadge = isVerified 
                 ? `<span style="color: #5cb85c; font-weight: bold;"><i class="fas fa-check-circle"></i> Verified</span>`
                 : `<span style="color: #f0ad4e; font-weight: bold;"><i class="fas fa-clock"></i> Pending</span>`;
@@ -1207,13 +1199,19 @@ async function loadFaculty() {
                 : `<button class="btn btn-sm" data-action="send-verification" data-id="${member.id}" data-email="${member.email || ''}" style="background: #e0e7ff; color: #3730a3;">
                         <i class="fas fa-envelope"></i> Send
                     </button>`;
+            const employmentTypeBadge = member.employmentType 
+                ? `<span style="color: #64748b; font-size: 12px; display: block; margin-top: 3px;">
+                    <i class="fas fa-briefcase"></i> ${member.employmentType === 'full-time' ? 'Full-time' : 'Part-time'}
+                    ${member.mixedTeaching === true ? ' <span style="color: #8b5cf6;">(Mixed Teaching)</span>' : ''}
+                   </span>`
+                : '';
             
             return `
             <tr>
                 <td>${formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || ''}</td>
                 <td>${member.email || ''}</td>
                 <td>${member.department || ''}</td>
-                <td>${statusBadge}</td>
+                <td>${statusBadge}${employmentTypeBadge}</td>
                 <td>
                     ${verificationButton}
                     <button class="btn btn-sm btn-primary" data-action="edit-faculty" data-id="${member.id}">
@@ -2727,7 +2725,10 @@ function showAddFacultyModal() {
             padding: 0;
             max-width: 700px;
             width: 90%;
+            max-height: 90vh;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
         ">
             <div style="
                 padding: 20px;
@@ -2735,6 +2736,7 @@ function showAddFacultyModal() {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                flex-shrink: 0;
             ">
                 <h5 style="margin: 0; color: #1e293b;">Add Faculty Member</h5>
                 <button type="button" class="close-btn" style="
@@ -2745,7 +2747,12 @@ function showAddFacultyModal() {
                     color: #64748b;
                 ">&times;</button>
             </div>
-            <div style="padding: 20px;">
+            <div style="
+                padding: 20px;
+                overflow-y: auto;
+                flex: 1;
+                max-height: calc(90vh - 140px);
+            ">
                 <div style="margin-bottom: 20px;">
                     <label for="facultyFirstName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">First Name <span style="color: red;">*</span></label>
                     <input type="text" id="facultyFirstName" required style="
@@ -2802,6 +2809,40 @@ function showAddFacultyModal() {
                         <option value="">Select Department</option>
                     </select>
                 </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="facultyEmploymentType" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Employment Type <span style="color: red;">*</span></label>
+                    <select id="facultyEmploymentType" required style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                    ">
+                        <option value="">Select Employment Type</option>
+                        <option value="full-time">Full-time</option>
+                        <option value="part-time">Part-time</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="facultyMixedTeaching" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Teaching Type</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="facultyMixedTeaching" style="
+                            width: 18px;
+                            height: 18px;
+                            cursor: pointer;
+                        ">
+                        <label for="facultyMixedTeaching" style="margin: 0; cursor: pointer; color: #374151;">
+                            Mixed Teaching (teaches both SHS and Tertiary)
+                        </label>
+                    </div>
+                    <small style="color: #64748b; font-size: 12px; display: block; margin-top: 5px;">
+                        <strong>Unit Limits:</strong><br>
+                        • SHS Teachers: 27 units (no overload)<br>
+                        • Tertiary Teachers: 24 units base, up to 30 units with overload<br>
+                        • Mixed Teaching: Up to 30 units total (full-time) or 15 units (part-time)<br>
+                        • Part-time: Maximum 15 units
+                    </small>
+                </div>
             </div>
             <div style="
                 padding: 20px;
@@ -2809,6 +2850,7 @@ function showAddFacultyModal() {
                 display: flex;
                 gap: 10px;
                 justify-content: flex-end;
+                flex-shrink: 0;
             ">
                 <button type="button" class="btn btn-secondary" style="
                     background: #6b7280;
@@ -3003,8 +3045,10 @@ async function saveFaculty(modal) {
         const lastNameInput = modal.querySelector('#facultyLastName');
         const emailInput = modal.querySelector('#facultyEmail');
         const departmentInput = modal.querySelector('#facultyDepartment');
+        const employmentTypeInput = modal.querySelector('#facultyEmploymentType');
+        const mixedTeachingInput = modal.querySelector('#facultyMixedTeaching');
         
-        if (!firstNameInput || !lastNameInput || !emailInput || !departmentInput) {
+        if (!firstNameInput || !lastNameInput || !emailInput || !departmentInput || !employmentTypeInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
@@ -3014,9 +3058,11 @@ async function saveFaculty(modal) {
         const lastName = lastNameInput.value.trim();
         const email = emailInput.value.trim().toLowerCase() || null;
         const departmentId = departmentInput.value;
+        const employmentType = employmentTypeInput.value;
+        const mixedTeaching = mixedTeachingInput ? mixedTeachingInput.checked : false;
         
-        if (!firstName || !lastName || !departmentId) {
-            showNotification('Please fill in all required fields (First Name, Last Name, Department)', 'error');
+        if (!firstName || !lastName || !departmentId || !employmentType) {
+            showNotification('Please fill in all required fields (First Name, Last Name, Department, Employment Type)', 'error');
             return;
         }
         
@@ -3040,7 +3086,9 @@ async function saveFaculty(modal) {
                 middleName: middleName || '',
                 lastName,
                 email,
-                departmentId
+                departmentId,
+                employmentType,
+                mixedTeaching
             })
         });
         
@@ -3084,7 +3132,10 @@ function showEditFacultyModal(faculty) {
             padding: 0;
             max-width: 700px;
             width: 90%;
+            max-height: 90vh;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
         ">
             <div style="
                 padding: 20px;
@@ -3092,6 +3143,7 @@ function showEditFacultyModal(faculty) {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                flex-shrink: 0;
             ">
                 <h5 style="margin: 0; color: #1e293b;">Update Faculty Assignment</h5>
                 <button type="button" class="close-btn" style="
@@ -3102,7 +3154,12 @@ function showEditFacultyModal(faculty) {
                     color: #64748b;
                 ">&times;</button>
             </div>
-            <div style="padding: 20px;">
+            <div style="
+                padding: 20px;
+                overflow-y: auto;
+                flex: 1;
+                max-height: calc(90vh - 140px);
+            ">
                 <div style="margin-bottom: 20px;">
                     <label for="editFacultyFirstName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">First Name <span style="color: red;">*</span></label>
                     <input type="text" id="editFacultyFirstName" required value="${faculty.firstName || ''}" style="
@@ -3159,6 +3216,40 @@ function showEditFacultyModal(faculty) {
                         <option value="">Select Department</option>
                     </select>
                 </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="editFacultyEmploymentType" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Employment Type <span style="color: red;">*</span></label>
+                    <select id="editFacultyEmploymentType" required style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 4px;
+                        font-size: 14px;
+                    ">
+                        <option value="">Select Employment Type</option>
+                        <option value="full-time" ${faculty.employmentType === 'full-time' ? 'selected' : ''}>Full-time</option>
+                        <option value="part-time" ${faculty.employmentType === 'part-time' ? 'selected' : ''}>Part-time</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="editFacultyMixedTeaching" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Teaching Type</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="editFacultyMixedTeaching" ${faculty.mixedTeaching === true ? 'checked' : ''} style="
+                            width: 18px;
+                            height: 18px;
+                            cursor: pointer;
+                        ">
+                        <label for="editFacultyMixedTeaching" style="margin: 0; cursor: pointer; color: #374151;">
+                            Mixed Teaching (teaches both SHS and Tertiary)
+                        </label>
+                    </div>
+                    <small style="color: #64748b; font-size: 12px; display: block; margin-top: 5px;">
+                        <strong>Unit Limits:</strong><br>
+                        • SHS Teachers: 27 units (no overload)<br>
+                        • Tertiary Teachers: 24 units base, up to 30 units with overload<br>
+                        • Mixed Teaching: Up to 30 units total (full-time) or 15 units (part-time)<br>
+                        • Part-time: Maximum 15 units
+                    </small>
+                </div>
             </div>
             <div style="
                 padding: 20px;
@@ -3166,6 +3257,7 @@ function showEditFacultyModal(faculty) {
                 display: flex;
                 gap: 10px;
                 justify-content: flex-end;
+                flex-shrink: 0;
             ">
                 <button type="button" class="btn btn-secondary" style="
                     background: #6b7280;
@@ -3234,8 +3326,10 @@ async function saveFacultyChanges(facultyId, modal) {
         const lastNameInput = modal.querySelector('#editFacultyLastName');
         const emailInput = modal.querySelector('#editFacultyEmail');
         const departmentInput = modal.querySelector('#editFacultyDepartment');
+        const employmentTypeInput = modal.querySelector('#editFacultyEmploymentType');
+        const mixedTeachingInput = modal.querySelector('#editFacultyMixedTeaching');
         
-        if (!firstNameInput || !lastNameInput || !departmentInput) {
+        if (!firstNameInput || !lastNameInput || !departmentInput || !employmentTypeInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
@@ -3245,6 +3339,8 @@ async function saveFacultyChanges(facultyId, modal) {
         const lastName = lastNameInput.value.trim();
         const email = emailInput ? emailInput.value.trim() : '';
         const departmentId = departmentInput.value;
+        const employmentType = employmentTypeInput.value;
+        const mixedTeaching = mixedTeachingInput ? mixedTeachingInput.checked : false;
         
         if (!firstName || !lastName) {
             showNotification('Please fill in first name and last name', 'error');
@@ -3253,6 +3349,11 @@ async function saveFacultyChanges(facultyId, modal) {
         
         if (!departmentId) {
             showNotification('Please select a department', 'error');
+            return;
+        }
+        
+        if (!employmentType) {
+            showNotification('Please select an employment type', 'error');
             return;
         }
         
@@ -3276,7 +3377,9 @@ async function saveFacultyChanges(facultyId, modal) {
                 middleName: middleName || '',
                 lastName,
                 email: email || null,
-                departmentId
+                departmentId,
+                employmentType,
+                mixedTeaching
             })
         });
         
