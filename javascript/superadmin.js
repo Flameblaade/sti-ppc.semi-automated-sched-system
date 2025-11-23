@@ -298,7 +298,7 @@ function initializeDataManagementModals() {
             console.log('Confirm backup clicked');
             try {
                 // Fetch all relevant datasets
-                const endpoints = ['/api/users','/api/pending-users','/api/departments','/api/faculty','/api/subjects','/api/courses','/api/strands','/api/rooms','/api/schedule','/api/fixed-schedules'];
+                const endpoints = ['/api/users','/api/users/pending','/api/departments','/api/faculty','/api/subjects','/api/courses','/api/strands','/api/rooms','/api/schedule','/api/fixed-schedules'];
                 const token = localStorage.getItem('authToken');
                 const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
                 const results = {};
@@ -4985,6 +4985,18 @@ function showAddCourseModal() {
                         </select>
                     </div>
                     <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Department *</label>
+                        <select id="courseDepartment" required style="
+                            width: 100%;
+                            padding: 8px 12px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 6px;
+                            font-size: 14px;
+                        ">
+                            <option value="">Loading departments...</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 20px;">
                         <label for="courseColor" style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Program/Strand Color</label>
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <input type="color" id="courseColor" value="#3b82f6" style="
@@ -5068,6 +5080,9 @@ function showAddCourseModal() {
     `;
     
     document.body.appendChild(modal);
+    
+    // Load departments for the dropdown
+    loadDepartmentsForCourse(modal);
     
     // Color picker functionality
     const colorInput = modal.querySelector('#courseColor');
@@ -5356,10 +5371,11 @@ async function saveCourse(modal) {
         const code = modal.querySelector('#courseCode').value.trim();
         const name = modal.querySelector('#courseName').value.trim();
         const type = modal.querySelector('#courseType').value;
+        const departmentId = modal.querySelector('#courseDepartment').value;
         const colorInput = modal.querySelector('#courseColor');
         const color = colorInput ? colorInput.value.trim() : '#3b82f6';
         
-        if (!code || !name || !type) {
+        if (!code || !name || !type || !departmentId) {
             showNotification('Please fill in all required fields', 'error');
             return;
         }
@@ -5374,17 +5390,20 @@ async function saveCourse(modal) {
                 code,
                 name,
                 type,
+                departmentId,
                 color
             })
         });
         
         if (!response.ok) {
-            const errorData = await response.json();
+            const errorData = await response.json().catch(() => ({}));
             if (response.status === 409) {
                 showNotification(`Program/Strand with code "${code}" already exists. Please use a different code.`, 'error');
                 return;
             }
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            const errorMessage = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
+            showNotification(errorMessage, 'error');
+            throw new Error(errorMessage);
         }
         
         showNotification('Program/Strand added successfully', 'success');
@@ -5392,7 +5411,10 @@ async function saveCourse(modal) {
         loadCourses(); // Refresh the courses list
     } catch (error) {
         console.error('Error adding course:', error);
-        showNotification('Failed to add program/strand', 'error');
+        // Error notification is already shown above if response was not ok
+        if (!error.message || !error.message.includes('HTTP error')) {
+            showNotification('Failed to add program/strand', 'error');
+        }
     }
 }
 
