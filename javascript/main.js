@@ -811,6 +811,11 @@ document.addEventListener('DOMContentLoaded', function() {
             window.allClasses = allClasses;
             console.log('Classes added to allClasses array. Total:', allClasses.length);
             
+            // Explicitly save to localStorage to ensure persistence across tab navigation
+            if (typeof saveClassesToLocalStorage === 'function') {
+                saveClassesToLocalStorage();
+            }
+            
             // Update classes count badge
             updateClassesCountBadge();
             
@@ -5601,8 +5606,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save classes to localStorage
     function saveClassesToLocalStorage() {
         try {
-            localStorage.setItem('allClasses', JSON.stringify(allClasses));
-            console.log('Saved', allClasses.length, 'classes to localStorage');
+            // Use window.allClasses as source of truth to ensure we save the latest state
+            const classesToSave = window.allClasses || allClasses || [];
+            localStorage.setItem('allClasses', JSON.stringify(classesToSave));
+            console.log('Saved', classesToSave.length, 'classes to localStorage');
         } catch (e) {
             console.error('Error saving classes to localStorage:', e);
         }
@@ -5611,39 +5618,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load classes from localStorage
     async function loadClassesFromLocalStorage() {
         try {
-            // Check if schedule was cleared on server - if so, don't reload classes
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                try {
-                    const scheduleResponse = await fetch('/api/schedule', {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                    if (scheduleResponse.ok) {
-                        const scheduleData = await scheduleResponse.json();
-                        // If schedule is empty, it means it was cleared - don't reload classes
-                        if (!scheduleData || scheduleData.length === 0) {
-                            console.log('Schedule is empty on server - classes were cleared, not reloading');
-                            // Clear allClasses array
-                            allClasses = [];
-                            window.allClasses = [];
-                            // Clear localStorage
-                            localStorage.setItem('allClasses', JSON.stringify([]));
-                            // Clear the classes list UI
-                            const classesList = document.getElementById('createdClasses');
-                            if (classesList) {
-                                classesList.innerHTML = '';
-                            }
-                            return; // Exit early - don't load classes
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Error checking server schedule:', e);
-                    // Continue with localStorage load if server check fails
-                }
-            }
-            
+            // Always load classes from localStorage - they exist independently of the schedule
+            // Classes are only cleared when explicitly cleared by the user or when schedule is generated
             const savedClasses = JSON.parse(localStorage.getItem('allClasses') || '[]');
             if (savedClasses && savedClasses.length) {
                 console.log('Loading', savedClasses.length, 'classes from localStorage');
@@ -5675,6 +5651,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize the page with saved data
     loadClassesFromLocalStorage();
     loadScheduleFromLocalStorage();
+    
+    // Reload classes when user returns to the tab/window if they're missing
+    // This ensures persistence across tab navigation
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            // Tab/window is now visible - check if classes need to be reloaded
+            const savedClasses = JSON.parse(localStorage.getItem('allClasses') || '[]');
+            const currentClasses = window.allClasses || [];
+            
+            // Only reload if localStorage has classes but current state doesn't
+            if (savedClasses.length > 0 && currentClasses.length === 0) {
+                console.log('Classes missing in memory, reloading from localStorage');
+                if (typeof loadClassesFromLocalStorage === 'function') {
+                    loadClassesFromLocalStorage();
+                }
+            }
+        }
+    });
+    
+    // Also check on window focus to catch cases where visibilitychange might not fire
+    window.addEventListener('focus', function() {
+        const savedClasses = JSON.parse(localStorage.getItem('allClasses') || '[]');
+        const currentClasses = window.allClasses || [];
+        
+        if (savedClasses.length > 0 && currentClasses.length === 0) {
+            console.log('Classes missing in memory, reloading from localStorage on focus');
+            if (typeof loadClassesFromLocalStorage === 'function') {
+                loadClassesFromLocalStorage();
+            }
+        }
+    });
     
     // Save schedule whenever it changes - moved to after calendar initialization
     // This will be set up in the calendar initialization section
