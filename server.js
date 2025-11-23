@@ -3123,7 +3123,7 @@ app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
     
     // Validate input
     if (!name || !code) {
-      return res.status(400).json({ error: 'Subject name and code are required' });
+      return res.status(400).json({ error: 'Subject name and area are required' });
     }
     
     // Department is optional - if provided, validate it exists
@@ -3135,20 +3135,13 @@ app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
       }
     }
     
-    // Check if another subject with same code exists
-    const existingSubject = subjects.find((subj, index) => 
-      index !== subjectIndex && subj.code.toLowerCase() === code.toLowerCase()
-    );
-    
-    if (existingSubject) {
-      return res.status(409).json({ error: 'A subject with this code already exists' });
-    }
+    // Subject area can be duplicated - no uniqueness check needed
     
     // Update subject
     subjects[subjectIndex] = {
       ...subjects[subjectIndex],
       name: name.trim(),
-      code: code.trim().toUpperCase(),
+      code: code.trim(),
       departmentId: departmentId || null,
       department: department ? department.name : null,
       units: parseInt(units) || subjects[subjectIndex].units || 1,
@@ -3211,7 +3204,7 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
     
     // Validate input
     if (!name || !code) {
-      return res.status(400).json({ error: 'Subject name and code are required' });
+      return res.status(400).json({ error: 'Subject name and area are required' });
     }
     
     // Department is optional - if provided, validate it exists
@@ -3223,20 +3216,13 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
       }
     }
     
-    // Check if subject with same code already exists
-    const existingSubject = subjects.find(subj => 
-      subj.code.toLowerCase() === code.toLowerCase()
-    );
-    
-    if (existingSubject) {
-      return res.status(409).json({ error: 'A subject with this code already exists' });
-    }
+    // Subject area can be duplicated - no uniqueness check needed
     
     // Create new subject
     const newSubject = {
       id: `subj${Date.now()}`,
       name: name.trim(),
-      code: code.trim().toUpperCase(),
+      code: code.trim(),
       departmentId: departmentId || null,
       department: department ? department.name : null,
       units: parseInt(units) || 1,

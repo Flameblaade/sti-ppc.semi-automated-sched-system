@@ -3564,14 +3564,14 @@ function showAddSubjectModal() {
                 <form id="addSubjectForm">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div>
-                            <label for="subjectCode" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Subject Code</label>
+                            <label for="subjectCode" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Subject Area</label>
                             <input type="text" id="subjectCode" required style="
                                 width: 100%;
                                 padding: 8px 12px;
                                 border: 1px solid #d1d5db;
                                 border-radius: 4px;
                                 font-size: 14px;
-                            " placeholder="e.g., CS101, MATH201">
+                            " placeholder="e.g., Mathematics, Science, English">
                         </div>
                         <div>
                             <label for="subjectName" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Subject Name</label>
@@ -3725,7 +3725,7 @@ async function saveSubject(modal) {
             return;
         }
         
-        const code = codeInput.value.trim().toUpperCase();
+        const code = codeInput.value.trim();
         const name = nameInput.value.trim();
         const units = parseInt(unitsInput.value);
         const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
@@ -3755,8 +3755,8 @@ async function saveSubject(modal) {
             const errorData = await response.json();
             // Handle specific error cases
             if (response.status === 409) {
-                showNotification(`Subject with code "${code}" already exists. Please use a different code.`, 'error');
-                return; // Don't close modal, let user fix the code
+                showNotification(`Subject with area "${code}" already exists. Please use a different area.`, 'error');
+                return; // Don't close modal, let user fix the area
             }
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
@@ -3821,7 +3821,7 @@ function showEditSubjectModal(subject) {
                 <form id="editSubjectForm">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div>
-                            <label for="editSubjectCode" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Subject Code</label>
+                            <label for="editSubjectCode" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Subject Area</label>
                             <input type="text" id="editSubjectCode" value="${subject.code || ''}" required style="
                                 width: 100%;
                                 padding: 8px 12px;
@@ -3944,7 +3944,7 @@ async function saveSubjectChanges(subjectId, modal) {
             return;
         }
         
-        const code = codeInput.value.trim().toUpperCase();
+        const code = codeInput.value.trim();
         const name = nameInput.value.trim();
         const units = parseInt(unitsInput.value);
         const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
