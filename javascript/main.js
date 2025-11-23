@@ -378,84 +378,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Populate faculty dropdown with saved members
     populateFacultyDropdown();
 
-    // Department change handler - directly connect department to subjects
-    if (departmentSelect) {
-        departmentSelect.addEventListener('change', function() {
-            const selectedDepartment = this.value;
-            
-            // Update subject dropdown based on department
-            if (selectedDepartment && subjectSelect) {
-                // Enable subject dropdown
-                subjectSelect.disabled = false;
-                
-                // Clear and populate subject dropdown
-                subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
-                
-                // Add subject options for selected department
-                if (subjectsByDepartment[selectedDepartment] && Array.isArray(subjectsByDepartment[selectedDepartment])) {
-                    subjectsByDepartment[selectedDepartment].forEach(subject => {
-                    const option = document.createElement('option');
-                    option.value = subject.id;
-                    option.textContent = subject.name;
-                    option.dataset.course = selectedDepartment;
-                    subjectSelect.appendChild(option);
-                    });
-                }
-            } else if (subjectSelect) {
-                // Disable subject dropdown if no department is selected
-                subjectSelect.disabled = true;
-                subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
-            }
-            
-            // Filter faculty dropdown based on selected department
-            if (facultySelect) {
-                // Get currently selected faculty if any
-                const currentFaculty = facultySelect.value;
-                
-                // Rebuild faculty dropdown
-                facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty Member</option>';
-                
-                // Filter and add faculty options for selected department, excluding superadmin
-                const filteredFaculty = (selectedDepartment ? 
-                    facultyMembers.filter(f => f.department === selectedDepartment) : 
-                    facultyMembers).filter(f => 
-                        f.email !== 'superadmin@school.edu' &&
-                        f.role !== 'superadmin' &&
-                        String(f.role || '').toLowerCase() !== 'superadmin'
-                    );
-                
-                if (filteredFaculty.length > 0) {
-                    console.log('Faculty members for department', selectedDepartment, ':', filteredFaculty.length);
-                    
-                    filteredFaculty.forEach(faculty => {
-                        const option = document.createElement('option');
-                        option.value = faculty.id;
-                        option.textContent = faculty.fullName;
-                        facultySelect.appendChild(option);
-                    });
-                    
-                    // Enable the faculty select
-                    facultySelect.disabled = false;
-                } else {
-                    console.log('No faculty members found for department:', selectedDepartment);
-                    // Add a message that there are no faculty members yet
-                    const option = document.createElement('option');
-                    option.value = "";
-                    option.textContent = "No faculty members for this department";
-                    option.disabled = true;
-                    facultySelect.appendChild(option);
-                    
-                    // Keep the faculty select disabled when no options available
-                    facultySelect.disabled = true;
-                }
-                
-                // Try to restore previous selection
-                if (currentFaculty) {
-                    facultySelect.value = currentFaculty;
-                }
-            }
-        });
-    }
+    // Department is no longer used in the form - removed dependency
+    // All selection is now based on Program/Strand
       // Entity management moved to superadmin.html
     // Faculty link handlers disabled - management moved to superadmin dashboard
     if (addFacultyLink) {
@@ -686,17 +610,45 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             console.log('Form validation passed');
               // Get selected values
-            const selectedDepartment = departmentSelect.value; // This is the department code
+            const programSelect = document.getElementById('programSelect');
+            const selectedProgramId = programSelect?.value;
+            const selectedProgram = programSelect?.value ? programSelect.options[programSelect.selectedIndex]?.text : 'Unknown Program';
+            
+            // Get department from the selected program
+            let departmentId = '';
+            let selectedDepartment = '';
+            if (programSelect && selectedProgramId) {
+                // Try to get departmentId from Choices.js custom properties
+                if (window.choicesInstances && window.choicesInstances['programSelect']) {
+                    const selectedValue = window.choicesInstances['programSelect'].getValue(true);
+                    const valueToFind = Array.isArray(selectedValue) ? selectedValue[0] : selectedValue;
+                    if (valueToFind) {
+                        // Safely access store.choices - check if store exists first
+                        const choicesInstance = window.choicesInstances['programSelect'];
+                        if (choicesInstance.store && choicesInstance.store.choices) {
+                            const choice = choicesInstance.store.choices.find(c => c.value === valueToFind);
+                            departmentId = choice?.customProperties?.departmentId || '';
+                        }
+                    }
+                }
+                // Fallback to dataset
+                if (!departmentId) {
+                    const selectedOption = programSelect.options[programSelect.selectedIndex];
+                    departmentId = selectedOption?.dataset?.departmentId || '';
+                }
+                
+                // Get department name from departments
+                if (departmentId) {
+                    const depts = JSON.parse(localStorage.getItem('departments') || '[]');
+                    const dept = depts.find(d => String(d.id || '') === String(departmentId) || String(d.code || '') === String(departmentId));
+                    selectedDepartment = dept?.name || dept?.code || departmentId;
+                }
+            }
+            
             const selectedFacultyId = facultySelect.value;
             const selectedFacultyName = facultySelect.options[facultySelect.selectedIndex]?.text || 'Unknown Faculty';
             const selectedSubjectId = subjectSelect.value;
             const selectedSubjectName = subjectSelect.options[subjectSelect.selectedIndex]?.text || 'Unknown Subject';
-            const programSelect = document.getElementById('programSelect');
-            const selectedProgram = programSelect?.value ? programSelect.options[programSelect.selectedIndex]?.text : selectedDepartment;
-            
-            // Get department ID from the select option data attribute if available
-            const deptOption = departmentSelect.options[departmentSelect.selectedIndex];
-            const departmentId = deptOption?.dataset?.deptId || selectedDepartment;
             
             // Get subject data to find lecture/lab hours (for ALL users)
             let lectureHours = 0;
@@ -982,12 +934,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const userRole = userData.role || 'user';
         const isSuperAdmin = userRole === 'superadmin';
         
-        if (departmentSelect && !departmentSelect.value) {
-            departmentSelect.parentElement.classList.add('error');
+        // Program/Strand is now required first
+        const programSelect = document.getElementById('programSelect');
+        if (programSelect && !programSelect.value) {
+            programSelect.parentElement.classList.add('error');
             isValid = false;
-        } else if (departmentSelect) {
-            departmentSelect.parentElement.classList.remove('error');
+        } else if (programSelect) {
+            programSelect.parentElement.classList.remove('error');
         }
+        
+        // Department is no longer required - removed from form
         
         // Faculty is optional for superadmin
         if (facultySelect && !facultySelect.value && !isSuperAdmin) {
@@ -1008,46 +964,69 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return isValid;
     }
-      // Reset form fields but keep department selection
+      // Reset form fields but keep program selection
     function resetFormFieldsPartial() {
-        // Keep department selection
+        // Keep program selection
         const programSelect = document.getElementById('programSelect');
         
-        // Reset faculty select - reload it using the department
-        if (facultySelect && departmentSelect && departmentSelect.value) {
-            const selectedDepartment = departmentSelect.value;
-            // Reload faculty for the selected department
-            if (typeof loadFaculty === 'function') {
-                loadFaculty(selectedDepartment);
+        // Reset Choices.js instances
+        if (window.choicesInstances) {
+            if (window.choicesInstances['facultySelect']) {
+                window.choicesInstances['facultySelect'].setChoiceByValue('');
+            }
+            if (window.choicesInstances['subjectSelect']) {
+                window.choicesInstances['subjectSelect'].setChoiceByValue('');
+            }
+            // Don't reset programSelect - keep it selected
+        }
+        
+        // Reset faculty select - reload all faculty if program is selected
+        if (facultySelect && programSelect && programSelect.value) {
+            // Reload all faculty when program is selected
+            if (typeof loadAllFaculty === 'function') {
+                loadAllFaculty();
             } else {
                 // Fallback: just reset to initial state
-                facultySelect.innerHTML = '<option value="" selected disabled>Select Department First</option>';
+                if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+                    window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+                } else {
+                    facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+                }
                 facultySelect.disabled = true;
             }
         } else if (facultySelect) {
-            facultySelect.innerHTML = '<option value="" selected disabled>Select Department First</option>';
+            if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+                window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+            } else {
+                facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+            }
             facultySelect.disabled = true;
         }
         
         // Reset subject select
         if (subjectSelect) {
-            subjectSelect.innerHTML = '<option value="" selected disabled>Select Faculty First</option>';
+            if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+            } else {
+                subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+            }
             subjectSelect.disabled = true;
         }
         
-        // Reset program select - reload it using the department
-        if (programSelect && departmentSelect && departmentSelect.value) {
-            // Reload programs for the selected department
-            if (typeof loadPrograms === 'function') {
-                loadPrograms();
+        // Reset program select - reload all programs
+        if (programSelect) {
+            // Reload all programs
+            if (typeof loadAllPrograms === 'function') {
+                loadAllPrograms();
             } else {
                 // Fallback: just reset to initial state
-                programSelect.innerHTML = '<option value="" selected disabled>Select Department First</option>';
-                programSelect.disabled = true;
+                if (window.choicesInstances && window.choicesInstances['programSelect']) {
+                    window.choicesInstances['programSelect'].setChoiceByValue('');
+                } else {
+                    programSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand</option>';
+                }
+                programSelect.disabled = false;
             }
-        } else if (programSelect) {
-            programSelect.innerHTML = '<option value="" selected disabled>Select Department First</option>';
-            programSelect.disabled = true;
         }
         
         // Reset class type to default (lecture)
@@ -1059,23 +1038,42 @@ document.addEventListener('DOMContentLoaded', function() {
             group.classList.remove('error');
         });
     }
-      // Reset all form fields
+    
+    // Reset all form fields
     function resetFormFieldsFull() {
-        if (departmentSelect) {
-            // Reset department dropdown
-            departmentSelect.value = '';
+        // Reset Choices.js instances
+        if (window.choicesInstances) {
+            if (window.choicesInstances['programSelect']) {
+                window.choicesInstances['programSelect'].setChoiceByValue('');
+            }
+            if (window.choicesInstances['facultySelect']) {
+                window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+            }
+            if (window.choicesInstances['subjectSelect']) {
+                window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+            }
         }
         
         if (facultySelect) {
             // Reset and disable faculty dropdown
-            facultySelect.innerHTML = '<option value="" selected disabled>Select Department First</option>';
+            if (!window.choicesInstances || !window.choicesInstances['facultySelect']) {
+                facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+            }
             facultySelect.disabled = true;
         }
         
         if (subjectSelect) {
             // Reset and disable subject dropdown
-            subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
+            if (!window.choicesInstances || !window.choicesInstances['subjectSelect']) {
+                subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+            }
             subjectSelect.disabled = true;
+        }
+        
+        // Reload all programs
+        const programSelect = document.getElementById('programSelect');
+        if (programSelect && typeof loadAllPrograms === 'function') {
+            loadAllPrograms();
         }
         
         // Unit load removed from form
@@ -1135,12 +1133,19 @@ document.addEventListener('DOMContentLoaded', function() {
             typeDisplay = `${classData.classType} (${classData.unitLoad}h)`;
         }
         
+        // Check if this class is merged
+        const isMerged = classData.mergedClassIds && classData.mergedClassIds.length > 0;
+        const mergedIndicator = isMerged ? `<span class="merged-badge" style="background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem; margin-left: 8px;">MERGED</span>` : '';
+        
         classItem.innerHTML = `
-            <h3>${subjectDisplay}</h3>
+            <h3>${subjectDisplay}${mergedIndicator}</h3>
             <div class="class-info"><i class="fas fa-building"></i> ${classData.department || classData.course}</div>
             <div class="class-info"><i class="fas fa-chalkboard-teacher"></i> ${classData.faculty}</div>
             <div class="class-info"><i class="fas fa-book"></i> ${typeDisplay}</div>
             <div class="class-actions">
+                <button class="merge-class-btn" data-id="${classData.id}" title="Merge with other classes">
+                    <i class="fas fa-link"></i> ${isMerged ? 'Unmerge' : 'Merge'}
+                </button>
                 <button class="remove-class-btn" data-id="${classData.id}"><i class="fas fa-trash-alt"></i> Remove</button>
             </div>
         `;
@@ -1151,6 +1156,14 @@ document.addEventListener('DOMContentLoaded', function() {
         classItem.querySelector('.remove-class-btn').addEventListener('click', function() {
             removeClassItem(classData.id);
         });
+        
+        // Add event listener to merge button
+        const mergeBtn = classItem.querySelector('.merge-class-btn');
+        if (mergeBtn) {
+            mergeBtn.addEventListener('click', function() {
+                showMergeClassesModal(classData);
+            });
+        }
         
         // Make class draggable for manual placement
         makeClassDraggable(classItem, classData);
@@ -1186,17 +1199,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     console.log('Creating draggable event with color:', deptColor);
                     
+                    // Check if this class is merged
+                    const isMerged = classData.mergedClassIds && classData.mergedClassIds.length > 0;
+                    const finalColor = isMerged ? '#000000' : deptColor; // Black for merged classes
+                    
+                    // Create title with merged info
+                    let dragTitle = classData.subject;
+                    if (isMerged && classData.mergedClassIds) {
+                        const mergedClasses = allClasses.filter(c => classData.mergedClassIds.includes(c.id));
+                        const mergedStrands = mergedClasses.map(c => c.course || c.department).filter(Boolean);
+                        if (mergedStrands.length > 0) {
+                            dragTitle += ` [MERGED: ${mergedStrands.join(', ')}]`;
+                        }
+                    }
+                    
                     return {
                         id: uniqueInstanceId, // Use the unique instance ID instead of the original class ID
-                        title: classData.subject,
+                        title: dragTitle,
                         duration: { hours: classData.unitLoad },
-                        backgroundColor: deptColor,
-                        borderColor: deptColor,
+                        backgroundColor: finalColor,
+                        borderColor: finalColor,
                         textColor: '#ffffff',
                         classNames: [
                             `${classData.course.toLowerCase()}-event`,
                             `${classData.classType}-type`,
-                            'department-colored-event'
+                            'department-colored-event',
+                            ...(isMerged ? ['merged-class-event'] : [])
                         ],
                         extendedProps: {
                             originalClassId: classData.id, // Store the original ID for reference
@@ -1209,7 +1237,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             classType: classData.classType,
                             department: classData.department,
                             departmentId: classData.departmentId,
-                            departmentColor: deptColor
+                            departmentColor: finalColor,
+                            isMerged: isMerged,
+                            mergedClassIds: classData.mergedClassIds || []
                         }
                     };
                 }
@@ -1221,9 +1251,238 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Show merge classes modal
+    function showMergeClassesModal(classData) {
+        // Find all classes that can be merged (same subject, different strands/courses)
+        const mergeableClasses = allClasses.filter(c => 
+            c.id !== classData.id && 
+            c.subject === classData.subject &&
+            c.subjectId === classData.subjectId &&
+            (c.course !== classData.course || c.courseId !== classData.courseId)
+        );
+        
+        // Get currently merged classes
+        const currentMergedIds = classData.mergedClassIds || [];
+        const isCurrentlyMerged = currentMergedIds.length > 0;
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'custom-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        const modalContent = `
+            <div style="
+                background: white;
+                border-radius: 8px;
+                padding: 0;
+                max-width: 600px;
+                width: 90%;
+                max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                display: flex;
+                flex-direction: column;
+            ">
+                <div style="
+                    padding: 20px;
+                    border-bottom: 1px solid #e2e8f0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                ">
+                    <h5 style="margin: 0; color: #1e293b;">${isCurrentlyMerged ? 'Unmerge' : 'Merge'} Classes</h5>
+                    <button type="button" class="close-btn" style="
+                        background: none;
+                        border: none;
+                        font-size: 24px;
+                        cursor: pointer;
+                        color: #64748b;
+                    ">&times;</button>
+                </div>
+                <div style="
+                    padding: 20px;
+                    overflow-y: auto;
+                    flex: 1;
+                ">
+                    <p style="margin: 0 0 20px 0; color: #64748b;">
+                        ${isCurrentlyMerged 
+                            ? `This class is currently merged with ${currentMergedIds.length} other class(es). Select "Unmerge" to separate them.`
+                            : mergeableClasses.length > 0
+                                ? `Select classes to merge with "${classData.subject}". Merged classes will share the same schedule and appear in black on the timetable.`
+                                : `No other classes found with the same subject "${classData.subject}" to merge with.`
+                        }
+                    </p>
+                    ${isCurrentlyMerged ? `
+                        <button id="unmergeBtn" style="
+                            width: 100%;
+                            padding: 12px;
+                            background: #dc2626;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-weight: 500;
+                            margin-top: 10px;
+                        ">Unmerge Classes</button>
+                    ` : mergeableClasses.length > 0 ? `
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            ${mergeableClasses.map(c => {
+                                const isSelected = currentMergedIds.includes(c.id);
+                                return `
+                                    <div style="
+                                        padding: 12px;
+                                        margin-bottom: 8px;
+                                        border: 2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'};
+                                        border-radius: 6px;
+                                        background: ${isSelected ? '#eff6ff' : 'white'};
+                                        cursor: pointer;
+                                    " data-class-id="${c.id}" class="merge-class-option">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                                                style="width: 18px; height: 18px; cursor: pointer;" 
+                                                data-class-id="${c.id}">
+                                            <div style="flex: 1;">
+                                                <strong>${c.subject}</strong>
+                                                <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
+                                                    ${c.course || c.department} - ${c.faculty}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <button id="mergeBtn" style="
+                            width: 100%;
+                            padding: 12px;
+                            background: #3b82f6;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-weight: 500;
+                            margin-top: 20px;
+                        ">Merge Selected Classes</button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        modal.innerHTML = modalContent;
+        document.body.appendChild(modal);
+        
+        // Close handlers
+        const closeModal = () => document.body.removeChild(modal);
+        modal.querySelector('.close-btn').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+        
+        // Unmerge handler
+        if (isCurrentlyMerged) {
+            modal.querySelector('#unmergeBtn')?.addEventListener('click', () => {
+                unmergeClasses(classData.id);
+                closeModal();
+            });
+        }
+        
+        // Merge handler
+        if (!isCurrentlyMerged && mergeableClasses.length > 0) {
+            // Toggle selection on click
+            modal.querySelectorAll('.merge-class-option').forEach(option => {
+                option.addEventListener('click', (e) => {
+                    if (e.target.type !== 'checkbox') {
+                        const checkbox = option.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                    }
+                });
+            });
+            
+            modal.querySelector('#mergeBtn')?.addEventListener('click', () => {
+                const selectedIds = Array.from(modal.querySelectorAll('input[type="checkbox"]:checked'))
+                    .map(cb => cb.dataset.classId);
+                
+                if (selectedIds.length > 0) {
+                    mergeClasses(classData.id, selectedIds);
+                } else {
+                    alert('Please select at least one class to merge with.');
+                }
+                closeModal();
+            });
+        }
+    }
+    
+    // Merge classes function
+    function mergeClasses(classId, otherClassIds) {
+        // Update all involved classes to have the same mergedClassIds array
+        const allMergedIds = [classId, ...otherClassIds];
+        
+        allClasses.forEach(c => {
+            if (allMergedIds.includes(c.id)) {
+                c.mergedClassIds = allMergedIds.filter(id => id !== c.id);
+            }
+        });
+        
+        window.allClasses = allClasses;
+        saveClassesToLocalStorage();
+        
+        // Refresh the UI
+        const classesList = document.getElementById('createdClasses');
+        if (classesList) {
+            classesList.innerHTML = '';
+            allClasses.forEach(c => addClassToList(c));
+        }
+        
+        showNotification(`Merged ${allMergedIds.length} classes. They will share the same schedule.`, 'success');
+    }
+    
+    // Unmerge classes function
+    function unmergeClasses(classId) {
+        const classData = allClasses.find(c => c.id === classId);
+        if (!classData || !classData.mergedClassIds) return;
+        
+        const mergedIds = [...classData.mergedClassIds, classId];
+        
+        // Remove mergedClassIds from all involved classes
+        allClasses.forEach(c => {
+            if (mergedIds.includes(c.id)) {
+                delete c.mergedClassIds;
+            }
+        });
+        
+        window.allClasses = allClasses;
+        saveClassesToLocalStorage();
+        
+        // Refresh the UI
+        const classesList = document.getElementById('createdClasses');
+        if (classesList) {
+            classesList.innerHTML = '';
+            allClasses.forEach(c => addClassToList(c));
+        }
+        
+        showNotification('Classes unmerged successfully.', 'success');
+    }
+    
     // Remove class item
     function removeClassItem(id) {
         // Remove from array
+        const classToRemove = allClasses.find(c => c.id === id);
+        
+        // If this class is merged, unmerge it first
+        if (classToRemove && classToRemove.mergedClassIds) {
+            unmergeClasses(id);
+        }
+        
         allClasses = allClasses.filter(item => item.id !== id);
         window.allClasses = allClasses;
         
@@ -2167,14 +2426,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const room of compatibleRooms) {
                     // dateStr is already calculated above before this loop
                     
-                    // Get department color for this class
-                    const departmentColor = getDepartmentColorForClass(classItem);
-                    console.log(`Generated department color: ${departmentColor} for class: ${classItem.subject} (${classItem.course})`);
+                    // Check if this class is merged
+                    const isMerged = classItem.mergedClassIds && classItem.mergedClassIds.length > 0;
                     
-                    // Create event title with class type
+                    // Get department color for this class
+                    let departmentColor = getDepartmentColorForClass(classItem);
+                    // If merged, use black background with white text
+                    if (isMerged) {
+                        departmentColor = '#000000'; // Black for merged classes
+                    }
+                    console.log(`Generated department color: ${departmentColor} for class: ${classItem.subject} (${classItem.course})${isMerged ? ' [MERGED]' : ''}`);
+                    
+                    // Create event title with class type and merged indicator
                     let eventTitle = classItem.subject;
                     if (classItem.classType === 'lecture' || classItem.classType === 'laboratory') {
                         eventTitle = `${classItem.subject} (${classItem.classType === 'lecture' ? 'Lecture' : 'Lab'})`;
+                    }
+                    
+                    // If merged, add merged classes info to title
+                    if (isMerged && classItem.mergedClassIds) {
+                        const mergedClasses = allClasses.filter(c => classItem.mergedClassIds.includes(c.id));
+                        const mergedStrands = mergedClasses.map(c => c.course || c.department).filter(Boolean);
+                        if (mergedStrands.length > 0) {
+                            eventTitle += ` [MERGED: ${mergedStrands.join(', ')}]`;
+                        }
                     }
                     
                     // Create event data - for timeGridWeek, we use the actual date, not resourceId
@@ -2185,10 +2460,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         end: `${dateStr}T${endTime}:00`,
                         backgroundColor: departmentColor,
                         borderColor: departmentColor,
+                        textColor: isMerged ? '#ffffff' : '#ffffff', // White text for merged (black bg), white for normal
                         classNames: [
                             `${classItem.course.toLowerCase()}-event`,
                             `${classItem.classType}-type`,
-                            'department-colored-event'
+                            'department-colored-event',
+                            ...(isMerged ? ['merged-class-event'] : [])
                         ],
                         extendedProps: {
                             originalClassId: classItem.id,
@@ -2207,7 +2484,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 department: classItem.department,
                                 departmentId: classItem.departmentId,
                             dayOfWeek: day.id,
-                            departmentColor: departmentColor
+                            departmentColor: departmentColor,
+                            isMerged: isMerged,
+                            mergedClassIds: classItem.mergedClassIds || []
                         }
                     };
                         
@@ -4869,22 +5148,49 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             
+                            // Check if merged
+                            const isMerged = eventData.extendedProps?.isMerged || false;
+                            
                             // Apply department color if not already set
                             if (!eventData.backgroundColor && eventData.extendedProps?.departmentColor) {
-                                eventData.backgroundColor = eventData.extendedProps.departmentColor;
-                                eventData.borderColor = eventData.extendedProps.departmentColor;
-                                console.log(`Applied stored department color: ${eventData.extendedProps.departmentColor} for event: ${eventData.title}`);
+                                eventData.backgroundColor = isMerged ? '#000000' : eventData.extendedProps.departmentColor;
+                                eventData.borderColor = isMerged ? '#000000' : eventData.extendedProps.departmentColor;
+                                eventData.textColor = '#ffffff';
+                                if (isMerged) {
+                                    eventData.classNames = [
+                                        ...(eventData.classNames || []),
+                                        'merged-class-event'
+                                    ];
+                                }
+                                console.log(`Applied stored color: ${eventData.backgroundColor} for event: ${eventData.title}${isMerged ? ' [MERGED]' : ''}`);
                             } else if (!eventData.backgroundColor) {
                                 // Try to get department color for existing events
-                                const departmentColor = getDepartmentColorForClass({
+                                const departmentColor = isMerged ? '#000000' : getDepartmentColorForClass({
                                     course: eventData.extendedProps?.course || '',
                                     courseId: eventData.extendedProps?.courseId
                                 });
                                 eventData.backgroundColor = departmentColor;
                                 eventData.borderColor = departmentColor;
-                                console.log(`Applied calculated department color: ${departmentColor} for event: ${eventData.title}`);
+                                eventData.textColor = '#ffffff';
+                                if (isMerged) {
+                                    eventData.classNames = [
+                                        ...(eventData.classNames || []),
+                                        'merged-class-event'
+                                    ];
+                                }
+                                console.log(`Applied calculated color: ${departmentColor} for event: ${eventData.title}${isMerged ? ' [MERGED]' : ''}`);
                             } else {
-                                console.log(`Event already has color: ${eventData.backgroundColor} for event: ${eventData.title}`);
+                                // Ensure merged classes have black background
+                                if (isMerged) {
+                                    eventData.backgroundColor = '#000000';
+                                    eventData.borderColor = '#000000';
+                                    eventData.textColor = '#ffffff';
+                                    eventData.classNames = [
+                                        ...(eventData.classNames || []),
+                                        'merged-class-event'
+                                    ];
+                                }
+                                console.log(`Event already has color: ${eventData.backgroundColor} for event: ${eventData.title}${isMerged ? ' [MERGED]' : ''}`);
                             }
                             
                             calendar.addEvent(eventData);
@@ -4893,15 +5199,31 @@ document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(() => {
                                 const eventElement = document.querySelector(`[data-event-id="${eventData.id}"]`);
                                 if (eventElement) {
+                                    const isMerged = eventData.extendedProps?.isMerged || false;
                                     eventElement.style.backgroundColor = eventData.backgroundColor;
                                     eventElement.style.borderColor = eventData.borderColor;
+                                    eventElement.style.color = '#ffffff';
                                     eventElement.style.opacity = '1';
+                                    
                                     const mainEl = eventElement.querySelector('.fc-event-main');
                                     if (mainEl) {
                                         mainEl.style.backgroundColor = eventData.backgroundColor;
                                         mainEl.style.borderColor = eventData.borderColor;
+                                        mainEl.style.color = '#ffffff';
                                     }
-                                    console.log(`Applied department color ${eventData.backgroundColor} to loaded event element`);
+                                    
+                                    // Ensure text is readable for merged classes
+                                    if (isMerged) {
+                                        const titleEl = eventElement.querySelector('.fc-event-title');
+                                        if (titleEl) {
+                                            titleEl.style.color = '#ffffff';
+                                            titleEl.style.fontWeight = '500';
+                                        }
+                                        // Add merged class styling
+                                        eventElement.classList.add('merged-class-event');
+                                    }
+                                    
+                                    console.log(`Applied color ${eventData.backgroundColor} to loaded event element${isMerged ? ' [MERGED]' : ''}`);
                                 }
                             }, 100);
                         });

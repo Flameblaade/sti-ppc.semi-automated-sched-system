@@ -2354,8 +2354,8 @@ app.post('/api/faculty', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
 app.post('/api/faculty/create', isAuthenticated, isAdminOrSuperAdmin, async (req, res) => {
   console.log('POST /api/faculty/create - Route hit');
   try {
-    const { firstName, middleName, lastName, email, departmentId, employmentType, mixedTeaching } = req.body;
-    console.log('Request body:', { firstName, middleName, lastName, email, departmentId, employmentType, mixedTeaching });
+    const { firstName, middleName, lastName, email, departmentId, employmentType, mixedTeaching, teachesTertiary, teachesSHS } = req.body;
+    console.log('Request body:', { firstName, middleName, lastName, email, departmentId, employmentType, mixedTeaching, teachesTertiary, teachesSHS });
     
     // Validate required fields (email is optional)
     if (!firstName || !lastName || !departmentId || !employmentType) {
@@ -2409,6 +2409,8 @@ app.post('/api/faculty/create', isAuthenticated, isAdminOrSuperAdmin, async (req
       title: 'Instructor',
       employmentType: employmentType,
       mixedTeaching: mixedTeaching === true,
+      teachesTertiary: mixedTeaching === true ? false : (teachesTertiary === true),
+      teachesSHS: mixedTeaching === true ? false : (teachesSHS === true),
       createdAt: new Date().toISOString(),
       createdBy: req.user.id,
       updatedAt: new Date().toISOString(),
@@ -2860,7 +2862,9 @@ app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
       middleName,
       lastName,
       employmentType,
-      mixedTeaching
+      mixedTeaching,
+      teachesTertiary,
+      teachesSHS
     } = req.body;
     
     // Find the faculty member
@@ -2928,6 +2932,21 @@ app.put('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => 
     // Update mixed teaching flag if provided
     if (mixedTeaching !== undefined && mixedTeaching !== null) {
       users[facultyIndex].mixedTeaching = mixedTeaching === true;
+      // If mixed teaching is enabled, disable individual teaching level flags
+      if (mixedTeaching === true) {
+        users[facultyIndex].teachesTertiary = false;
+        users[facultyIndex].teachesSHS = false;
+      }
+    }
+    
+    // Update teaching level flags if provided (only if mixed teaching is not enabled)
+    if (users[facultyIndex].mixedTeaching !== true) {
+      if (teachesTertiary !== undefined && teachesTertiary !== null) {
+        users[facultyIndex].teachesTertiary = teachesTertiary === true;
+      }
+      if (teachesSHS !== undefined && teachesSHS !== null) {
+        users[facultyIndex].teachesSHS = teachesSHS === true;
+      }
     }
     
     users[facultyIndex].updatedAt = new Date().toISOString();
@@ -3009,10 +3028,10 @@ app.delete('/api/faculty/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) 
   }
 });
 
-// Get subjects - by faculty, by department, or all subjects
+// Get subjects - by faculty, by programId, by departmentId (backward compatibility), or all subjects
 app.get('/api/subjects', isAuthenticated, (req, res) => {
   try {
-    const { facultyId, departmentId } = req.query;
+    const { facultyId, programId, departmentId } = req.query;
     
     if (facultyId) {
       // Return subjects by faculty (existing functionality)
@@ -3021,12 +3040,43 @@ app.get('/api/subjects', isAuthenticated, (req, res) => {
       const subjects = [];
 
       res.status(200).json(subjects);
+    } else if (programId) {
+      // Filter subjects by programId (NEW: primary way to filter subjects)
+      // Subjects can belong to multiple programs (via programIds array) or single program (via programId)
+      const filteredSubjects = subjects.filter(subject => {
+        // Check if subject has programIds array (supports multiple programs)
+        if (subject.programIds && Array.isArray(subject.programIds)) {
+          return subject.programIds.some(pid => String(pid) === String(programId));
+        }
+        // Check if subject has programId (single program, for backward compatibility)
+        if (subject.programId) {
+          return String(subject.programId) === String(programId);
+        }
+        // Backward compatibility: if no programId/programIds, check by departmentId
+        // This allows existing subjects to still work
+        if (subject.departmentId) {
+          // Get all programs to check if the selected program belongs to the subject's department
+          const allCourses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
+          const allStrands = readJsonFile(path.join(__dirname, 'data', 'strands.json'), []);
+          const allPrograms = [...allCourses, ...allStrands];
+          const selectedProgram = allPrograms.find(p => 
+            String(p.id || '') === String(programId) || 
+            String(p.code || '') === String(programId)
+          );
+          if (selectedProgram && String(selectedProgram.departmentId || '') === String(subject.departmentId || '')) {
+            return true;
+          }
+        }
+        return false;
+      });
+      console.log(`GET /api/subjects?programId=${programId} - Returning ${filteredSubjects.length} subjects for program/strand`);
+      res.status(200).json(filteredSubjects);
     } else if (departmentId) {
-      // Filter subjects by department
+      // Filter subjects by department (backward compatibility - deprecated, use programId instead)
       const filteredSubjects = subjects.filter(subject => 
         subject.departmentId === departmentId
       );
-      console.log(`GET /api/subjects?departmentId=${departmentId} - Returning ${filteredSubjects.length} subjects for department`);
+      console.log(`GET /api/subjects?departmentId=${departmentId} - Returning ${filteredSubjects.length} subjects for department (deprecated, use programId)`);
       res.status(200).json(filteredSubjects);
     } else {
       // Return all subjects for entity management
@@ -4403,24 +4453,24 @@ function getFacultyUnitLimit(facultyMember) {
     return { max: 15, allowOverload: false };
   }
   
-  // Mixed teaching faculty (full-time): can teach both SHS and Tertiary, up to 30 units
+  // Mixed teaching faculty (full-time): can teach both SHS and Tertiary, unlimited overload
   if (facultyMember.mixedTeaching === true) {
-    return { max: 30, allowOverload: false };
+    return { max: 24, allowOverload: true };
   }
   
   // Get department to determine if SHS or Tertiary
   const department = departments.find(d => d.id === facultyMember.departmentId);
   if (!department) {
     // Default to tertiary if department not found
-    return { max: 24, allowOverload: true, overloadMax: 30 };
+    return { max: 24, allowOverload: true };
   }
   
   if (isSHSDepartment(department)) {
     // SHS teachers: 27 units, no overload
     return { max: 27, allowOverload: false };
   } else {
-    // Tertiary teachers: 24 units base, overload up to 30
-    return { max: 24, allowOverload: true, overloadMax: 30 };
+    // Tertiary teachers: 24 units base, unlimited overload
+    return { max: 24, allowOverload: true };
   }
 }
 
@@ -4479,20 +4529,14 @@ app.put('/api/schedule/assign-faculty', isAuthenticated, isAdminOrSuperAdmin, (r
       
       // Validate unit limits
       if (unitLimit.allowOverload) {
-        // Tertiary: can go up to overloadMax
-        if (totalUnits > unitLimit.overloadMax) {
-          return res.status(400).json({ 
-            error: `Unit limit exceeded. Current: ${currentUnits.toFixed(1)} units, Adding: ${newUnits.toFixed(1)} units, Total: ${totalUnits.toFixed(1)} units. Maximum allowed (with overload): ${unitLimit.overloadMax} units.` 
-          });
-        }
+        // Tertiary and Mixed Teaching: unlimited overload, no maximum limit check
+        // Base limit is 24 units, but overload is allowed without restriction
       } else {
-        // SHS, Part-time, or Mixed Teaching: strict limit
+        // SHS or Part-time: strict limit
         if (totalUnits > unitLimit.max) {
           let facultyType = '';
           if (facultyMember.employmentType === 'part-time') {
             facultyType = 'Part-time';
-          } else if (facultyMember.mixedTeaching === true) {
-            facultyType = 'Mixed Teaching (Full-time)';
           } else {
             facultyType = 'SHS';
           }

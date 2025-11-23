@@ -9,9 +9,13 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
+    <!-- Choices.js for searchable dropdowns -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
     <link rel="stylesheet" href="css/schedule.css">
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- Choices.js for searchable dropdowns -->
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -50,17 +54,17 @@
                         
                         <form id="scheduleForm">
                             <div class="form-group">
-                                <label for="departmentSelect">Department</label>
-                                <select id="departmentSelect" class="form-control" required>
-                                    <option value="" selected disabled>Select Department</option>
+                                <label for="programSelect">Program/Strand</label>
+                                <select id="programSelect" class="form-control" required>
+                                    <option value="" selected disabled>Select Program/Strand</option>
                                 </select>
-                                <div class="form-error">Please select a department</div>
+                                <div class="form-error">Please select a program/strand</div>
                             </div>
                             
                             <div class="form-group">
                                 <label for="facultySelect">Faculty Member <span style="color: #999; font-size: 12px;">(Optional for Superadmin)</span></label>
                                 <select id="facultySelect" class="form-control" disabled>
-                                    <option value="" selected disabled>Select Department First</option>
+                                    <option value="" selected disabled>Select Program/Strand First</option>
                                 </select>
                                 <div class="form-error">Please select a faculty member</div>
                             </div>
@@ -68,7 +72,7 @@
                             <div class="form-group">
                                 <label for="subjectSelect">Subject/Course</label>
                                 <select id="subjectSelect" class="form-control" disabled>
-                                    <option value="" selected disabled>Select Faculty First</option>
+                                    <option value="" selected disabled>Select Program/Strand First</option>
                                 </select>
                                 <div id="subjectDetails" class="subject-details" style="display: none; margin-top: 10px; padding: 10px; background-color: #f0f7ff; border-left: 3px solid #4a90e2; border-radius: 4px; font-size: 0.9rem;">
                                     <div style="font-weight: 600; margin-bottom: 5px; color: #2c3e50;">
@@ -81,12 +85,6 @@
                                 <div class="form-error">Please select a subject/course</div>
                             </div>
 
-                            <div class="form-group">
-                                <label for="programSelect">Program/Strand</label>
-                                <select id="programSelect" class="form-control" disabled>
-                                    <option value="" selected disabled>Select Department First</option>
-                                </select>
-                            </div>
 
                             <div class="form-group" id="classTypeGroup" style="display: none;">
                                 <label>Class Type</label>

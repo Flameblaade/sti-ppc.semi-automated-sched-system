@@ -1466,3 +1466,80 @@ label {
     background: #e2e8f0 !important;
 }
 
+/* Choices.js Styling to match form controls */
+.choices {
+    margin-bottom: 0;
+    font-size: 0.95rem;
+}
+
+.choices__inner {
+    min-height: 44px;
+    padding: 5px 7.5px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background-color: white;
+    transition: border-color 0.2s ease;
+}
+
+.choices__inner:focus,
+.choices[data-type*="select-one"] .choices__inner:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.choices.is-disabled .choices__inner {
+    background: var(--neutral-gray);
+    color: var(--dark-gray);
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.choices__input {
+    font-size: 0.95rem;
+    padding: 5px;
+    margin: 0;
+    background-color: transparent;
+}
+
+.choices__input--cloned {
+    padding: 5px;
+}
+
+.choices__list--dropdown {
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-top: 4px;
+    z-index: 1000;
+    background-color: white;
+}
+
+.choices__list--dropdown .choices__item {
+    padding: 10px 12px;
+    font-size: 0.95rem;
+}
+
+.choices__list--dropdown .choices__item--selectable.is-highlighted {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.choices__item--selectable.is-selected {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.choices__placeholder {
+    opacity: 0.6;
+    color: var(--dark-gray);
+}
+
+.choices__button {
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.choices__button:hover {
+    opacity: 1;
+}
+
