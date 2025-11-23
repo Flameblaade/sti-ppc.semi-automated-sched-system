@@ -766,6 +766,37 @@ input[type="text"]:focus {
     margin-top: 12px;
 }
 
+.merge-class-btn {
+    background: var(--primary-color);
+    border: none;
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.merge-class-btn:hover {
+    background: var(--primary-color-dark, #1e40af);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+}
+
+.merge-class-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+}
+
+.merge-class-btn i {
+    font-size: 0.8rem;
+}
+
 .remove-class-btn {
     background: none;
     border: none;
@@ -1994,6 +2025,38 @@ select.form-control:hover {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s, box-shadow 0.2s;
     font-size: 0.85rem;
+}
+
+/* Merged class event styling - black background with white text */
+.fc-event.merged-class-event,
+.merged-class-event {
+    background-color: #000000 !important;
+    border-color: #000000 !important;
+    color: #ffffff !important;
+}
+
+.fc-event.merged-class-event .fc-event-title,
+.fc-event.merged-class-event .event-subject,
+.fc-event.merged-class-event .event-time,
+.fc-event.merged-class-event .event-room,
+.merged-class-event .fc-event-title,
+.merged-class-event .event-subject,
+.merged-class-event .event-time,
+.merged-class-event .event-room {
+    color: #ffffff !important;
+    font-weight: 500;
+}
+
+.fc-event.merged-class-event .event-time,
+.merged-class-event .event-time {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+}
+
+.fc-event.merged-class-event .event-room,
+.merged-class-event .event-room {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
 }
 
 .fc-event:hover {

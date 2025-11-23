@@ -793,15 +793,26 @@ document.addEventListener('DOMContentLoaded', function() {
             eventReceive: function(info) {
                 // Ensure the department color is applied when event is dropped
                 const event = info.event;
-                const deptColor = event.extendedProps?.departmentColor || 
+                const isMerged = event.extendedProps?.isMerged || false;
+                const deptColor = isMerged ? '#000000' : 
+                                (event.extendedProps?.departmentColor || 
                                 (event.backgroundColor) || 
-                                '#6b7280';
+                                '#6b7280');
                 
-                console.log('Event received, applying department color:', deptColor);
+                console.log('Event received, applying color:', deptColor, isMerged ? '[MERGED]' : '');
                 
                 // Set the event color
                 event.setProp('backgroundColor', deptColor);
                 event.setProp('borderColor', deptColor);
+                event.setProp('textColor', '#ffffff');
+                
+                // Add merged class if needed
+                if (isMerged) {
+                    event.setProp('classNames', [
+                        ...(event.classNames || []),
+                        'merged-class-event'
+                    ]);
+                }
                 
                 // Apply color to DOM element
                 setTimeout(() => {
@@ -809,15 +820,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (eventEl) {
                         eventEl.style.backgroundColor = deptColor;
                         eventEl.style.borderColor = deptColor;
+                        eventEl.style.color = '#ffffff';
                         eventEl.style.opacity = '1';
                         
                         const mainEl = eventEl.querySelector('.fc-event-main');
                         if (mainEl) {
                             mainEl.style.backgroundColor = deptColor;
                             mainEl.style.borderColor = deptColor;
+                            mainEl.style.color = '#ffffff';
                         }
                         
-                        console.log('Applied department color to dropped event:', deptColor);
+                        // Ensure text is readable
+                        const titleEl = eventEl.querySelector('.fc-event-title');
+                        if (titleEl) {
+                            titleEl.style.color = '#ffffff';
+                            titleEl.style.fontWeight = '500';
+                        }
+                        
+                        console.log('Applied color to dropped event:', deptColor, isMerged ? '[MERGED]' : '');
                     }
                 }, 50);
 
@@ -1091,6 +1111,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 const teacher = extendedProps.faculty || '';
                 const room = extendedProps.room || '';
                 
+                // Check if this is a merged class
+                const isMerged = extendedProps.isMerged || false;
+                const mergedClassIds = extendedProps.mergedClassIds || [];
+                
+                // Get merged strands information
+                let mergedStrandsInfo = '';
+                if (isMerged && mergedClassIds.length > 0) {
+                    // Try to get merged strands from window.allClasses if available
+                    if (window.allClasses && Array.isArray(window.allClasses)) {
+                        const mergedClasses = window.allClasses.filter(c => c && mergedClassIds.includes(c.id));
+                        const mergedStrands = mergedClasses.map(c => c.course || c.department).filter(Boolean);
+                        if (mergedStrands.length > 0) {
+                            // Include the current class's strand/course in the list
+                            const currentStrand = department || extendedProps.course || '';
+                            const allStrands = [currentStrand, ...mergedStrands].filter(Boolean);
+                            const uniqueStrands = [...new Set(allStrands)];
+                            mergedStrandsInfo = uniqueStrands.join(', ');
+                        }
+                    }
+                    
+                    // Fallback: extract from event title if available
+                    if (!mergedStrandsInfo && event.title) {
+                        const mergedMatch = event.title.match(/\[MERGED:\s*(.+?)\]/i);
+                        if (mergedMatch && mergedMatch[1]) {
+                            mergedStrandsInfo = mergedMatch[1].trim();
+                        }
+                    }
+                }
+                
                 // Format time
                 let timeStr = '';
                 if (event.start) {
@@ -1114,13 +1163,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 const content = document.createElement('div');
                 content.style.cssText = 'padding: 4px 6px; font-size: 11px; line-height: 1.3;';
                 
-                let html = `<div style="font-weight: 600; margin-bottom: 2px;">${subject}</div>`;
+                // Clean subject title (remove [MERGED: ...] if present, we'll show it separately)
+                let cleanSubject = subject.replace(/\s*\[MERGED:.*?\]/gi, '').trim();
+                
+                let html = `<div style="font-weight: 600; margin-bottom: 2px;">${cleanSubject}</div>`;
+                
+                // Show merged strands prominently if merged
+                if (mergedStrandsInfo) {
+                    html += `<div style="font-size: 9px; font-weight: 600; color: #ffffff; background-color: rgba(255, 255, 255, 0.25); padding: 2px 4px; border-radius: 3px; margin-bottom: 3px; display: inline-block;"><i class="fas fa-link" style="margin-right: 3px; font-size: 0.8em;"></i>Merged: ${mergedStrandsInfo}</div>`;
+                }
                 
                 if (timeStr) {
                     html += `<div style="font-size: 10px; opacity: 0.9;"><i class="fas fa-clock" style="margin-right: 4px;"></i>${timeStr}</div>`;
                 }
                 
-                if (department) {
+                if (department && !mergedStrandsInfo) {
                     html += `<div style="font-size: 10px; opacity: 0.9;"><i class="fas fa-building" style="margin-right: 4px;"></i>${department}</div>`;
                 }
                 
