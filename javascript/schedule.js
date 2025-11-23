@@ -547,8 +547,8 @@ async function loadFaculty(departmentIdOrCode) {
     }
 }
 
-// Function to load subjects by program/strand (instead of department)
-// This allows subjects to be shared across departments (e.g., GE subjects)
+// Function to load ALL subjects (no filtering by program/strand)
+// This allows users to see and select any subject freely
 async function loadSubjects(programId) {
     const subjectSelect = document.getElementById('subjectSelect');
     
@@ -556,123 +556,24 @@ async function loadSubjects(programId) {
     subjectSelect.innerHTML = '<option value="" selected disabled>Loading subjects...</option>';
     subjectSelect.disabled = true;
     
-    // Get selected program/strand
-    const programValue = programId || document.getElementById('programSelect')?.value;
-    if (!programValue) {
-        subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-        return;
-    }
-    
-    const eq = (a,b) => String(a||'').toLowerCase() === String(b||'').toLowerCase();
-    
     try {
         let subjects = [];
         try {
-            // Try to fetch subjects by programId from API
-            const response = await fetchWithAuth(`/api/subjects?programId=${encodeURIComponent(programValue)}`);
+            // Fetch ALL subjects from API (no programId filter)
+            const response = await fetchWithAuth(`/api/subjects`);
             if (response && response.ok) {
                 subjects = await response.json();
+                console.log(`Loaded ${subjects.length} subjects from API`);
             }
         } catch (e) { 
             console.log('API call failed, using localStorage fallback:', e);
         }
 
+        // If API didn't return subjects, try localStorage
         if (!Array.isArray(subjects) || !subjects.length) {
             // Fallback to localStorage
-            const allSubjects = JSON.parse(localStorage.getItem('subjects') || '[]');
-            
-            console.log('Filtering subjects for program/strand:', programValue);
-            
-            // Get all programs/strands for backward compatibility matching (do this once, not in the filter)
-            let allCourses = [];
-            let allStrands = [];
-            
-            try {
-                allCourses = JSON.parse(localStorage.getItem('courses') || '[]');
-            } catch (e) {
-                console.warn('Error parsing courses from localStorage:', e);
-            }
-            
-            try {
-                allStrands = JSON.parse(localStorage.getItem('strands') || '[]');
-            } catch (e) {
-                console.warn('Error parsing strands from localStorage:', e);
-            }
-            
-            // If courses is empty, try to get from API
-            // Fetch ALL courses/strands to find the selected program (not just by department)
-            if (!allCourses.length && !allStrands.length) {
-                try {
-                    // Try to fetch all courses (no department filter)
-                    const resp = await fetchWithAuth(`/api/courses`);
-                    if (resp && resp.ok) {
-                        allCourses = await resp.json();
-                        // Cache in localStorage for future use
-                        if (allCourses.length) {
-                            localStorage.setItem('courses', JSON.stringify(allCourses));
-                        }
-                    }
-                    // Try to fetch all strands (no department filter)
-                    const respStrands = await fetchWithAuth(`/api/strands`);
-                    if (respStrands && respStrands.ok) {
-                        allStrands = await respStrands.json();
-                        // Cache in localStorage for future use
-                        if (allStrands.length) {
-                            localStorage.setItem('strands', JSON.stringify(allStrands));
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Error fetching programs from API:', e);
-                }
-            }
-            
-            const allPrograms = [...allCourses, ...allStrands];
-            const selectedProgram = allPrograms.find(p => 
-                eq(String(p.id || ''), String(programValue)) || 
-                eq(String(p.code || ''), String(programValue))
-            );
-            
-            // Filter subjects by programId or programIds array
-            // A subject can belong to multiple programs (e.g., GE subjects for IT, THM, etc.)
-            const matchesProgram = (subject) => {
-                if (!subject) return false;
-                
-                // Check if subject has programIds array (new structure)
-                if (subject.programIds && Array.isArray(subject.programIds)) {
-                    const matches = subject.programIds.some(pid => 
-                        eq(String(pid || ''), String(programValue))
-                    );
-                    if (matches) {
-                        console.log(`Matched subject "${subject.code || subject.name}" by programIds array`);
-                        return true;
-                    }
-                }
-                
-                // Check if subject has programId (single program, for backward compatibility)
-                if (subject.programId) {
-                    if (eq(String(subject.programId || ''), String(programValue))) {
-                        console.log(`Matched subject "${subject.code || subject.name}" by programId`);
-                        return true;
-                    }
-                }
-                
-                // Backward compatibility: if subject has departmentId but no programId,
-                // check if the selected program belongs to that department
-                // This is a fallback for existing data
-                if (subject.departmentId && !subject.programId && !subject.programIds && selectedProgram) {
-                    // Match if program's department matches subject's department
-                    if (eq(String(selectedProgram.departmentId || ''), String(subject.departmentId || ''))) {
-                        console.log(`Matched subject "${subject.code || subject.name}" by departmentId (backward compatibility)`);
-                        return true;
-                    }
-                }
-                
-                return false;
-            };
-            
-            const filteredSubjects = allSubjects.filter(matchesProgram);
-            console.log(`Filtered subjects: ${filteredSubjects.length} of ${allSubjects.length} match program/strand`);
-            subjects = filteredSubjects;
+            subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
+            console.log(`Loaded ${subjects.length} subjects from localStorage`);
         }
 
         // Prepare options for Choices.js
@@ -695,7 +596,7 @@ async function loadSubjects(programId) {
                 }
                 console.log('Subject dropdown enabled with', subjectOptions.length, 'subjects');
             } else {
-                window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'No subjects available for this program/strand', disabled: true}], 'value', 'label', true);
+                window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'No subjects available', disabled: true}], 'value', 'label', true);
                 subjectSelect.disabled = true;
                 if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
                     window.choicesInstances['subjectSelect'].disable();
@@ -714,7 +615,7 @@ async function loadSubjects(programId) {
 
             subjectSelect.disabled = (subjectSelect.options.length <= 1);
             if (subjectSelect.options.length <= 1) {
-                subjectSelect.innerHTML = '<option value="" selected disabled>No subjects available for this program/strand</option>';
+                subjectSelect.innerHTML = '<option value="" selected disabled>No subjects available</option>';
             }
         }
     } catch (error) {
@@ -1653,6 +1554,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Load ALL programs/strands after Choices.js is initialized (Program/Strand is now first in the form)
         loadAllPrograms();
+        
+        // Load ALL subjects on page load (no program requirement)
+        loadSubjects();
     }, 100);
     
     // Load departments when the page loads
@@ -1703,10 +1607,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Error loading faculty:', err);
                 });
                 
-                // Load subjects for the selected program/strand
+                // Load ALL subjects (no filtering by program)
                 loadSubjects(programId);
             } else {
-                // No program selected, reset everything
+                // No program selected, but subjects should still be available
+                // Load all subjects even without program selection
+                loadSubjects();
+                
+                // Reset faculty dropdown (still requires program selection)
                 if (facSel) {
                     if (window.choicesInstances && window.choicesInstances['facultySelect']) {
                         window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
@@ -1715,14 +1623,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     facSel.disabled = true;
                 }
-                if (subjSel) {
-                    if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
-                        window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
-                    } else {
-                        subjSel.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-                    }
-                    subjSel.disabled = true;
-                }
+                // Subjects are now independent - no need to disable them
             }
         });
     }
@@ -1738,10 +1639,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 subjectDetails.style.display = 'none';
             }
             
-            // Ensure subject dropdown is enabled if program is selected
-            const programSelect = document.getElementById('programSelect');
+            // Ensure subject dropdown is enabled (subjects are independent of program)
             const subjectSelect = document.getElementById('subjectSelect');
-            if (programSelect && programSelect.value && subjectSelect) {
+            if (subjectSelect) {
                 // If subjects were already loaded, make sure dropdown is enabled
                 if (subjectSelect.options.length > 1) {
                     subjectSelect.disabled = false;
@@ -1750,6 +1650,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             window.choicesInstances['subjectSelect'].enable();
                         }
                     }
+                } else {
+                    // Load subjects if not already loaded
+                    loadSubjects();
                 }
             }
         });

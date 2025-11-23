@@ -1003,14 +1003,19 @@ document.addEventListener('DOMContentLoaded', function() {
             facultySelect.disabled = true;
         }
         
-        // Reset subject select
+        // Reset subject select - load all subjects (no program requirement)
         if (subjectSelect) {
-            if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
-                window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+            // Load all subjects regardless of program selection
+            if (typeof loadSubjects === 'function') {
+                loadSubjects();
             } else {
-                subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+                // Fallback: just reset to initial state
+                if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                    window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Subject', disabled: true}], 'value', 'label', true);
+                } else {
+                    subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
+                }
             }
-            subjectSelect.disabled = true;
         }
         
         // Reset program select - reload all programs
@@ -1050,7 +1055,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
             }
             if (window.choicesInstances['subjectSelect']) {
-                window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+                // Load all subjects (no program requirement)
+                if (typeof loadSubjects === 'function') {
+                    loadSubjects();
+                } else {
+                    window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Subject', disabled: true}], 'value', 'label', true);
+                }
             }
         }
         
@@ -1063,9 +1073,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (subjectSelect) {
-            // Reset and disable subject dropdown
-            if (!window.choicesInstances || !window.choicesInstances['subjectSelect']) {
-                subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+            // Load all subjects (no program requirement)
+            if (typeof loadSubjects === 'function') {
+                loadSubjects();
+            } else if (!window.choicesInstances || !window.choicesInstances['subjectSelect']) {
+                subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
             }
             subjectSelect.disabled = true;
         }

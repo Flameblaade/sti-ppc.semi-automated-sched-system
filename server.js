@@ -3033,6 +3033,22 @@ app.get('/api/subjects', isAuthenticated, (req, res) => {
   try {
     const { facultyId, programId, departmentId } = req.query;
     
+    // Reload subjects from file to ensure we have the latest data
+    let currentSubjects = [];
+    try {
+      if (fs.existsSync(USERS_FILE)) {
+        const data = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+        currentSubjects = data.subjects || subjects || [];
+      } else {
+        currentSubjects = subjects || [];
+      }
+    } catch (e) {
+      console.warn('Error reloading subjects from file, using global variable:', e);
+      currentSubjects = subjects || [];
+    }
+    
+    console.log(`GET /api/subjects - Total subjects available: ${currentSubjects.length}`);
+    
     if (facultyId) {
       // Return subjects by faculty (existing functionality)
       // In a real app, this would come from a database
@@ -3043,48 +3059,88 @@ app.get('/api/subjects', isAuthenticated, (req, res) => {
     } else if (programId) {
       // Filter subjects by programId (NEW: primary way to filter subjects)
       // Subjects can belong to multiple programs (via programIds array) or single program (via programId)
-      const filteredSubjects = subjects.filter(subject => {
+      console.log(`Filtering ${currentSubjects.length} subjects for programId: ${programId}`);
+      
+      // Get all programs/strands for matching
+      const allCourses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
+      const allStrands = readJsonFile(path.join(__dirname, 'data', 'strands.json'), []);
+      const allPrograms = [...allCourses, ...allStrands];
+      const selectedProgram = allPrograms.find(p => 
+        String(p.id || '') === String(programId) || 
+        String(p.code || '') === String(programId)
+      );
+      
+      console.log(`Selected program:`, selectedProgram ? `${selectedProgram.name} (id: ${selectedProgram.id}, code: ${selectedProgram.code})` : 'NOT FOUND');
+      
+      const filteredSubjects = currentSubjects.filter(subject => {
         // Check if subject has programIds array (supports multiple programs)
         if (subject.programIds && Array.isArray(subject.programIds)) {
-          return subject.programIds.some(pid => String(pid) === String(programId));
-        }
-        // Check if subject has programId (single program, for backward compatibility)
-        if (subject.programId) {
-          return String(subject.programId) === String(programId);
-        }
-        // Backward compatibility: if no programId/programIds, check by departmentId
-        // This allows existing subjects to still work
-        if (subject.departmentId) {
-          // Get all programs to check if the selected program belongs to the subject's department
-          const allCourses = readJsonFile(path.join(__dirname, 'data', 'courses.json'), []);
-          const allStrands = readJsonFile(path.join(__dirname, 'data', 'strands.json'), []);
-          const allPrograms = [...allCourses, ...allStrands];
-          const selectedProgram = allPrograms.find(p => 
-            String(p.id || '') === String(programId) || 
-            String(p.code || '') === String(programId)
+          const matches = subject.programIds.some(pid => 
+            String(pid || '') === String(programId) || 
+            String(pid || '') === String(selectedProgram?.id || '') ||
+            String(pid || '') === String(selectedProgram?.code || '')
           );
-          if (selectedProgram && String(selectedProgram.departmentId || '') === String(subject.departmentId || '')) {
+          if (matches) {
+            console.log(`  ✓ Matched "${subject.code || subject.name}" by programIds array`);
             return true;
           }
         }
+        // Check if subject has programId (single program, for backward compatibility)
+        if (subject.programId) {
+          const matches = String(subject.programId || '') === String(programId) ||
+                         String(subject.programId || '') === String(selectedProgram?.id || '') ||
+                         String(subject.programId || '') === String(selectedProgram?.code || '');
+          if (matches) {
+            console.log(`  ✓ Matched "${subject.code || subject.name}" by programId`);
+            return true;
+          }
+        }
+        // Backward compatibility: if no programId/programIds, check by departmentId
+        // This allows existing subjects to still work
+        if (subject.departmentId && selectedProgram) {
+          // Match if program's department matches subject's department
+          if (String(selectedProgram.departmentId || '') === String(subject.departmentId || '')) {
+            console.log(`  ✓ Matched "${subject.code || subject.name}" by departmentId (backward compatibility)`);
+            return true;
+          }
+        }
+        // If subject has no programId/programIds and no departmentId, 
+        // and we couldn't find the selected program, return all subjects as fallback
+        // OR if subject has no associations at all, include it (might be a general subject)
+        if (!subject.programId && !subject.programIds && !subject.departmentId) {
+          console.log(`  ? Subject "${subject.code || subject.name}" has no program/department association`);
+          // Only include if we can't find the program (safer to exclude unassociated subjects)
+          // return !selectedProgram; // Uncomment this line if you want to show unassociated subjects when program not found
+        }
         return false;
       });
-      console.log(`GET /api/subjects?programId=${programId} - Returning ${filteredSubjects.length} subjects for program/strand`);
+      
+      console.log(`GET /api/subjects?programId=${programId} - Returning ${filteredSubjects.length} of ${currentSubjects.length} subjects for program/strand`);
+      
+      // Warn if no subjects matched but subjects exist
+      if (filteredSubjects.length === 0 && currentSubjects.length > 0) {
+        console.warn(`⚠️  No subjects matched for programId ${programId}. This might mean:`);
+        console.warn(`   - Subjects don't have programId/programIds set`);
+        console.warn(`   - Subjects' departmentId doesn't match the program's department`);
+        console.warn(`   - Program ${programId} not found in courses/strands`);
+        console.warn(`   Sample subject structure:`, currentSubjects[0]);
+      }
+      
       res.status(200).json(filteredSubjects);
     } else if (departmentId) {
       // Filter subjects by department (backward compatibility - deprecated, use programId instead)
-      const filteredSubjects = subjects.filter(subject => 
+      const filteredSubjects = currentSubjects.filter(subject => 
         subject.departmentId === departmentId
       );
       console.log(`GET /api/subjects?departmentId=${departmentId} - Returning ${filteredSubjects.length} subjects for department (deprecated, use programId)`);
       res.status(200).json(filteredSubjects);
     } else {
       // Return all subjects for entity management
-      console.log('GET /api/subjects - Returning all subjects:', subjects.length, 'subjects');
-      console.log('Subjects array:', subjects);
+      console.log('GET /api/subjects - Returning all subjects:', currentSubjects.length, 'subjects');
+      console.log('Subjects array:', currentSubjects);
 
       // Return the actual subjects array
-      res.status(200).json(subjects);
+      res.status(200).json(currentSubjects);
     }
   } catch (error) {
     console.error('Error fetching subjects:', error);
