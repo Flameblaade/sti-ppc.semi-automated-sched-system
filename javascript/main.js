@@ -6795,6 +6795,20 @@ function showClassesDetailsModal() {
     // Set up search functionality
     const searchInput = document.getElementById('classesDetailsSearch');
     if (searchInput) {
+        // Clear search when modal is closed
+        searchInput.value = '';
+        
+        // Add focus styles
+        searchInput.addEventListener('focus', function() {
+            this.style.borderColor = '#4a90e2';
+            this.style.boxShadow = '0 0 0 3px rgba(74, 144, 226, 0.1)';
+        });
+        
+        searchInput.addEventListener('blur', function() {
+            this.style.borderColor = '#e2e8f0';
+            this.style.boxShadow = 'none';
+        });
+        
         searchInput.addEventListener('input', function(e) {
             const searchTerm = e.target.value.toLowerCase().trim();
             if (searchTerm === '') {
@@ -6802,13 +6816,18 @@ function showClassesDetailsModal() {
             } else {
                 const filtered = classes.filter(cls => {
                     const subject = (cls.subject || '').toLowerCase();
+                    const subjectCode = (cls.subjectCode || '').toLowerCase();
                     const faculty = (cls.faculty || '').toLowerCase();
                     const course = (cls.course || '').toLowerCase();
                     const department = (cls.department || '').toLowerCase();
+                    const classType = (cls.classType || '').toLowerCase();
+                    
                     return subject.includes(searchTerm) || 
+                           subjectCode.includes(searchTerm) ||
                            faculty.includes(searchTerm) || 
                            course.includes(searchTerm) || 
-                           department.includes(searchTerm);
+                           department.includes(searchTerm) ||
+                           classType.includes(searchTerm);
                 });
                 renderClassesList(filtered);
             }
