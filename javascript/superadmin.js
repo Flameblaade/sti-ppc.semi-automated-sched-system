@@ -2824,8 +2824,30 @@ function showAddFacultyModal() {
                     </select>
                 </div>
                 <div style="margin-bottom: 20px;">
-                    <label for="facultyMixedTeaching" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Teaching Type</label>
-                    <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 500; color: #374151;">Teaching Level</label>
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="facultyTeachesTertiary" style="
+                                width: 18px;
+                                height: 18px;
+                                cursor: pointer;
+                            ">
+                            <label for="facultyTeachesTertiary" style="margin: 0; cursor: pointer; color: #374151;">
+                                Teaches Tertiary
+                            </label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="facultyTeachesSHS" style="
+                                width: 18px;
+                                height: 18px;
+                                cursor: pointer;
+                            ">
+                            <label for="facultyTeachesSHS" style="margin: 0; cursor: pointer; color: #374151;">
+                                Teaches SHS
+                            </label>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
                         <input type="checkbox" id="facultyMixedTeaching" style="
                             width: 18px;
                             height: 18px;
@@ -2838,8 +2860,8 @@ function showAddFacultyModal() {
                     <small style="color: #64748b; font-size: 12px; display: block; margin-top: 5px;">
                         <strong>Unit Limits:</strong><br>
                         • SHS Teachers: 27 units (no overload)<br>
-                        • Tertiary Teachers: 24 units base, up to 30 units with overload<br>
-                        • Mixed Teaching: Up to 30 units total (full-time) or 15 units (part-time)<br>
+                        • Tertiary Teachers: 24 units base, unlimited overload<br>
+                        • Mixed Teaching: 24 units base, unlimited overload (full-time) or 15 units (part-time)<br>
                         • Part-time: Maximum 15 units
                     </small>
                 </div>
@@ -2876,6 +2898,38 @@ function showAddFacultyModal() {
     
     // Load departments
     loadDepartmentsForFaculty(modal);
+    
+    // Handle mixed teaching checkbox change to disable/enable teaching level checkboxes
+    const mixedTeachingCheckbox = modal.querySelector('#facultyMixedTeaching');
+    const teachesTertiaryCheckbox = modal.querySelector('#facultyTeachesTertiary');
+    const teachesSHSCheckbox = modal.querySelector('#facultyTeachesSHS');
+    
+    function updateTeachingLevelCheckboxes() {
+        const isMixedTeaching = mixedTeachingCheckbox.checked;
+        teachesTertiaryCheckbox.disabled = isMixedTeaching;
+        teachesSHSCheckbox.disabled = isMixedTeaching;
+        
+        if (isMixedTeaching) {
+            teachesTertiaryCheckbox.checked = false;
+            teachesSHSCheckbox.checked = false;
+        }
+    }
+    
+    // Make the teaching level checkboxes mutually exclusive (only one can be selected)
+    teachesTertiaryCheckbox.addEventListener('change', function() {
+        if (this.checked && !mixedTeachingCheckbox.checked) {
+            teachesSHSCheckbox.checked = false;
+        }
+    });
+    
+    teachesSHSCheckbox.addEventListener('change', function() {
+        if (this.checked && !mixedTeachingCheckbox.checked) {
+            teachesTertiaryCheckbox.checked = false;
+        }
+    });
+    
+    mixedTeachingCheckbox.addEventListener('change', updateTeachingLevelCheckboxes);
+    updateTeachingLevelCheckboxes(); // Initialize state
     
     // Handle save button
     document.getElementById('saveFaculty').addEventListener('click', async () => {
@@ -3047,6 +3101,8 @@ async function saveFaculty(modal) {
         const departmentInput = modal.querySelector('#facultyDepartment');
         const employmentTypeInput = modal.querySelector('#facultyEmploymentType');
         const mixedTeachingInput = modal.querySelector('#facultyMixedTeaching');
+        const teachesTertiaryInput = modal.querySelector('#facultyTeachesTertiary');
+        const teachesSHSInput = modal.querySelector('#facultyTeachesSHS');
         
         if (!firstNameInput || !lastNameInput || !emailInput || !departmentInput || !employmentTypeInput) {
             showNotification('Form elements not found', 'error');
@@ -3060,6 +3116,8 @@ async function saveFaculty(modal) {
         const departmentId = departmentInput.value;
         const employmentType = employmentTypeInput.value;
         const mixedTeaching = mixedTeachingInput ? mixedTeachingInput.checked : false;
+        const teachesTertiary = teachesTertiaryInput ? teachesTertiaryInput.checked : false;
+        const teachesSHS = teachesSHSInput ? teachesSHSInput.checked : false;
         
         if (!firstName || !lastName || !departmentId || !employmentType) {
             showNotification('Please fill in all required fields (First Name, Last Name, Department, Employment Type)', 'error');
@@ -3088,7 +3146,9 @@ async function saveFaculty(modal) {
                 email,
                 departmentId,
                 employmentType,
-                mixedTeaching
+                mixedTeaching,
+                teachesTertiary,
+                teachesSHS
             })
         });
         
@@ -3231,8 +3291,30 @@ function showEditFacultyModal(faculty) {
                     </select>
                 </div>
                 <div style="margin-bottom: 20px;">
-                    <label for="editFacultyMixedTeaching" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Teaching Type</label>
-                    <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 500; color: #374151;">Teaching Level</label>
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="editFacultyTeachesTertiary" ${faculty.teachesTertiary === true ? 'checked' : ''} style="
+                                width: 18px;
+                                height: 18px;
+                                cursor: pointer;
+                            ">
+                            <label for="editFacultyTeachesTertiary" style="margin: 0; cursor: pointer; color: #374151;">
+                                Teaches Tertiary
+                            </label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="editFacultyTeachesSHS" ${faculty.teachesSHS === true ? 'checked' : ''} style="
+                                width: 18px;
+                                height: 18px;
+                                cursor: pointer;
+                            ">
+                            <label for="editFacultyTeachesSHS" style="margin: 0; cursor: pointer; color: #374151;">
+                                Teaches SHS
+                            </label>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
                         <input type="checkbox" id="editFacultyMixedTeaching" ${faculty.mixedTeaching === true ? 'checked' : ''} style="
                             width: 18px;
                             height: 18px;
@@ -3245,8 +3327,8 @@ function showEditFacultyModal(faculty) {
                     <small style="color: #64748b; font-size: 12px; display: block; margin-top: 5px;">
                         <strong>Unit Limits:</strong><br>
                         • SHS Teachers: 27 units (no overload)<br>
-                        • Tertiary Teachers: 24 units base, up to 30 units with overload<br>
-                        • Mixed Teaching: Up to 30 units total (full-time) or 15 units (part-time)<br>
+                        • Tertiary Teachers: 24 units base, unlimited overload<br>
+                        • Mixed Teaching: 24 units base, unlimited overload (full-time) or 15 units (part-time)<br>
                         • Part-time: Maximum 15 units
                     </small>
                 </div>
@@ -3292,6 +3374,38 @@ function showEditFacultyModal(faculty) {
         }
     }, 100);
     
+    // Handle mixed teaching checkbox change to disable/enable teaching level checkboxes
+    const mixedTeachingCheckbox = modal.querySelector('#editFacultyMixedTeaching');
+    const teachesTertiaryCheckbox = modal.querySelector('#editFacultyTeachesTertiary');
+    const teachesSHSCheckbox = modal.querySelector('#editFacultyTeachesSHS');
+    
+    function updateTeachingLevelCheckboxes() {
+        const isMixedTeaching = mixedTeachingCheckbox.checked;
+        teachesTertiaryCheckbox.disabled = isMixedTeaching;
+        teachesSHSCheckbox.disabled = isMixedTeaching;
+        
+        if (isMixedTeaching) {
+            teachesTertiaryCheckbox.checked = false;
+            teachesSHSCheckbox.checked = false;
+        }
+    }
+    
+    // Make the teaching level checkboxes mutually exclusive (only one can be selected)
+    teachesTertiaryCheckbox.addEventListener('change', function() {
+        if (this.checked && !mixedTeachingCheckbox.checked) {
+            teachesSHSCheckbox.checked = false;
+        }
+    });
+    
+    teachesSHSCheckbox.addEventListener('change', function() {
+        if (this.checked && !mixedTeachingCheckbox.checked) {
+            teachesTertiaryCheckbox.checked = false;
+        }
+    });
+    
+    mixedTeachingCheckbox.addEventListener('change', updateTeachingLevelCheckboxes);
+    updateTeachingLevelCheckboxes(); // Initialize state
+    
     // Handle save button
     document.getElementById('saveFacultyChanges').addEventListener('click', async () => {
         await saveFacultyChanges(faculty.id, modal);
@@ -3328,6 +3442,8 @@ async function saveFacultyChanges(facultyId, modal) {
         const departmentInput = modal.querySelector('#editFacultyDepartment');
         const employmentTypeInput = modal.querySelector('#editFacultyEmploymentType');
         const mixedTeachingInput = modal.querySelector('#editFacultyMixedTeaching');
+        const teachesTertiaryInput = modal.querySelector('#editFacultyTeachesTertiary');
+        const teachesSHSInput = modal.querySelector('#editFacultyTeachesSHS');
         
         if (!firstNameInput || !lastNameInput || !departmentInput || !employmentTypeInput) {
             showNotification('Form elements not found', 'error');
@@ -3341,6 +3457,8 @@ async function saveFacultyChanges(facultyId, modal) {
         const departmentId = departmentInput.value;
         const employmentType = employmentTypeInput.value;
         const mixedTeaching = mixedTeachingInput ? mixedTeachingInput.checked : false;
+        const teachesTertiary = teachesTertiaryInput ? teachesTertiaryInput.checked : false;
+        const teachesSHS = teachesSHSInput ? teachesSHSInput.checked : false;
         
         if (!firstName || !lastName) {
             showNotification('Please fill in first name and last name', 'error');
@@ -3379,7 +3497,9 @@ async function saveFacultyChanges(facultyId, modal) {
                 email: email || null,
                 departmentId,
                 employmentType,
-                mixedTeaching
+                mixedTeaching,
+                teachesTertiary,
+                teachesSHS
             })
         });
         
@@ -3465,29 +3585,15 @@ function showAddSubjectModal() {
                             " placeholder="e.g., Introduction to Programming">
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                        <div>
-                            <label for="subjectDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department</label>
-                            <select id="subjectDepartment" required style="
-                                width: 100%;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                            ">
-                                <option value="">Select Department</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="subjectUnits" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Units</label>
-                            <input type="number" id="subjectUnits" min="1" max="6" value="3" required style="
-                                width: 100%;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                            ">
-                        </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="subjectUnits" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Units</label>
+                        <input type="number" id="subjectUnits" min="1" max="6" value="3" required style="
+                            width: 100%;
+                            padding: 8px 12px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 4px;
+                            font-size: 14px;
+                        ">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div>
@@ -3542,9 +3648,6 @@ function showAddSubjectModal() {
     
     document.body.appendChild(modal);
     
-    // Load departments into the dropdown
-    loadDepartmentsForSubject(modal);
-    
     // Handle save button
     document.getElementById('saveSubject').addEventListener('click', async () => {
         await saveSubject(modal);
@@ -3569,31 +3672,38 @@ function showAddSubjectModal() {
 }
 
 /**
- * Load departments for subject dropdown (handles both add and edit modals)
+ * Load programs/strands for subject dropdown (handles both add and edit modals)
  */
-async function loadDepartmentsForSubject(modal) {
+async function loadProgramsForSubject(modal) {
     try {
-        const departments = await fetchData('/api/departments');
-        // Try both selectors - one for add modal, one for edit modal
-        const departmentSelect = modal.querySelector('#subjectDepartment') || modal.querySelector('#editSubjectDepartment');
+        // Fetch all courses and strands
+        const courses = await fetchData('/api/courses');
+        const strands = await fetchData('/api/strands');
         
-        if (!departmentSelect) {
-            console.error('Department select not found in modal');
+        // Combine courses and strands
+        const allPrograms = [...(courses || []), ...(strands || [])];
+        
+        // Try both selectors - one for add modal, one for edit modal
+        const programsSelect = modal.querySelector('#subjectPrograms') || modal.querySelector('#editSubjectPrograms');
+        
+        if (!programsSelect) {
+            console.error('Programs select not found in modal');
             return Promise.resolve();
         }
         
-        if (departments && departments.length > 0) {
-            departmentSelect.innerHTML = '<option value="">Select Department</option>' +
-                departments.map(dept => `<option value="${dept.id}">${dept.name} (${dept.code})</option>`).join('');
+        if (allPrograms && allPrograms.length > 0) {
+            programsSelect.innerHTML = allPrograms.map(prog => 
+                `<option value="${prog.id || prog.code}">${prog.code || ''} - ${prog.name || ''}</option>`
+            ).join('');
         } else {
-            departmentSelect.innerHTML = '<option value="">No departments available</option>';
+            programsSelect.innerHTML = '<option value="">No programs/strands available</option>';
         }
         return Promise.resolve();
     } catch (error) {
-        console.error('Error loading departments for subject:', error);
-        const departmentSelect = modal.querySelector('#subjectDepartment') || modal.querySelector('#editSubjectDepartment');
-        if (departmentSelect) {
-            departmentSelect.innerHTML = '<option value="">Error loading departments</option>';
+        console.error('Error loading programs/strands for subject:', error);
+        const programsSelect = modal.querySelector('#subjectPrograms') || modal.querySelector('#editSubjectPrograms');
+        if (programsSelect) {
+            programsSelect.innerHTML = '<option value="">Error loading programs/strands</option>';
         }
         return Promise.resolve();
     }
@@ -3607,24 +3717,22 @@ async function saveSubject(modal) {
         // Get form values before removing modal
         const codeInput = modal.querySelector('#subjectCode');
         const nameInput = modal.querySelector('#subjectName');
-        const departmentInput = modal.querySelector('#subjectDepartment');
         const unitsInput = modal.querySelector('#subjectUnits');
         const lectureHoursInput = modal.querySelector('#subjectLectureHours');
         const labHoursInput = modal.querySelector('#subjectLabHours');
         
-        if (!codeInput || !nameInput || !departmentInput || !unitsInput) {
+        if (!codeInput || !nameInput || !unitsInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
         
         const code = codeInput.value.trim().toUpperCase();
         const name = nameInput.value.trim();
-        const departmentId = departmentInput.value;
         const units = parseInt(unitsInput.value);
         const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
         const labHours = labHoursInput ? parseInt(labHoursInput.value) || 0 : 0;
         
-        if (!code || !name || !departmentId || !units) {
+        if (!code || !name || !units) {
             showNotification('Please fill in all required fields', 'error');
             return;
         }
@@ -3638,7 +3746,6 @@ async function saveSubject(modal) {
             body: JSON.stringify({
                 code,
                 name,
-                departmentId,
                 units,
                 lectureHours,
                 labHours
@@ -3735,29 +3842,15 @@ function showEditSubjectModal(subject) {
                             ">
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                        <div>
-                            <label for="editSubjectDepartment" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Department</label>
-                            <select id="editSubjectDepartment" required style="
-                                width: 100%;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                            ">
-                                <option value="">Select Department</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="editSubjectUnits" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Units</label>
-                            <input type="number" id="editSubjectUnits" min="1" max="6" value="${subject.units || 3}" required style="
-                                width: 100%;
-                                padding: 8px 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                font-size: 14px;
-                            ">
-                        </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="editSubjectUnits" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Units</label>
+                        <input type="number" id="editSubjectUnits" min="1" max="6" value="${subject.units || 3}" required style="
+                            width: 100%;
+                            padding: 8px 12px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 4px;
+                            font-size: 14px;
+                        ">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div>
@@ -3812,27 +3905,6 @@ function showEditSubjectModal(subject) {
     
     document.body.appendChild(modal);
     
-    // Load departments into the dropdown, then set the selected department
-    loadDepartmentsForSubject(modal).then(() => {
-        // Wait a bit longer to ensure departments are loaded
-        setTimeout(() => {
-            const departmentSelect = modal.querySelector('#editSubjectDepartment');
-            if (departmentSelect && subject.departmentId) {
-                departmentSelect.value = subject.departmentId;
-                // If value didn't set, try to find by matching ID or code
-                if (!departmentSelect.value && subject.departmentId) {
-                    const options = departmentSelect.querySelectorAll('option');
-                    for (const option of options) {
-                        if (option.value === subject.departmentId) {
-                            option.selected = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }, 300);
-    });
-    
     // Handle save button
     document.getElementById('saveSubjectChanges').addEventListener('click', async () => {
         await saveSubjectChanges(subject.id, modal);
@@ -3864,24 +3936,22 @@ async function saveSubjectChanges(subjectId, modal) {
         // Get form values before removing modal
         const codeInput = modal.querySelector('#editSubjectCode');
         const nameInput = modal.querySelector('#editSubjectName');
-        const departmentInput = modal.querySelector('#editSubjectDepartment');
         const unitsInput = modal.querySelector('#editSubjectUnits');
         const lectureHoursInput = modal.querySelector('#editSubjectLectureHours');
         const labHoursInput = modal.querySelector('#editSubjectLabHours');
         
-        if (!codeInput || !nameInput || !departmentInput || !unitsInput) {
+        if (!codeInput || !nameInput || !unitsInput) {
             showNotification('Form elements not found', 'error');
             return;
         }
         
         const code = codeInput.value.trim().toUpperCase();
         const name = nameInput.value.trim();
-        const departmentId = departmentInput.value;
         const units = parseInt(unitsInput.value);
         const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
         const labHours = labHoursInput ? parseInt(labHoursInput.value) || 0 : 0;
         
-        if (!code || !name || !departmentId || !units) {
+        if (!code || !name || !units) {
             showNotification('Please fill in all required fields', 'error');
             return;
         }
@@ -3895,7 +3965,6 @@ async function saveSubjectChanges(subjectId, modal) {
             body: JSON.stringify({
                 code,
                 name,
-                departmentId,
                 units,
                 lectureHours,
                 labHours
@@ -4796,18 +4865,6 @@ function showAddCourseModal() {
                             font-size: 14px;
                         " placeholder="e.g., Bachelor of Science in Information Technology">
                     </div>
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Department *</label>
-                        <select id="courseDepartment" required style="
-                            width: 100%;
-                            padding: 8px 12px;
-                            border: 1px solid #d1d5db;
-                            border-radius: 6px;
-                            font-size: 14px;
-                        ">
-                            <option value="">Select Department</option>
-                        </select>
-                    </div>
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Type *</label>
                         <select id="courseType" required style="
@@ -4852,9 +4909,6 @@ function showAddCourseModal() {
     `;
     
     document.body.appendChild(modal);
-    
-    // Load departments into the dropdown
-    loadDepartmentsForCourse(modal);
     
     // Handle save button
     document.getElementById('saveCourseBtn').addEventListener('click', () => saveCourse(modal));
@@ -4943,18 +4997,6 @@ function showEditCourseModal(course) {
                             font-size: 14px;
                         " value="${course.name || ''}">
                     </div>
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Department *</label>
-                        <select id="editCourseDepartment" required style="
-                            width: 100%;
-                            padding: 8px 12px;
-                            border: 1px solid #d1d5db;
-                            border-radius: 6px;
-                            font-size: 14px;
-                        ">
-                            <option value="">Select Department</option>
-                        </select>
-                    </div>
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Type *</label>
                         <select id="editCourseType" required style="
@@ -5000,15 +5042,6 @@ function showEditCourseModal(course) {
     
     document.body.appendChild(modal);
     
-    // Load departments and set selected department
-    loadDepartmentsForCourse(modal);
-    setTimeout(() => {
-        const departmentSelect = modal.querySelector('#editCourseDepartment');
-        if (course.departmentId) {
-            departmentSelect.value = course.departmentId;
-        }
-    }, 100);
-    
     // Handle save button
     document.getElementById('saveCourseChangesBtn').addEventListener('click', () => saveCourseChanges(course.id, modal));
     
@@ -5038,9 +5071,8 @@ async function saveCourse(modal) {
         const code = modal.querySelector('#courseCode').value.trim();
         const name = modal.querySelector('#courseName').value.trim();
         const type = modal.querySelector('#courseType').value;
-        const departmentId = modal.querySelector('#courseDepartment').value;
         
-        if (!code || !name || !type || !departmentId) {
+        if (!code || !name || !type) {
             showNotification('Please fill in all required fields', 'error');
             return;
         }
@@ -5054,8 +5086,7 @@ async function saveCourse(modal) {
             body: JSON.stringify({
                 code,
                 name,
-                type,
-                departmentId
+                type
             })
         });
         
@@ -5085,9 +5116,8 @@ async function saveCourseChanges(courseId, modal) {
         const code = modal.querySelector('#editCourseCode').value.trim();
         const name = modal.querySelector('#editCourseName').value.trim();
         const type = modal.querySelector('#editCourseType').value;
-        const departmentId = modal.querySelector('#editCourseDepartment').value;
         
-        if (!code || !name || !type || !departmentId) {
+        if (!code || !name || !type) {
             showNotification('Please fill in all required fields', 'error');
             return;
         }
@@ -5101,8 +5131,7 @@ async function saveCourseChanges(courseId, modal) {
             body: JSON.stringify({
                 code,
                 name,
-                type,
-                departmentId
+                type
             })
         });
         

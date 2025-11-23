@@ -219,7 +219,172 @@ function resolveDepartmentId(departmentIdOrCode) {
     }
 }
 
+// Function to load ALL faculty (not filtered by department) - for program-based selection
+async function loadAllFaculty() {
+    const facultySelect = document.getElementById('facultySelect');
+    
+    if (!facultySelect) {
+        console.warn('facultySelect element not found');
+        return;
+    }
+    
+    // Reset faculty select - show loading state
+    if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+        window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Loading faculty...', disabled: true}], 'value', 'label', true);
+    } else {
+        facultySelect.innerHTML = '<option value="" selected disabled>Loading faculty...</option>';
+    }
+    facultySelect.disabled = true;
+    
+    try {
+        let faculty = [];
+        
+        // Try to fetch ALL faculty from API (no department filter)
+        try {
+            const response = await fetchWithAuth(`/api/faculty`);
+            if (response && response.ok) {
+                faculty = await response.json();
+                // Filter out superadmin account
+                faculty = faculty.filter(f => 
+                    f.email !== 'superadmin@school.edu' && 
+                    f.role !== 'superadmin' && 
+                    String(f.role || '').toLowerCase() !== 'superadmin'
+                );
+                console.log('Loaded all faculty from API:', faculty.length);
+            }
+        } catch (e) {
+            console.warn('API call failed, using fallback:', e);
+        }
+
+        if (!Array.isArray(faculty) || faculty.length === 0) {
+            // Build from localStorage - get ALL users with departmentId (faculty)
+            const users = JSON.parse(localStorage.getItem('users') || '[]');
+            const assignments = JSON.parse(localStorage.getItem('facultyAssignments') || '[]');
+            
+            const localFaculty = [];
+            
+            // From users - get all faculty (any department)
+            users.filter(u => {
+                // Exclude superadmin account
+                if (u.email === 'superadmin@school.edu' || 
+                    u.role === 'superadmin' || 
+                    String(u.role || '').toLowerCase() === 'superadmin') {
+                    return false;
+                }
+                // Check if user has a departmentId assigned (faculty assignment)
+                return u.departmentId != null && u.departmentId !== '';
+            }).forEach(u => {
+                localFaculty.push({ 
+                    id: u.id, 
+                    name: formatFullName(u.firstName || '', u.middleName || '', u.lastName || '') || u.email || 'Faculty', 
+                    email: u.email,
+                    department: u.department || '',
+                    departmentId: u.departmentId || ''
+                });
+            });
+            
+            // From assignments
+            assignments.forEach(a => {
+                localFaculty.push({ 
+                    id: a.userId, 
+                    name: formatFullName(a.firstName || '', a.middleName || '', a.lastName || '') || a.email || 'Faculty', 
+                    email: a.email,
+                    department: a.department || '',
+                    departmentId: a.departmentId || ''
+                });
+            });
+            
+            // Deduplicate by id/email
+            const seen = new Set();
+            faculty = localFaculty.filter(f => {
+                const key = String(f.id||'') + '|' + String((f.email||'').toLowerCase());
+                if (seen.has(key)) return false; 
+                seen.add(key); 
+                return true;
+            });
+            
+            console.log('Loaded all faculty from localStorage:', faculty.length);
+        }
+
+        // Filter out superadmin account before populating dropdown
+        faculty = (faculty || []).filter(f => 
+            f.email !== 'superadmin@school.edu' && 
+            f.role !== 'superadmin' && 
+            String(f.role || '').toLowerCase() !== 'superadmin'
+        );
+        
+        // Prepare options for Choices.js (include department in label for clarity)
+        const facultyOptions = faculty.map(f => ({
+            value: f.id,
+            label: `${f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty'}${f.department ? ' - ' + f.department : ''}`,
+            customProperties: {
+                email: f.email || '',
+                department: f.department || '',
+                departmentId: f.departmentId || ''
+            }
+        }));
+        
+        // Update Choices.js instance if available
+        if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+            if (facultyOptions.length > 0) {
+                // Add placeholder option first
+                const optionsWithPlaceholder = [
+                    {value: '', label: 'Select Faculty Member', disabled: true},
+                    ...facultyOptions
+                ];
+                window.choicesInstances['facultySelect'].setChoices(optionsWithPlaceholder, 'value', 'label', true);
+                // Enable both the underlying select and the Choices.js instance
+                facultySelect.disabled = false;
+                if (typeof window.choicesInstances['facultySelect'].enable === 'function') {
+                    window.choicesInstances['facultySelect'].enable();
+                }
+                console.log('Faculty dropdown enabled with', facultyOptions.length, 'faculty members');
+            } else {
+                window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'No faculty available', disabled: true}], 'value', 'label', true);
+                facultySelect.disabled = true;
+                if (typeof window.choicesInstances['facultySelect'].disable === 'function') {
+                    window.choicesInstances['facultySelect'].disable();
+                }
+            }
+        } else {
+            // Fallback: populate normally if Choices not initialized
+            facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty Member</option>';
+            faculty.forEach(f => {
+                const option = document.createElement('option');
+                option.value = f.id;
+                const display = `${f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty'}${f.department ? ' - ' + f.department : ''}`;
+                option.textContent = display;
+                if (f.email) option.dataset.email = f.email;
+                if (f.department) option.dataset.department = f.department;
+                if (f.departmentId) option.dataset.departmentId = f.departmentId;
+                facultySelect.appendChild(option);
+            });
+            
+            if ((faculty||[]).length > 0) {
+                facultySelect.disabled = false;
+                console.log('Faculty dropdown enabled (native) with', faculty.length, 'faculty members');
+            } else {
+                facultySelect.disabled = true;
+                facultySelect.innerHTML = '<option value="" selected disabled>No faculty available</option>';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading faculty:', error);
+        if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+            window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Error loading faculty', disabled: true}], 'value', 'label', true);
+            facultySelect.disabled = true;
+            if (typeof window.choicesInstances['facultySelect'].disable === 'function') {
+                window.choicesInstances['facultySelect'].disable();
+            }
+        } else {
+            facultySelect.innerHTML = '<option value="" selected disabled>Error loading faculty</option>';
+            facultySelect.disabled = true;
+        }
+    }
+}
+
 // Function to load faculty by department (server first, fallback to localStorage users/facultyAssignments)
+// Kept for backward compatibility but not used in main form flow
 async function loadFaculty(departmentIdOrCode) {
     const facultySelect = document.getElementById('facultySelect');
     const subjectSelect = document.getElementById('subjectSelect');
@@ -338,24 +503,42 @@ async function loadFaculty(departmentIdOrCode) {
             String(f.role || '').toLowerCase() !== 'superadmin'
         );
         
-        // Update faculty select
-        facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty</option>';
-        faculty.forEach(f => {
-            const option = document.createElement('option');
-            option.value = f.id;
-            // tolerate different shapes
-            const display = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
-            option.textContent = display;
-            if (f.email) option.dataset.email = f.email;
-            facultySelect.appendChild(option);
-        });
+        // Prepare options for Choices.js
+        const facultyOptions = faculty.map(f => ({
+            value: f.id,
+            label: f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty',
+            customProperties: {
+                email: f.email || ''
+            }
+        }));
         
-        // Only enable if faculty are available
-        if ((faculty||[]).length > 0) {
-            facultySelect.disabled = false;
+        // Update Choices.js instance if available
+        if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+            if (facultyOptions.length > 0) {
+                window.choicesInstances['facultySelect'].setChoices(facultyOptions, 'value', 'label', true);
+                facultySelect.disabled = false;
+            } else {
+                window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'No faculty available', disabled: true}], 'value', 'label', true);
+                facultySelect.disabled = true;
+            }
         } else {
-            facultySelect.disabled = true;
-            facultySelect.innerHTML = '<option value="" selected disabled>No faculty available</option>';
+            // Fallback: populate normally if Choices not initialized
+            facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty</option>';
+            faculty.forEach(f => {
+                const option = document.createElement('option');
+                option.value = f.id;
+                const display = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
+                option.textContent = display;
+                if (f.email) option.dataset.email = f.email;
+                facultySelect.appendChild(option);
+            });
+            
+            if ((faculty||[]).length > 0) {
+                facultySelect.disabled = false;
+            } else {
+                facultySelect.disabled = true;
+                facultySelect.innerHTML = '<option value="" selected disabled>No faculty available</option>';
+            }
         }
     } catch (error) {
         console.error('Error loading faculty:', error);
@@ -364,62 +547,122 @@ async function loadFaculty(departmentIdOrCode) {
     }
 }
 
-// Function to load subjects by department (aligns with Entity Management)
-async function loadSubjects(facultyId) {
+// Function to load subjects by program/strand (instead of department)
+// This allows subjects to be shared across departments (e.g., GE subjects)
+async function loadSubjects(programId) {
     const subjectSelect = document.getElementById('subjectSelect');
     
     // Reset subject select
     subjectSelect.innerHTML = '<option value="" selected disabled>Loading subjects...</option>';
     subjectSelect.disabled = true;
     
-    const departmentValue = document.getElementById('departmentSelect')?.value;
-    if (!departmentValue) return;
+    // Get selected program/strand
+    const programValue = programId || document.getElementById('programSelect')?.value;
+    if (!programValue) {
+        subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+        return;
+    }
     
-    // Resolve department to get actual ID
     const eq = (a,b) => String(a||'').toLowerCase() === String(b||'').toLowerCase();
-    const depts = JSON.parse(localStorage.getItem('departments') || '[]');
-    const dept = depts.find(d => eq(d.id, departmentValue) || eq(d.code, departmentValue));
-    const departmentId = dept?.id || departmentValue; // Use resolved ID, fallback to value
     
     try {
         let subjects = [];
         try {
-            // Use resolved department ID for API call
-            const response = await fetchWithAuth(`/api/subjects?departmentId=${encodeURIComponent(departmentId)}`);
+            // Try to fetch subjects by programId from API
+            const response = await fetchWithAuth(`/api/subjects?programId=${encodeURIComponent(programValue)}`);
             if (response && response.ok) {
                 subjects = await response.json();
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) { 
+            console.log('API call failed, using localStorage fallback:', e);
+        }
 
         if (!Array.isArray(subjects) || !subjects.length) {
             // Fallback to localStorage
             const allSubjects = JSON.parse(localStorage.getItem('subjects') || '[]');
             
-            // Resolve to actual department ID and code (dept already resolved above)
-            const resolvedDeptId = dept?.id || null;
-            const resolvedDeptCode = dept?.code || null;
+            console.log('Filtering subjects for program/strand:', programValue);
             
-            console.log('Filtering subjects for department:', departmentValue, 'Resolved ID:', resolvedDeptId, 'Resolved Code:', resolvedDeptCode);
+            // Get all programs/strands for backward compatibility matching (do this once, not in the filter)
+            let allCourses = [];
+            let allStrands = [];
             
-            // Strict matching function - only match by departmentId or department code field
-            const matchesDept = (obj) => {
-                if (!obj) return false;
+            try {
+                allCourses = JSON.parse(localStorage.getItem('courses') || '[]');
+            } catch (e) {
+                console.warn('Error parsing courses from localStorage:', e);
+            }
+            
+            try {
+                allStrands = JSON.parse(localStorage.getItem('strands') || '[]');
+            } catch (e) {
+                console.warn('Error parsing strands from localStorage:', e);
+            }
+            
+            // If courses is empty, try to get from API
+            // Fetch ALL courses/strands to find the selected program (not just by department)
+            if (!allCourses.length && !allStrands.length) {
+                try {
+                    // Try to fetch all courses (no department filter)
+                    const resp = await fetchWithAuth(`/api/courses`);
+                    if (resp && resp.ok) {
+                        allCourses = await resp.json();
+                        // Cache in localStorage for future use
+                        if (allCourses.length) {
+                            localStorage.setItem('courses', JSON.stringify(allCourses));
+                        }
+                    }
+                    // Try to fetch all strands (no department filter)
+                    const respStrands = await fetchWithAuth(`/api/strands`);
+                    if (respStrands && respStrands.ok) {
+                        allStrands = await respStrands.json();
+                        // Cache in localStorage for future use
+                        if (allStrands.length) {
+                            localStorage.setItem('strands', JSON.stringify(allStrands));
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error fetching programs from API:', e);
+                }
+            }
+            
+            const allPrograms = [...allCourses, ...allStrands];
+            const selectedProgram = allPrograms.find(p => 
+                eq(String(p.id || ''), String(programValue)) || 
+                eq(String(p.code || ''), String(programValue))
+            );
+            
+            // Filter subjects by programId or programIds array
+            // A subject can belong to multiple programs (e.g., GE subjects for IT, THM, etc.)
+            const matchesProgram = (subject) => {
+                if (!subject) return false;
                 
-                // Primary check: match by departmentId (the ID field)
-                if (resolvedDeptId) {
-                    const objDeptId = String(obj.departmentId || '').toLowerCase();
-                    if (objDeptId && eq(objDeptId, resolvedDeptId)) {
-                        console.log(`Matched subject "${obj.code || obj.name}" by departmentId: ${obj.departmentId}`);
+                // Check if subject has programIds array (new structure)
+                if (subject.programIds && Array.isArray(subject.programIds)) {
+                    const matches = subject.programIds.some(pid => 
+                        eq(String(pid || ''), String(programValue))
+                    );
+                    if (matches) {
+                        console.log(`Matched subject "${subject.code || subject.name}" by programIds array`);
                         return true;
                     }
                 }
                 
-                // Secondary check: match by department code if departmentId doesn't match
-                if (resolvedDeptCode) {
-                    // Check departmentCode or deptCode fields (if they exist)
-                    const objDeptCode = String(obj.departmentCode || obj.deptCode || '').toLowerCase();
-                    if (objDeptCode && eq(objDeptCode, resolvedDeptCode)) {
-                        console.log(`Matched subject "${obj.code || obj.name}" by departmentCode: ${objDeptCode}`);
+                // Check if subject has programId (single program, for backward compatibility)
+                if (subject.programId) {
+                    if (eq(String(subject.programId || ''), String(programValue))) {
+                        console.log(`Matched subject "${subject.code || subject.name}" by programId`);
+                        return true;
+                    }
+                }
+                
+                // Backward compatibility: if subject has departmentId but no programId,
+                // check if the selected program belongs to that department
+                // This is a fallback for existing data
+                if (subject.departmentId && !subject.programId && !subject.programIds && selectedProgram) {
+                    // Match if program's department matches subject's department
+                    if (eq(String(selectedProgram.departmentId || ''), String(subject.departmentId || ''))) {
+                        console.log(`Matched subject "${subject.code || subject.name}" by departmentId (backward compatibility)`);
                         return true;
                     }
                 }
@@ -427,143 +670,201 @@ async function loadSubjects(facultyId) {
                 return false;
             };
             
-            const filteredSubjects = allSubjects.filter(s => matchesDept(s));
-            console.log(`Filtered subjects: ${filteredSubjects.length} of ${allSubjects.length} match department`);
+            const filteredSubjects = allSubjects.filter(matchesProgram);
+            console.log(`Filtered subjects: ${filteredSubjects.length} of ${allSubjects.length} match program/strand`);
             subjects = filteredSubjects;
         }
 
-        // Populate subjects only
-        subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject/Course</option>';
-        (subjects||[]).forEach(sub => {
-            const opt = document.createElement('option');
-            opt.value = sub.id || sub.code;
-            opt.textContent = `${sub.code || ''} ${sub.name ? '- ' + sub.name : ''}`.trim();
-            opt.dataset.kind = 'subject';
-            subjectSelect.appendChild(opt);
-        });
+        // Prepare options for Choices.js
+        const subjectOptions = subjects.map(sub => ({
+            value: sub.id || sub.code,
+            label: `${sub.code || ''} ${sub.name ? '- ' + sub.name : ''}`.trim(),
+            customProperties: {
+                kind: 'subject'
+            }
+        }));
+        
+        // Update Choices.js instance if available
+        if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+            if (subjectOptions.length > 0) {
+                window.choicesInstances['subjectSelect'].setChoices(subjectOptions, 'value', 'label', true);
+                // Enable both the underlying select and the Choices.js instance
+                subjectSelect.disabled = false;
+                if (typeof window.choicesInstances['subjectSelect'].enable === 'function') {
+                    window.choicesInstances['subjectSelect'].enable();
+                }
+                console.log('Subject dropdown enabled with', subjectOptions.length, 'subjects');
+            } else {
+                window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'No subjects available for this program/strand', disabled: true}], 'value', 'label', true);
+                subjectSelect.disabled = true;
+                if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
+                    window.choicesInstances['subjectSelect'].disable();
+                }
+            }
+        } else {
+            // Fallback: populate normally if Choices not initialized
+            subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject/Course</option>';
+            (subjects||[]).forEach(sub => {
+                const opt = document.createElement('option');
+                opt.value = sub.id || sub.code;
+                opt.textContent = `${sub.code || ''} ${sub.name ? '- ' + sub.name : ''}`.trim();
+                opt.dataset.kind = 'subject';
+                subjectSelect.appendChild(opt);
+            });
 
-        subjectSelect.disabled = (subjectSelect.options.length <= 1);
-        if (subjectSelect.options.length <= 1) {
-            subjectSelect.innerHTML = '<option value="" selected disabled>No subjects available</option>';
+            subjectSelect.disabled = (subjectSelect.options.length <= 1);
+            if (subjectSelect.options.length <= 1) {
+                subjectSelect.innerHTML = '<option value="" selected disabled>No subjects available for this program/strand</option>';
+            }
         }
     } catch (error) {
         console.error('Error loading subjects:', error);
-        subjectSelect.innerHTML = '<option value="" selected disabled>Error loading subjects</option>';
-        subjectSelect.disabled = true;
+        if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+            window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Error loading subjects', disabled: true}], 'value', 'label', true);
+            subjectSelect.disabled = true;
+            if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
+                window.choicesInstances['subjectSelect'].disable();
+            }
+        } else {
+            subjectSelect.innerHTML = '<option value="" selected disabled>Error loading subjects</option>';
+            subjectSelect.disabled = true;
+        }
     }
 }
 
-// Function to load programs/strands by department (courses + strands)
-async function loadPrograms() {
+// Function to load ALL programs/strands (for when Program/Strand is selected first)
+async function loadAllPrograms() {
     const programSelect = document.getElementById('programSelect');
     
+    if (!programSelect) {
+        console.warn('programSelect element not found');
+        return;
+    }
+    
     // Reset program select
-    programSelect.innerHTML = '<option value="" selected disabled>Loading programs/strands...</option>';
+    if (window.choicesInstances && window.choicesInstances['programSelect']) {
+        window.choicesInstances['programSelect'].setChoices([{value: '', label: 'Loading programs/strands...', disabled: true}], 'value', 'label', true);
+    } else {
+        programSelect.innerHTML = '<option value="" selected disabled>Loading programs/strands...</option>';
+    }
     programSelect.disabled = true;
-    
-    const departmentValue = document.getElementById('departmentSelect')?.value;
-    if (!departmentValue) return;
-    
-    // Resolve department to get actual ID
-    const eq = (a,b) => String(a||'').toLowerCase() === String(b||'').toLowerCase();
-    const depts = JSON.parse(localStorage.getItem('departments') || '[]');
-    const dept = depts.find(d => eq(d.id, departmentValue) || eq(d.code, departmentValue));
-    const departmentId = dept?.id || departmentValue; // Use resolved ID, fallback to value
     
     try {
         let courses = [];
         let strands = [];
+        
+        // Try to fetch all courses and strands from API
         try {
-            // Use resolved department ID for API call
-            const respCourses = await fetchWithAuth(`/api/courses?departmentId=${encodeURIComponent(departmentId)}`);
+            const respCourses = await fetchWithAuth(`/api/courses`);
             if (respCourses && respCourses.ok) {
                 courses = await respCourses.json();
+                console.log('Loaded courses from API:', courses.length);
             }
-        } catch (e2) { /* ignore */ }
+        } catch (e) { 
+            console.log('API call for courses failed, using localStorage:', e);
+        }
+        
         try {
-            // Use resolved department ID for API call
-            const respStrands = await fetchWithAuth(`/api/strands?departmentId=${encodeURIComponent(departmentId)}`);
+            const respStrands = await fetchWithAuth(`/api/strands`);
             if (respStrands && respStrands.ok) {
                 strands = await respStrands.json();
+                console.log('Loaded strands from API:', strands.length);
             }
-        } catch (e3) { /* ignore */ }
+        } catch (e) { 
+            console.log('API call for strands failed, using localStorage:', e);
+        }
 
         // Fallback to localStorage if API didn't return results
-        if ((!Array.isArray(courses) || !courses.length) || (!Array.isArray(strands) || !strands.length)) {
-            const allCourses = JSON.parse(localStorage.getItem('courses') || '[]');
-            const allStrands = JSON.parse(localStorage.getItem('strands') || '[]');
-            
-            // Resolve to actual department ID and code (dept already resolved above)
-            const resolvedDeptId = dept?.id || null;
-            const resolvedDeptCode = dept?.code || null;
-            
-            console.log('Filtering programs/strands for department:', departmentValue, 'Resolved ID:', resolvedDeptId, 'Resolved Code:', resolvedDeptCode);
-            
-            // Strict matching function - only match by departmentId or department code field
-            const matchesDept = (obj) => {
-                if (!obj) return false;
-                
-                // Primary check: match by departmentId (the ID field)
-                if (resolvedDeptId) {
-                    const objDeptId = String(obj.departmentId || '').toLowerCase();
-                    if (objDeptId && eq(objDeptId, resolvedDeptId)) {
-                        console.log(`Matched program/strand "${obj.code || obj.name}" by departmentId: ${obj.departmentId}`);
-                        return true;
-                    }
-                }
-                
-                // Secondary check: match by department code if departmentId doesn't match
-                if (resolvedDeptCode) {
-                    // Check departmentCode or deptCode fields (if they exist)
-                    const objDeptCode = String(obj.departmentCode || obj.deptCode || '').toLowerCase();
-                    if (objDeptCode && eq(objDeptCode, resolvedDeptCode)) {
-                        console.log(`Matched program/strand "${obj.code || obj.name}" by departmentCode: ${objDeptCode}`);
-                        return true;
-                    }
-                }
-                
-                return false;
-            };
-            
-            // Filter courses and strands independently
-            if (!Array.isArray(courses) || !courses.length) {
-                const filteredCourses = allCourses.filter(c => matchesDept(c));
-                console.log(`Filtered courses: ${filteredCourses.length} of ${allCourses.length} match department`);
-                courses = filteredCourses;
-            }
-            if (!Array.isArray(strands) || !strands.length) {
-                const filteredStrands = allStrands.filter(s => matchesDept(s));
-                console.log(`Filtered strands: ${filteredStrands.length} of ${allStrands.length} match department`);
-                strands = filteredStrands;
-            }
+        if (!Array.isArray(courses) || !courses.length) {
+            courses = JSON.parse(localStorage.getItem('courses') || '[]');
+            console.log('Loaded courses from localStorage:', courses.length);
+        }
+        if (!Array.isArray(strands) || !strands.length) {
+            strands = JSON.parse(localStorage.getItem('strands') || '[]');
+            console.log('Loaded strands from localStorage:', strands.length);
         }
 
-        // Populate combined programs (courses + strands)
-        programSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand</option>';
+        // Prepare options for Choices.js
+        const programOptions = [];
+        
         (courses||[]).forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.id || c.code;
-            opt.textContent = `${c.code || ''} ${c.name ? '- ' + c.name : ''}`.trim();
-            opt.dataset.kind = c.type || 'course';
-            programSelect.appendChild(opt);
+            programOptions.push({
+                value: c.id || c.code,
+                label: `${c.code || ''} ${c.name ? '- ' + c.name : ''}`.trim(),
+                customProperties: {
+                    kind: c.type || 'course',
+                    departmentId: c.departmentId || ''
+                }
+            });
         });
+        
         (strands||[]).forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id || s.code;
-            opt.textContent = `${s.code || ''} ${s.name ? '- ' + s.name : ''}`.trim();
-            opt.dataset.kind = s.type || 'strand';
-            programSelect.appendChild(opt);
+            programOptions.push({
+                value: s.id || s.code,
+                label: `${s.code || ''} ${s.name ? '- ' + s.name : ''}`.trim(),
+                customProperties: {
+                    kind: s.type || 'strand',
+                    departmentId: s.departmentId || ''
+                }
+            });
         });
 
-        programSelect.disabled = (programSelect.options.length <= 1);
-        if (programSelect.options.length <= 1) {
-            programSelect.innerHTML = '<option value="" selected disabled>No programs/strands available</option>';
+        console.log('Total program options prepared:', programOptions.length);
+        
+        if (programOptions.length === 0) {
+            console.warn('No programs/strands found');
+            if (window.choicesInstances && window.choicesInstances['programSelect']) {
+                window.choicesInstances['programSelect'].setChoices([{value: '', label: 'No programs/strands available', disabled: true}], 'value', 'label', true);
+            } else {
+                programSelect.innerHTML = '<option value="" selected disabled>No programs/strands available</option>';
+            }
+            programSelect.disabled = true;
+        } else {
+            // Update Choices.js instance if available
+            if (window.choicesInstances && window.choicesInstances['programSelect']) {
+                // Add placeholder option first
+                const optionsWithPlaceholder = [
+                    {value: '', label: 'Select Program/Strand', disabled: true},
+                    ...programOptions
+                ];
+                window.choicesInstances['programSelect'].setChoices(optionsWithPlaceholder, 'value', 'label', true);
+                programSelect.disabled = false;
+                console.log('Programs loaded into Choices.js dropdown');
+            } else {
+                // Fallback: populate normally if Choices not initialized
+                programSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand</option>';
+                programOptions.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.label;
+                    option.dataset.kind = opt.customProperties.kind;
+                    option.dataset.departmentId = opt.customProperties.departmentId;
+                    programSelect.appendChild(option);
+                });
+                programSelect.disabled = false;
+                console.log('Programs loaded into native dropdown');
+            }
         }
     } catch (error) {
-        console.error('Error loading programs/strands:', error);
-        programSelect.innerHTML = '<option value="" selected disabled>Error loading programs/strands</option>';
+        console.error('Error loading programs:', error);
+        if (window.choicesInstances && window.choicesInstances['programSelect']) {
+            window.choicesInstances['programSelect'].setChoices([{value: '', label: 'Error loading programs/strands', disabled: true}], 'value', 'label', true);
+        } else {
+            programSelect.innerHTML = '<option value="" selected disabled>Error loading programs/strands</option>';
+        }
         programSelect.disabled = true;
     }
+}
+
+// Function to load programs/strands by department (courses + strands) - kept for backward compatibility
+async function loadPrograms() {
+    const programSelect = document.getElementById('programSelect');
+    
+    if (!programSelect) return;
+    
+    // Department is no longer required - just call loadAllPrograms instead
+    // This function is kept for backward compatibility
+    await loadAllPrograms();
 }
 
 // Function to update user info based on authentication
@@ -1276,71 +1577,180 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update user info
     updateUserInfo();
     
-    // Ensure faculty dropdown starts disabled
+    // Ensure faculty dropdown starts disabled (will be enabled when program is selected)
     const facultySelect = document.getElementById('facultySelect');
     if (facultySelect) {
         facultySelect.disabled = true;
-        facultySelect.innerHTML = '<option value="" selected disabled>Select Department First</option>';
+        if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+            window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+        } else {
+            facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+        }
     }
+    
+    // Store Choices.js instances for dynamic updates
+    window.choicesInstances = {};
+    
+    // Initialize Choices.js for searchable dropdowns
+    function initSearchableSelect(selectId, options = {}) {
+        const selectElement = document.getElementById(selectId);
+        if (!selectElement) return null;
+        
+        // Destroy existing instance if any
+        if (window.choicesInstances[selectId]) {
+            window.choicesInstances[selectId].destroy();
+        }
+        
+        // Default options for Choices.js
+        const defaultOptions = {
+            searchEnabled: true,
+            searchChoices: true,
+            itemSelectText: '',
+            placeholder: true,
+            placeholderValue: selectElement.options[0]?.text || 'Select...',
+            searchPlaceholderValue: 'Type to search...',
+            shouldSort: true,
+            ...options
+        };
+        
+        // Create new Choices instance
+        const choices = new Choices(selectElement, defaultOptions);
+        window.choicesInstances[selectId] = choices;
+        
+        return choices;
+    }
+    
+    // Update Choices.js instance when options change
+    function updateSearchableSelect(selectId, newOptions = []) {
+        const choices = window.choicesInstances[selectId];
+        if (!choices) {
+            // Initialize if not already initialized
+            return initSearchableSelect(selectId);
+        }
+        
+        // Clear existing choices
+        choices.clearChoices();
+        
+        // Add new options
+        if (newOptions.length > 0) {
+            choices.setChoices(newOptions, 'value', 'label', true);
+        }
+        
+        return choices;
+    }
+    
+    // Initialize all searchable selects after page loads, then load programs
+    setTimeout(() => {
+        initSearchableSelect('programSelect', {
+            placeholderValue: 'Select Program/Strand'
+        });
+        initSearchableSelect('facultySelect', {
+            placeholderValue: 'Select Faculty Member'
+        });
+        initSearchableSelect('subjectSelect', {
+            placeholderValue: 'Select Subject/Course'
+        });
+        
+        // Load ALL programs/strands after Choices.js is initialized (Program/Strand is now first in the form)
+        loadAllPrograms();
+    }, 100);
     
     // Load departments when the page loads
     loadDepartments();
     
-    // Handle department change: load faculty, reset and load programs/strands, and load subjects
+    // Get form elements
     const deptSel = document.getElementById('departmentSelect');
     const facSel = document.getElementById('facultySelect');
     const subjSel = document.getElementById('subjectSelect');
     const progSel = document.getElementById('programSelect');
     
-    if (deptSel) {
-        deptSel.addEventListener('change', function() {
-            const val = this.value;
-            if (val) {
-                loadFaculty(val);
-                // reset dependent selects
-                if (facSel) { 
-                    facSel.innerHTML = '<option value="" selected disabled>Loading faculty...</option>'; 
-                    facSel.disabled = true; 
+    // Handle program/strand change (FIRST in the form flow)
+    // Note: With Choices.js, we need to listen to the actual select element, not the Choices wrapper
+    if (progSel) {
+        // Listen to both native change and Choices.js change events
+        progSel.addEventListener('change', function() {
+            const programId = this.value;
+            // Get departmentId from Choices.js custom properties or dataset
+            let programDeptId = '';
+            if (window.choicesInstances && window.choicesInstances['programSelect']) {
+                try {
+                    const selectedValue = window.choicesInstances['programSelect'].getValue(true);
+                    const valueToFind = Array.isArray(selectedValue) ? selectedValue[0] : selectedValue;
+                    if (valueToFind) {
+                        // Safely access store.choices - check if store exists first
+                        const choicesInstance = window.choicesInstances['programSelect'];
+                        if (choicesInstance.store && choicesInstance.store.choices) {
+                            const choice = choicesInstance.store.choices.find(c => c.value === valueToFind);
+                            programDeptId = choice?.customProperties?.departmentId || '';
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error accessing Choices.js store:', e);
                 }
-                if (subjSel) { 
-                    subjSel.innerHTML = '<option value="" selected disabled>Loading subjects...</option>'; 
-                    subjSel.disabled = true; 
-                }
-                if (progSel) { 
-                    progSel.innerHTML = '<option value="" selected disabled>Loading programs/strands...</option>'; 
-                    progSel.disabled = true; 
-                }
-                // load programs and subjects for the selected department
-                loadPrograms();
-                // Load subjects for the department (pass null for facultyId to load all subjects for the department)
-                loadSubjects(null);
+            }
+            // Fallback to dataset if not found in Choices
+            if (!programDeptId) {
+                const selectedOption = this.options[this.selectedIndex];
+                programDeptId = selectedOption?.dataset?.departmentId || '';
+            }
+            
+            if (programId) {
+                // Load ALL faculty (not filtered by department) when program is selected
+                // This enables the faculty dropdown immediately after program selection
+                loadAllFaculty().then(() => {
+                    console.log('Faculty loaded after program selection');
+                }).catch(err => {
+                    console.error('Error loading faculty:', err);
+                });
+                
+                // Load subjects for the selected program/strand
+                loadSubjects(programId);
             } else {
-                // No department selected, disable all dependent selects
-                if (facSel) { 
-                    facSel.innerHTML = '<option value="" selected disabled>Select Department First</option>'; 
-                    facSel.disabled = true; 
+                // No program selected, reset everything
+                if (facSel) {
+                    if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+                        window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+                    } else {
+                        facSel.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+                    }
+                    facSel.disabled = true;
                 }
-                if (subjSel) { 
-                    subjSel.innerHTML = '<option value="" selected disabled>Select Department First</option>'; 
-                    subjSel.disabled = true; 
-                }
-                if (progSel) { 
-                    progSel.innerHTML = '<option value="" selected disabled>Select Department First</option>'; 
-                    progSel.disabled = true; 
+                if (subjSel) {
+                    if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                        window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Program/Strand First', disabled: true}], 'value', 'label', true);
+                    } else {
+                        subjSel.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+                    }
+                    subjSel.disabled = true;
                 }
             }
         });
     }
     
-    // Handle faculty change: load subjects for the department (can refine by faculty if needed)
+    // Department is no longer used - removed dependency
+    
+    // Handle faculty change: hide subject details and ensure subject dropdown is enabled
     if (facSel) {
         facSel.addEventListener('change', function() {
-            // Still load subjects filtered by department (faculty selection doesn't change subject filtering)
-            loadSubjects(this.value);
             // Hide subject details when faculty changes
             const subjectDetails = document.getElementById('subjectDetails');
             if (subjectDetails) {
                 subjectDetails.style.display = 'none';
+            }
+            
+            // Ensure subject dropdown is enabled if program is selected
+            const programSelect = document.getElementById('programSelect');
+            const subjectSelect = document.getElementById('subjectSelect');
+            if (programSelect && programSelect.value && subjectSelect) {
+                // If subjects were already loaded, make sure dropdown is enabled
+                if (subjectSelect.options.length > 1) {
+                    subjectSelect.disabled = false;
+                    if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                        if (typeof window.choicesInstances['subjectSelect'].enable === 'function') {
+                            window.choicesInstances['subjectSelect'].enable();
+                        }
+                    }
+                }
             }
         });
     }
