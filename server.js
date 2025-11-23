@@ -3144,7 +3144,7 @@ app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
       code: code.trim(),
       departmentId: departmentId || null,
       department: department ? department.name : null,
-      units: parseInt(units) || subjects[subjectIndex].units || 1,
+      units: parseFloat(units) || subjects[subjectIndex].units || 1,
       lectureHours: parseInt(lectureHours) || 0,
       labHours: parseInt(labHours) || 0,
       updatedAt: new Date().toISOString()
@@ -3225,7 +3225,7 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
       code: code.trim(),
       departmentId: departmentId || null,
       department: department ? department.name : null,
-      units: parseInt(units) || 1,
+      units: parseFloat(units) || 1,
       lectureHours: parseInt(lectureHours) || 0,
       labHours: parseInt(labHours) || 0,
       createdAt: new Date().toISOString(),

@@ -3586,13 +3586,13 @@ function showAddSubjectModal() {
                     </div>
                     <div style="margin-bottom: 20px;">
                         <label for="subjectUnits" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Units</label>
-                        <input type="number" id="subjectUnits" min="1" max="6" value="3" required style="
+                        <input type="number" id="subjectUnits" min="0.5" max="6" step="0.1" value="3" required style="
                             width: 100%;
                             padding: 8px 12px;
                             border: 1px solid #d1d5db;
                             border-radius: 4px;
                             font-size: 14px;
-                        ">
+                        " placeholder="e.g., 1.5, 3.2">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div>
@@ -3727,12 +3727,12 @@ async function saveSubject(modal) {
         
         const code = codeInput.value.trim();
         const name = nameInput.value.trim();
-        const units = parseInt(unitsInput.value);
+        const units = parseFloat(unitsInput.value);
         const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
         const labHours = labHoursInput ? parseInt(labHoursInput.value) || 0 : 0;
         
-        if (!code || !name || !units) {
-            showNotification('Please fill in all required fields', 'error');
+        if (!code || !name || !units || isNaN(units)) {
+            showNotification('Please fill in all required fields with valid values', 'error');
             return;
         }
         
@@ -3843,13 +3843,13 @@ function showEditSubjectModal(subject) {
                     </div>
                     <div style="margin-bottom: 20px;">
                         <label for="editSubjectUnits" style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Units</label>
-                        <input type="number" id="editSubjectUnits" min="1" max="6" value="${subject.units || 3}" required style="
+                        <input type="number" id="editSubjectUnits" min="0.5" max="6" step="0.1" value="${subject.units || 3}" required style="
                             width: 100%;
                             padding: 8px 12px;
                             border: 1px solid #d1d5db;
                             border-radius: 4px;
                             font-size: 14px;
-                        ">
+                            " placeholder="e.g., 1.5, 3.2">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div>
@@ -3946,12 +3946,12 @@ async function saveSubjectChanges(subjectId, modal) {
         
         const code = codeInput.value.trim();
         const name = nameInput.value.trim();
-        const units = parseInt(unitsInput.value);
+        const units = parseFloat(unitsInput.value);
         const lectureHours = lectureHoursInput ? parseInt(lectureHoursInput.value) || 0 : 0;
         const labHours = labHoursInput ? parseInt(labHoursInput.value) || 0 : 0;
         
-        if (!code || !name || !units) {
-            showNotification('Please fill in all required fields', 'error');
+        if (!code || !name || !units || isNaN(units)) {
+            showNotification('Please fill in all required fields with valid values', 'error');
             return;
         }
         
