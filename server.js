@@ -3122,14 +3122,17 @@ app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
     }
     
     // Validate input
-    if (!name || !code || !departmentId) {
-      return res.status(400).json({ error: 'Subject name, code, and department are required' });
+    if (!name || !code) {
+      return res.status(400).json({ error: 'Subject name and code are required' });
     }
     
-    // Check if department exists
-    const department = departments.find(dept => dept.id === departmentId);
-    if (!department) {
-      return res.status(400).json({ error: 'Department not found' });
+    // Department is optional - if provided, validate it exists
+    let department = null;
+    if (departmentId) {
+      department = departments.find(dept => dept.id === departmentId);
+      if (!department) {
+        return res.status(400).json({ error: 'Department not found' });
+      }
     }
     
     // Check if another subject with same code exists
@@ -3146,8 +3149,8 @@ app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
       ...subjects[subjectIndex],
       name: name.trim(),
       code: code.trim().toUpperCase(),
-      departmentId: departmentId,
-      department: department.name,
+      departmentId: departmentId || null,
+      department: department ? department.name : null,
       units: parseInt(units) || subjects[subjectIndex].units || 1,
       lectureHours: parseInt(lectureHours) || 0,
       labHours: parseInt(labHours) || 0,
@@ -3207,14 +3210,17 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
     console.log('Extracted data:', { name, code, departmentId, units, lectureHours, labHours });
     
     // Validate input
-    if (!name || !code || !departmentId) {
-      return res.status(400).json({ error: 'Subject name, code, and department are required' });
+    if (!name || !code) {
+      return res.status(400).json({ error: 'Subject name and code are required' });
     }
     
-    // Check if department exists
-    const department = departments.find(dept => dept.id === departmentId);
-    if (!department) {
-      return res.status(400).json({ error: 'Department not found' });
+    // Department is optional - if provided, validate it exists
+    let department = null;
+    if (departmentId) {
+      department = departments.find(dept => dept.id === departmentId);
+      if (!department) {
+        return res.status(400).json({ error: 'Department not found' });
+      }
     }
     
     // Check if subject with same code already exists
@@ -3231,8 +3237,8 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
       id: `subj${Date.now()}`,
       name: name.trim(),
       code: code.trim().toUpperCase(),
-      departmentId: departmentId,
-      department: department.name,
+      departmentId: departmentId || null,
+      department: department ? department.name : null,
       units: parseInt(units) || 1,
       lectureHours: parseInt(lectureHours) || 0,
       labHours: parseInt(labHours) || 0,
