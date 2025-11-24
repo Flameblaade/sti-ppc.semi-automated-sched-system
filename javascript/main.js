@@ -1,357 +1,15 @@
-// Define notification and conflict detection functions at top level so they're available immediately
-(function() {
-    // Simple notification function that works on index.html
-    if (typeof window.showNotification !== 'function') {
-        window.showNotification = function(message, type = 'info') {
-            // Remove existing notifications first
-            const existing = document.querySelectorAll('.custom-notification');
-            existing.forEach(n => n.remove());
-            
-            const notification = document.createElement('div');
-            notification.className = `custom-notification notification-${type}`;
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                z-index: 10000;
-                padding: 16px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-                max-width: 450px;
-                word-wrap: break-word;
-                animation: slideInRight 0.3s ease;
-                font-size: 14px;
-                line-height: 1.5;
-            `;
-            
-            // Set background color based on type
-            if (type === 'error') {
-                notification.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
-                notification.style.color = 'white';
-            } else if (type === 'success') {
-                notification.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                notification.style.color = 'white';
-            } else if (type === 'warning') {
-                notification.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
-                notification.style.color = 'white';
-            } else {
-                notification.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
-                notification.style.color = 'white';
-            }
-            
-            notification.innerHTML = message;
-            
-            document.body.appendChild(notification);
-            
-            // Auto-remove after longer duration for errors (5 seconds) or regular (3 seconds)
-            const duration = type === 'error' ? 5000 : 3000;
-            setTimeout(() => {
-                notification.style.animation = 'slideOutRight 0.3s ease';
-                setTimeout(() => notification.remove(), 300);
-            }, duration);
-        };
-        
-        // Add CSS animations if not already present
-        if (!document.getElementById('notification-styles')) {
-            const style = document.createElement('style');
-            style.id = 'notification-styles';
-            style.textContent = `
-                @keyframes slideInRight {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-                @keyframes slideOutRight {
-                    from { transform: translateX(0); opacity: 1; }
-                    to { transform: translateX(100%); opacity: 0; }
-                }
-            `;
-            document.head.appendChild(style);
-        }
-    }
-    
-    // Comprehensive conflict check: faculty overlap, room overlap, and room exclusivity
-    // Works with both eventData objects and FullCalendar event objects
-    window.wouldCreateScheduleConflict = function(eventOrData, excludeEventId = null) {
-        try {
-            const calendar = window.calendar;
-            if (!calendar) {
-                console.warn('Calendar not available for conflict check');
-                return false;
-            }
-            
-            // Extract data from event object or eventData
-            const eventId = eventOrData.id || excludeEventId;
-            const startTime = eventOrData.start || (eventOrData.startTime ? new Date(eventOrData.startTime) : null);
-            const endTime = eventOrData.end || (eventOrData.endTime ? new Date(eventOrData.endTime) : null);
-            const extendedProps = eventOrData.extendedProps || eventOrData;
-            
-            if (!startTime || !endTime) {
-                console.warn('Invalid time data for conflict check');
-                return false;
-            }
-            
-            const newStart = startTime instanceof Date ? startTime : new Date(startTime);
-            const newEnd = endTime instanceof Date ? endTime : new Date(endTime);
-            const newRoomId = extendedProps.roomId;
-            const newFaculty = extendedProps.faculty;
-            const newSubject = extendedProps.subject || eventOrData.title || '';
-            const newDeptId = extendedProps.departmentId;
-            const newDeptName = extendedProps.department;
-
-            // Enforce room exclusivity first
-            const roomsList = (window.rooms && Array.isArray(window.rooms)) ? window.rooms : (function(){
-                try { const saved = localStorage.getItem('rooms'); return saved ? JSON.parse(saved) : []; } catch(_) { return []; }
-            })();
-            const roomObj = roomsList.find(r => String(r.id) === String(newRoomId));
-            if (roomObj && roomObj.exclusive) {
-                const sameDept = (idA, idB, nameA, nameB) => {
-                    if (idA && idB) return String(idA) === String(idB);
-                    if (nameA && nameB) return String(nameA).toLowerCase() === String(nameB).toLowerCase();
-                    return false;
-                };
-                const allowed = sameDept(roomObj.departmentId, newDeptId, roomObj.department, newDeptName);
-                if (!allowed) {
-                    const roomName = roomObj.name || roomObj.id || 'This room';
-                    const deptName = roomObj.department || 'another department';
-                    if (typeof showNotification === 'function') {
-                        showNotification(`Conflict: ${roomName} is exclusive to ${deptName}. Cannot schedule ${newSubject || 'this class'} here.`, 'error');
-                    } else {
-                        console.error(`Conflict: Room ${roomName} is exclusive to ${deptName}`);
-                    }
-                    return true; // block
-                }
-            }
-
-            // Check for fixed schedule conflicts first
-            if (typeof window.checkFixedScheduleConflict === 'function') {
-                const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                const dayOfWeek = dayNames[newStart.getDay()];
-                const fixedConflict = window.checkFixedScheduleConflict(newStart, newEnd, dayOfWeek);
-                
-                if (fixedConflict && fixedConflict.conflict) {
-                    const conflictMsg = `Schedule Conflict: Cannot schedule "${newSubject || 'this class'}" during "${fixedConflict.scheduleName}" (${fixedConflict.scheduleTime}). This fixed schedule does not allow classes.`;
-                    if (typeof showNotification === 'function') {
-                        showNotification(conflictMsg, 'error');
-                    } else {
-                        console.error('Fixed Schedule Conflict:', conflictMsg);
-                    }
-                    return true; // block
-                }
-            }
-            
-            // Check against existing events for time overlap
-            const overlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
-            const existing = calendar.getEvents();
-            let conflictDetails = [];
-            
-            for (const evt of existing) {
-                // Only compare events on the same date
-                if (!evt.start || !evt.end) continue;
-                if (evt.id === eventId) continue; // Skip the event being moved/resized
-                const eStart = new Date(evt.start);
-                const eEnd = new Date(evt.end);
-                const sameDay = eStart.toDateString() === newStart.toDateString();
-                if (!sameDay) continue;
-                if (!overlap(newStart, newEnd, eStart, eEnd)) continue;
-
-                const eRoomId = evt.extendedProps?.roomId;
-                const eFaculty = evt.extendedProps?.faculty;
-                const eSubject = evt.extendedProps?.subject || evt.title || '';
-                const eRoomName = evt.extendedProps?.room || '';
-
-                // Check if subject is the same (prevent merging same subject at same time)
-                const sameSubject = newSubject && eSubject && String(newSubject).trim().toLowerCase() === String(eSubject).trim().toLowerCase();
-                
-                // Check if room is the same
-                const sameRoom = eRoomId && newRoomId && String(eRoomId) === String(newRoomId);
-                // Check if faculty is the same
-                const sameFaculty = eFaculty && newFaculty && String(eFaculty) === String(newFaculty);
-
-                // Convert to 12-hour format
-                const formatTime12Hour = (date) => {
-                    const hours = date.getHours();
-                    const minutes = date.getMinutes();
-                    const period = hours >= 12 ? 'PM' : 'AM';
-                    const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
-                    return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`;
-                };
-                const timeStr = `${formatTime12Hour(eStart)} - ${formatTime12Hour(eEnd)}`;
-
-                // Block on any conflict: same subject OR same teacher OR same room
-                if (sameSubject) {
-                    conflictDetails.push(`Conflict: Subject "${eSubject}" is already scheduled at ${timeStr}.`);
-                } else if (sameFaculty) {
-                    conflictDetails.push(`Conflict: Teacher "${eFaculty}" is already occupied at ${timeStr}.`);
-                } else if (sameRoom) {
-                    conflictDetails.push(`Conflict: Room "${eRoomName || newRoomId}" is already occupied at ${timeStr}.`);
-                }
-            }
-            
-            if (conflictDetails.length > 0) {
-                // Format conflict message for better readability
-                const conflictMsg = `Schedule Conflict Detected:<br>${conflictDetails.join('<br>')}<br><br><strong>Cannot schedule "${newSubject || 'this class'}" at this time.</strong>`;
-                if (typeof showNotification === 'function') {
-                    showNotification(conflictMsg, 'error');
-                } else {
-                    console.error('Schedule Conflict:', conflictDetails.join('; '));
-                }
-                return true;
-            }
-            
-            return false;
-        } catch (e) {
-            console.warn('Conflict check failed, proceeding without blocking:', e);
-            return false;
-        }
-    };
-    
-    console.log('Conflict detection function initialized');
-})();
-
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM fully loaded');
-    
-    // Initialize allClasses array at the very beginning
-    let allClasses = [];
-    window.allClasses = allClasses;
-    
-    // Expose a safe global reset/setter to keep state in sync across files
-    window.resetClasses = function() {
-        allClasses = [];
-        window.allClasses = allClasses;
-        if (typeof saveClassesToLocalStorage === 'function') {
-            try { saveClassesToLocalStorage(); } catch (e) { console.warn('saveClassesToLocalStorage failed', e); }
-        }
-        if (typeof updateClassesCountBadge === 'function') {
-            try { updateClassesCountBadge(); } catch (e) { console.warn('updateClassesCountBadge failed', e); }
-        }
-    };
-
-    window.setAllClasses = function(newClasses) {
-        allClasses = Array.isArray(newClasses) ? newClasses.slice() : [];
-        window.allClasses = allClasses;
-        if (typeof saveClassesToLocalStorage === 'function') {
-            try { saveClassesToLocalStorage(); } catch (e) { console.warn('saveClassesToLocalStorage failed', e); }
-        }
-        if (typeof updateClassesCountBadge === 'function') {
-            try { updateClassesCountBadge(); } catch (e) { console.warn('updateClassesCountBadge failed', e); }
-        }
-    };
     
     // Check authentication and redirect if needed
     checkAuthAndRedirect();
     
-    // Set up event color observer
-    setupEventColorObserver();
-    
     // Debug check for calendar element
     const calendarEl = document.getElementById('calendar');
-    console.log('Calendar element exists:', !!calendarEl);
-    console.log('Current page URL:', window.location.href);
-    console.log('Document title:', document.title);
-    
-    // Only initialize calendar if the element exists (not on superadmin dashboard)
-    if (!calendarEl) {
-        console.log('No calendar element found - likely on superadmin dashboard or wrong page');
-        console.log('Available elements with "calendar" in ID:', document.querySelectorAll('[id*="calendar"]'));
-        return;
-    }    // Initialize empty subjects by department (to be created by superadmin)
+    console.log('Calendar element exists:', !!calendarEl);    // Initialize empty subjects by department (to be created by superadmin)
     let subjectsByDepartment = {};
       // Initialize empty rooms (to be created by superadmin)
-    let rooms = [];
-    
-    // Load courses from server and store in localStorage
-    async function loadCourses() {
-        try {
-            const authToken = localStorage.getItem('authToken');
-            if (!authToken) {
-                console.warn('No auth token, skipping course load');
-                return;
-            }
-            
-            const response = await fetch('/api/courses', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                }
-            });
-            
-            if (response.ok) {
-                const courses = await response.json();
-                if (Array.isArray(courses)) {
-                    localStorage.setItem('courses', JSON.stringify(courses));
-                    window.courses = courses;
-                    console.log('Loaded', courses.length, 'courses and stored in localStorage');
-                }
-            } else {
-                console.warn('Failed to load courses from server:', response.status);
-                // Try to use existing localStorage data
-                const existingCourses = JSON.parse(localStorage.getItem('courses') || '[]');
-                if (Array.isArray(existingCourses) && existingCourses.length > 0) {
-                    window.courses = existingCourses;
-                    console.log('Using existing courses from localStorage:', existingCourses.length);
-                }
-            }
-        } catch (error) {
-            console.warn('Error loading courses:', error);
-            // Try to use existing localStorage data
-            const existingCourses = JSON.parse(localStorage.getItem('courses') || '[]');
-            if (Array.isArray(existingCourses) && existingCourses.length > 0) {
-                window.courses = existingCourses;
-                console.log('Using existing courses from localStorage:', existingCourses.length);
-            }
-        }
-    }
-    
-    // Load courses on page initialization
-    loadCourses();
-    
-    // Load rooms from server
-    async function loadRooms() {
-        try {
-            const authToken = localStorage.getItem('authToken');
-            console.log('Auth token exists:', !!authToken);
-            console.log('Auth token value:', authToken ? 'Present' : 'Missing');
-            
-            if (!authToken) {
-                console.error('No authentication token found');
-                showNotification('Please log in to access room data', 'error');
-                return;
-            }
-            
-            const response = await fetch('/api/rooms', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                }
-            });
-            
-            console.log('Room API response status:', response.status);
-            
-            if (response.ok) {
-                const roomsData = await response.json();
-                rooms = roomsData;
-                window.rooms = rooms; // Update global reference
-                initializeRoomUsageCount(); // Initialize room usage counts
-                console.log('Loaded rooms:', rooms.length);
-            } else {
-                console.error('Failed to load rooms:', response.statusText);
-                if (response.status === 401) {
-                    showNotification('Authentication expired. Please log in again.', 'error');
-                } else {
-                    showNotification('Failed to load rooms. Please try again.', 'error');
-                }
-            }
-        } catch (error) {
-            console.error('Error loading rooms:', error);
-            showNotification('Error loading rooms. Please check your connection.', 'error');
-        }
-    }
-    
-    // Load rooms when page loads
-    loadRooms();
+    const rooms = [];
 
     // Define days of the week for the calendar in correct order
     const days = [
@@ -363,7 +21,9 @@ document.addEventListener('DOMContentLoaded', function() {
         { id: 'Saturday', title: 'Saturday' }
     ];
     
-    // allClasses is already initialized at the top of the file
+    // Track all created classes for auto scheduling
+    let allClasses = [];
+    window.allClasses = allClasses; // Make it globally accessible
 
     // Initialize faculty members list - empty at first
     let facultyMembers = [];
@@ -384,33 +44,171 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize room usage counts
     const roomUsageCount = {};
+    rooms.forEach(room => {
+        roomUsageCount[room.id] = 0;
+    });
     window.roomUsageCount = roomUsageCount;
-    window.rooms = rooms;
-    
-    // Function to initialize room usage counts
-    function initializeRoomUsageCount() {
-        if (rooms && rooms.length > 0) {
-            rooms.forEach(room => {
-                roomUsageCount[room.id] = 0;
-            });
+    window.rooms = rooms;    // Initialize the calendar with resource time grid view
+    if (calendarEl) {
+        console.log('Initializing calendar...');
+        window.calendar = new FullCalendar.Calendar(calendarEl, {
+            schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
+            initialView: 'resourceTimeGrid',
+            headerToolbar: {
+                left: '',
+                center: '',
+                right: ''
+            },
+            // Removed problematic views configuration
+            resourceOrder: 'order',
+            resources: [
+                { id: 'Monday', title: 'Monday', order: 1 },
+                { id: 'Tuesday', title: 'Tuesday', order: 2 },
+                { id: 'Wednesday', title: 'Wednesday', order: 3 },
+                { id: 'Thursday', title: 'Thursday', order: 4 },
+                { id: 'Friday', title: 'Friday', order: 5 },
+                { id: 'Saturday', title: 'Saturday', order: 6 }
+            ],            navLinks: false,
+            // Check user role for initial editable state
+            editable: (function() {
+                const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+                const userRole = userData.role || '';
+                return userRole === 'admin' || userRole === 'superadmin';
+            })(),
+            droppable: (function() {
+                const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+                const userRole = userData.role || '';
+                return userRole === 'admin' || userRole === 'superadmin';
+            })(),
+            selectable: true,
+            dayMaxEvents: true,
+            slotMinTime: '07:00:00',
+            slotMaxTime: '20:00:00',
+            allDaySlot: false,
+            weekends: true,
+            slotDuration: '00:30:00',
+            slotLabelInterval: '01:00',
+            slotLabelFormat: {
+                hour: 'numeric',
+                minute: '2-digit',
+                omitZeroMinute: false,
+                meridiem: 'short'
+            },
+            dayHeaderFormat: { weekday: 'long' },
+            resourceLabelDidMount: function(info) {
+                info.el.classList.add('day-resource');
+            },
+            eventClick: function(info) {
+                showEventDetails(info.event);
+            },
+            eventDrop: function(info) {
+                // Check if the new position creates a conflict
+                if (hasConflict(info.event)) {
+                    // Revert the change and show notification
+                    info.revert();
+                    showNotification('This move would create a room or faculty conflict!', 'error');
+                }
+                
+                // Force a complete event re-render
+                const event = calendar.getEventById(info.event.id);
+                if (event) {
+                    event.setProp('title', event.extendedProps.subject);
+                }
+            },
+            eventResize: function(info) {
+                // Check if the new size creates a conflict
+                if (hasConflict(info.event)) {
+                    // Revert the change and show notification
+                    info.revert();
+                    showNotification('This resize would create a room or faculty conflict!', 'error');
+                }
+            },
+            eventContent: function(arg) {
+                // Get event data
+                const event = arg.event;
+                const course = event.extendedProps?.course;
+                const room = event.extendedProps?.room;
+                const subject = event.extendedProps?.subject;
+                const classType = event.extendedProps?.classType;
+                
+                // Create HTML elements for custom content
+                const container = document.createElement('div');
+                container.className = 'custom-event-content';
+                
+                // Add course-specific classes to container
+                if (course) {
+                    container.classList.add(`${course.toLowerCase()}-event`);
+                    
+                    if (classType === 'laboratory') {
+                        container.classList.add('lab-type');
+                    } else {
+                        container.classList.add('lecture-type');
+                    }
+                }
+                
+                // Subject name
+                const subjectElement = document.createElement('div');
+                subjectElement.className = 'event-subject';
+                subjectElement.textContent = subject;
+                
+                // Time information
+                const timeElement = document.createElement('div');
+                timeElement.className = 'event-time';
+                
+                // Format the time
+                const startTime = event.start;
+                const endTime = event.end;
+                
+                let formattedStartTime = startTime ? 
+                    startTime.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : '';
+                let formattedEndTime = endTime ? 
+                    endTime.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : '';
+                
+                timeElement.innerHTML = `<i class="fas fa-clock"></i> ${formattedStartTime} - ${formattedEndTime}`;
+                
+                // Room information - make it more prominent
+                const roomElement = document.createElement('div');
+                roomElement.className = 'event-room';
+                roomElement.style.fontWeight = 'bold'; // Make the room text bold
+                roomElement.style.marginTop = '2px';   // Add some spacing
+                roomElement.style.display = 'block';   // Ensure it's always visible as a block
+                roomElement.innerHTML = `<i class="fas fa-door-open"></i> ${room || 'No Room'}`;
+                
+                // Add all elements to container in the correct order with the room more visible
+                container.appendChild(subjectElement);
+                container.appendChild(timeElement);
+                container.appendChild(roomElement);
+                
+                // Return the custom HTML content
+                return { domNodes: [container] };
+            },
+            height: 'auto',
+            contentHeight: 'auto',
+            aspectRatio: 2.5
+        });
+          console.log('Rendering calendar...');
+        calendar.render();
+        
+        // Store the calendar object globally
+        window.calendar = calendar;
+        
+        // Check if we need to apply user restrictions
+        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const userRole = userData.role || '';
+        if (userRole !== 'admin' && userRole !== 'superadmin' && userData.department) {
+            // Apply restrictions for regular users immediately after rendering
+            setTimeout(() => restrictToDepartment(userData.department), 100);
         }
-    }    
-    // Calendar initialization is now handled in index.html
-
-    // Form is now always visible - no toggle functionality needed
-    const formContainer = document.getElementById('formContainer');
-    
-    // Ensure form container is always visible
-    if (formContainer) {
-        formContainer.style.display = 'block';
+    } else {
+        console.error('Calendar element not found!');
     }
-    
+
     // Form elements
     const departmentSelect = document.getElementById('departmentSelect');
     const facultySelect = document.getElementById('facultySelect');
     const subjectSelect = document.getElementById('subjectSelect');
     const submitScheduleBtn = document.getElementById('submitScheduleBtn');
-    const resetFormBtn = document.getElementById('clearFormBtn');
+    const resetFormBtn = document.getElementById('resetFormBtn');
     
     // Faculty form elements
     const addFacultyLink = document.getElementById('addFacultyLink');
@@ -425,8 +223,78 @@ document.addEventListener('DOMContentLoaded', function() {
     // Populate faculty dropdown with saved members
     populateFacultyDropdown();
 
-    // Department is no longer used in the form - removed dependency
-    // All selection is now based on Program/Strand
+    // Department change handler - directly connect department to subjects
+    if (departmentSelect) {
+        departmentSelect.addEventListener('change', function() {
+            const selectedDepartment = this.value;
+            
+            // Update subject dropdown based on department
+            if (selectedDepartment && subjectSelect) {
+                // Enable subject dropdown
+                subjectSelect.disabled = false;
+                
+                // Clear and populate subject dropdown
+                subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
+                
+                // Add subject options for selected department
+                subjectsByDepartment[selectedDepartment].forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject.id;
+                    option.textContent = subject.name;
+                    option.dataset.course = selectedDepartment;
+                    subjectSelect.appendChild(option);
+                });
+            } else if (subjectSelect) {
+                // Disable subject dropdown if no department is selected
+                subjectSelect.disabled = true;
+                subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
+            }
+            
+            // Filter faculty dropdown based on selected department
+            if (facultySelect) {
+                // Get currently selected faculty if any
+                const currentFaculty = facultySelect.value;
+                
+                // Rebuild faculty dropdown
+                facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty Member</option>';
+                
+                // Filter and add faculty options for selected department
+                const filteredFaculty = selectedDepartment ? 
+                    facultyMembers.filter(f => f.department === selectedDepartment) : 
+                    facultyMembers;
+                
+                if (filteredFaculty.length > 0) {
+                    console.log('Faculty members for department', selectedDepartment, ':', filteredFaculty.length);
+                    
+                    filteredFaculty.forEach(faculty => {
+                        const option = document.createElement('option');
+                        option.value = faculty.id;
+                        option.textContent = faculty.fullName;
+                        facultySelect.appendChild(option);
+                    });
+                    
+                    // Enable the faculty select
+                    facultySelect.disabled = false;
+                } else {
+                    console.log('No faculty members found for department:', selectedDepartment);
+                    // Add a message that there are no faculty members yet
+                    const option = document.createElement('option');
+                    option.value = "";
+                    option.textContent = "No faculty members for this department";
+                    option.disabled = true;
+                    facultySelect.appendChild(option);
+                    
+                    // Keep the faculty select enabled so user sees there are no options
+                    facultySelect.disabled = false;
+                }
+                
+                // Try to restore previous selection
+                if (currentFaculty) {
+                    facultySelect.value = currentFaculty;
+                }
+            }
+        });
+    }
       // Entity management moved to superadmin.html
     // Faculty link handlers disabled - management moved to superadmin dashboard
     if (addFacultyLink) {
@@ -486,7 +354,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Create the faculty name element
                     const nameEl = document.createElement('span');
                     nameEl.className = 'faculty-name';
-                    nameEl.textContent = formatFullName(faculty.firstName || '', faculty.middleName || '', faculty.lastName || '') || faculty.email || '';
+                    nameEl.textContent = `${faculty.firstName} ${faculty.lastName}`;
                     
                     // Create the remove button
                     const removeBtn = document.createElement('button');
@@ -523,7 +391,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!faculty) return;
         
         // Get the name for the notification
-        const facultyName = formatFullName(faculty.firstName || '', faculty.middleName || '', faculty.lastName || '') || faculty.email || '';
+        const facultyName = `${faculty.firstName} ${faculty.lastName}`;
         
         // Remove from the array
         facultyMembers = facultyMembers.filter(f => f.id !== id);
@@ -618,217 +486,46 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Hide classtype field for superadmin
-    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-    const userRole = userData.role || 'user';
-    const classTypeGroup = document.getElementById('classTypeGroup');
-    if (classTypeGroup && userRole === 'superadmin') {
-        classTypeGroup.style.display = 'none';
-    }
-    
-    // Prevent form submission
-    const scheduleForm = document.getElementById('scheduleForm');
-    if (scheduleForm) {
-        scheduleForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            console.log('Form submission prevented');
-        });
-    }
-    
     // Submit button handler - creates a class based on form selections
     if (submitScheduleBtn) {
-        submitScheduleBtn.addEventListener('click', async function(e) {
-            e.preventDefault(); // Prevent form submission
-            console.log('Submit button clicked');
-            
-            // Check user role permissions
-            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-            const userRole = userData.role || 'user';
-            
-            if (userRole === 'user') {
-                showNotification('Access denied. Only admins and superadmins can create classes.', 'error');
-                return;
-            }
-            
+        submitScheduleBtn.addEventListener('click', function() {
             // Validate form selections
             if (!validateForm()) {
-                console.log('Form validation failed');
                 return;
             }
-            console.log('Form validation passed');
               // Get selected values
-            const programSelect = document.getElementById('programSelect');
-            const selectedProgramId = programSelect?.value;
-            const selectedProgram = programSelect?.value ? programSelect.options[programSelect.selectedIndex]?.text : 'Unknown Program';
-            
-            // Get department from the selected program
-            let departmentId = '';
-            let selectedDepartment = '';
-            if (programSelect && selectedProgramId) {
-                // Try to get departmentId from Choices.js custom properties
-                if (window.choicesInstances && window.choicesInstances['programSelect']) {
-                    const selectedValue = window.choicesInstances['programSelect'].getValue(true);
-                    const valueToFind = Array.isArray(selectedValue) ? selectedValue[0] : selectedValue;
-                    if (valueToFind) {
-                        // Safely access store.choices - check if store exists first
-                        const choicesInstance = window.choicesInstances['programSelect'];
-                        if (choicesInstance.store && choicesInstance.store.choices) {
-                            const choice = choicesInstance.store.choices.find(c => c.value === valueToFind);
-                            departmentId = choice?.customProperties?.departmentId || '';
-                        }
-                    }
-                }
-                // Fallback to dataset
-                if (!departmentId) {
-                    const selectedOption = programSelect.options[programSelect.selectedIndex];
-                    departmentId = selectedOption?.dataset?.departmentId || '';
-                }
-                
-                // Get department name from departments
-                if (departmentId) {
-                    const depts = JSON.parse(localStorage.getItem('departments') || '[]');
-                    const dept = depts.find(d => String(d.id || '') === String(departmentId) || String(d.code || '') === String(departmentId));
-                    selectedDepartment = dept?.name || dept?.code || departmentId;
-                }
-            }
-            
+            const selectedDepartment = departmentSelect.value;
             const selectedFacultyId = facultySelect.value;
-            const selectedFacultyName = facultySelect.options[facultySelect.selectedIndex]?.text || 'Unknown Faculty';
+            const selectedFacultyName = facultySelect.options[facultySelect.selectedIndex].text;
             const selectedSubjectId = subjectSelect.value;
-            const selectedSubjectName = subjectSelect.options[subjectSelect.selectedIndex]?.text || 'Unknown Subject';
+            const selectedSubjectName = subjectSelect.options[subjectSelect.selectedIndex].text;
+            const unitLoadInput = document.getElementById('unitLoadInput');
+            const unitLoad = unitLoadInput ? unitLoadInput.value.trim() : "3";
+            const classType = document.querySelector('input[name="classType"]:checked').value;
             
-            // Get subject data to find lecture/lab hours (for ALL users)
-            let lectureHours = 0;
-            let labHours = 0;
-            let classType = 'lecture';
-            let subjectCode = '';
-            let subjectName = selectedSubjectName;
-            
-            // Declare subject variable outside try block so it's accessible later
-            let subject = null;
-            
-            // Try to get subject data to find lecture/lab hours
-            try {
-                let subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
-                
-                // If no subjects in localStorage, try to fetch from API
-                if (!subjects || subjects.length === 0) {
-                    try {
-                        // Use fetchWithAuth if available, otherwise use regular fetch
-                        const fetchFn = typeof fetchWithAuth !== 'undefined' ? fetchWithAuth : fetch;
-                        const authToken = localStorage.getItem('authToken');
-                        const response = await fetchFn('/api/subjects', {
-                            method: 'GET',
-                            headers: {
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json'
-                            }
-                        });
-                        if (response && response.ok) {
-                            subjects = await response.json();
-                            if (subjects && subjects.length > 0) {
-                                localStorage.setItem('subjects', JSON.stringify(subjects));
-                            }
-                        }
-                    } catch (apiError) {
-                        console.warn('Could not fetch subjects from API:', apiError);
-                    }
-                }
-                
-                // Try multiple ways to find the subject
-                subject = subjects.find(s => s.id === selectedSubjectId || s.code === selectedSubjectId);
-                
-                // If not found by ID/code, try by name
-                if (!subject) {
-                    subject = subjects.find(s => s.name === selectedSubjectName);
-                }
-                
-                if (subject) {
-                    subjectCode = subject.code || '';
-                    subjectName = subject.name || selectedSubjectName;
-                    lectureHours = parseInt(subject.lectureHours) || 0;
-                    labHours = parseInt(subject.labHours) || 0;
-                    
-                    console.log('Subject data loaded:', {
-                        code: subjectCode,
-                        name: subjectName,
-                        lectureHours: lectureHours,
-                        labHours: labHours,
-                        units: subject.units
-                    });
-                } else {
-                    console.warn('Subject not found in data. Selected ID:', selectedSubjectId, 'Selected Name:', selectedSubjectName);
-                }
-            } catch (e) {
-                console.warn('Could not load subject data for lecture/lab hours:', e);
-            }
-            
-            // If no hours from subject data, use classType selection (for non-superadmin) or default
-            if (lectureHours === 0 && labHours === 0) {
-                if (userRole !== 'superadmin') {
-                    const classTypeRadio = document.querySelector('input[name="classType"]:checked');
-                    classType = classTypeRadio ? classTypeRadio.value : 'lecture';
-                    const unitLoad = "3"; // Default unit load
-                    lectureHours = classType === 'lecture' ? parseFloat(unitLoad) : 0;
-                    labHours = classType === 'laboratory' ? parseFloat(unitLoad) : 0;
-                } else {
-                    // Default to lecture if no hours specified for superadmin
-                    lectureHours = 3;
-                }
-            }
-            
-            // Get units from subject (preferred) or calculate from hours
-            let subjectUnits = 0;
-            if (subject && subject.units) {
-                subjectUnits = parseFloat(subject.units) || 0;
-            }
-            
-            // Create ONE class with both lecture and lab hours (if any)
-            // The generation logic will split it into separate schedules if both hours exist
-            // Use subject units if available, otherwise fall back to hours
-            const unitLoad = subjectUnits > 0 ? subjectUnits : (lectureHours > 0 ? lectureHours : (labHours > 0 ? labHours : 3));
+            // Create class data object
             const classData = {
                 id: 'class-' + Date.now(),
-                subject: subjectName,
-                subjectCode: subjectCode,
-                subjectId: selectedSubjectId,
-                unitLoad: unitLoad, // Use subject units (connected to subject)
-                units: subjectUnits > 0 ? subjectUnits : unitLoad, // Store units separately for clarity
-                classType: lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : (labHours > 0 ? 'laboratory' : classType)),
-                lectureHours: lectureHours,
-                labHours: labHours,
-                course: selectedProgram || selectedDepartment,
-                courseId: programSelect?.value || selectedDepartment,
+                subject: selectedSubjectName,
+                unitLoad: parseFloat(unitLoad),
+                classType: classType,
+                course: selectedDepartment,
                 faculty: selectedFacultyName,
-                facultyId: selectedFacultyId,
-                department: selectedDepartment,
-                departmentId: departmentId
+                department: selectedDepartment
             };
+            
+            // Add to our classes collection
             allClasses.push(classData);
-            addClassToList(classData);
-            console.log('Class created with lecture hours:', lectureHours, 'lab hours:', labHours);
-            
             window.allClasses = allClasses;
-            console.log('Classes added to allClasses array. Total:', allClasses.length);
             
-            // Explicitly save to localStorage to ensure persistence across tab navigation
-            if (typeof saveClassesToLocalStorage === 'function') {
-                saveClassesToLocalStorage();
-            }
-            
-            // Update classes count badge
-            updateClassesCountBadge();
-            
-            // Update created classes list
-            if (typeof updateCreatedClassesList === 'function') {
-                updateCreatedClassesList();
-            }
+            // Add to UI list
+            addClassToList(classData);
             
             // Reset form fields but keep department selection
             resetFormFieldsPartial();
             
             // Show notification
-            showNotification('Class added to list! Click "Generate Schedule" to add to timetable.', 'success');
+            showNotification('Class added successfully!', 'success');
         });
     }
     
@@ -840,40 +537,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Button handlers for backup, import, generate and clear
-    const backupBtn = document.getElementById('backupScheduleBtn');
-    const importBtn = document.getElementById('importScheduleBtn');
-    const importFileInput = document.getElementById('importScheduleFile');
+    // Button handlers for generate, clear and print
     const generateBtn = document.getElementById('generateScheduleBtn');
-    const clearBtn = document.getElementById('clearScheduleBtn');
-    
-    // Backup schedule button handler
-    if (backupBtn) {
-        backupBtn.addEventListener('click', function() {
-            backupSchedule();
-        });
-    }
-    
-    // Import schedule button handler
-    if (importBtn) {
-        importBtn.addEventListener('click', function() {
-            if (importFileInput) {
-                importFileInput.click();
-            }
-        });
-    }
-    
-    // Import file input handler
-    if (importFileInput) {
-        importFileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                importSchedule(file);
-            }
-            // Reset input so same file can be selected again
-            e.target.value = '';
-        });
-    }
+    const clearBtn = document.getElementById('clearAllClassesBtn');
+    const printBtn = document.getElementById('printScheduleBtn');
     
     if (generateBtn) {
         generateBtn.addEventListener('click', function() {
@@ -883,60 +550,29 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (clearBtn) {
         clearBtn.addEventListener('click', function() {
-            try {
-                const classesList = document.getElementById('createdClasses');
-                const classItems = classesList ? classesList.querySelectorAll('.class-item') : [];
-                if (typeof clearAllClasses === 'function' && classesList) {
-                    clearAllClasses(classesList, classItems);
-                } else {
-                    // Fallback: remove list items and events
-                    if (classItems && classItems.forEach) classItems.forEach(item => item.remove());
-                    if (window.calendar && typeof window.calendar.removeAllEvents === 'function') {
-                        window.calendar.removeAllEvents();
-                    }
-                    window.allClasses = [];
-                }
-                if (typeof saveClassesToLocalStorage === 'function') saveClassesToLocalStorage();
-                if (typeof updateGenerateScheduleButtonState === 'function') updateGenerateScheduleButtonState();
-                if (typeof showNotification === 'function') showNotification('All schedules and classes cleared.', 'success');
-            } catch (e) {
-                console.error('Error clearing schedule:', e);
-                if (typeof showNotification === 'function') showNotification('Failed to clear schedule', 'error');
-            }
+            showClearConfirmation();
+        });
+    }
+    
+    if (printBtn) {
+        printBtn.addEventListener('click', function() {
+            printSchedule();
         });
     }
 
     // Helper Functions
-    // Note: wouldCreateScheduleConflict is defined at the top level for immediate availability
     
-    // Format faculty name with middle initial
+    // Format faculty name
     function formatFacultyName(firstName, middleName, lastName, department) {
         let name = `${firstName} `;
         
-        if (middleName && middleName.trim()) {
-            name += `${middleName.trim().charAt(0).toUpperCase()}. `;
+        if (middleName) {
+            name += `${middleName.charAt(0)}. `;
         }
         
         name += `${lastName} (${department})`;
+        
         return name;
-    }
-    
-    // Format full name with middle initial (for general use)
-    function formatFullName(firstName, middleName, lastName) {
-        if (!firstName && !lastName) return '';
-        
-        let name = firstName || '';
-        
-        if (middleName && middleName.trim()) {
-            const middleInitial = middleName.trim().charAt(0).toUpperCase();
-            name += ` ${middleInitial}.`;
-        }
-        
-        if (lastName) {
-            name += ` ${lastName}`;
-        }
-        
-        return name.trim();
     }
     
     // Populate faculty dropdown
@@ -948,15 +584,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear dropdown
         facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty Member</option>';
         
-        // Filter by current department if one is selected, and exclude superadmin
-        let filteredFaculty = facultyMembers.filter(f => 
-            f.email !== 'superadmin@school.edu' &&
-            f.role !== 'superadmin' &&
-            String(f.role || '').toLowerCase() !== 'superadmin'
-        );
+        // Filter by current department if one is selected
+        let filteredFaculty = facultyMembers;
         
         if (departmentSelect && departmentSelect.value) {
-            filteredFaculty = filteredFaculty.filter(f => f.department === departmentSelect.value);
+            filteredFaculty = facultyMembers.filter(f => f.department === departmentSelect.value);
         }
         
         // Add faculty options
@@ -965,7 +597,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const option = document.createElement('option');
                 option.value = faculty.id;
                 option.textContent = faculty.fullName;
-                option.dataset.email = faculty.email || '';
                 facultySelect.appendChild(option);
             });
             
@@ -973,32 +604,22 @@ document.addEventListener('DOMContentLoaded', function() {
             facultySelect.disabled = false;
         } else {
             console.log('No faculty members available to populate dropdown');
-            // Keep dropdown disabled when no faculty available
-            facultySelect.disabled = true;
+            // Keep dropdown enabled so user can see they need to add faculty
+            facultySelect.disabled = false;
         }
     }
       // Validate form fields
     function validateForm() {
         let isValid = true;
         
-        // Check user role - superadmin can create schedule without faculty
-        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-        const userRole = userData.role || 'user';
-        const isSuperAdmin = userRole === 'superadmin';
-        
-        // Program/Strand is now required first
-        const programSelect = document.getElementById('programSelect');
-        if (programSelect && !programSelect.value) {
-            programSelect.parentElement.classList.add('error');
+        if (departmentSelect && !departmentSelect.value) {
+            departmentSelect.parentElement.classList.add('error');
             isValid = false;
-        } else if (programSelect) {
-            programSelect.parentElement.classList.remove('error');
+        } else if (departmentSelect) {
+            departmentSelect.parentElement.classList.remove('error');
         }
         
-        // Department is no longer required - removed from form
-        
-        // Faculty is optional for superadmin
-        if (facultySelect && !facultySelect.value && !isSuperAdmin) {
+        if (facultySelect && !facultySelect.value) {
             facultySelect.parentElement.classList.add('error');
             isValid = false;
         } else if (facultySelect) {
@@ -1012,173 +633,78 @@ document.addEventListener('DOMContentLoaded', function() {
             subjectSelect.parentElement.classList.remove('error');
         }
         
-        // Unit load removed; value is defined by subject/course and handled server-side
+        // Validate unit load input (must be a valid number)
+        const unitLoadInput = document.getElementById('unitLoadInput');
+        if (unitLoadInput) {
+            const unitLoadValue = unitLoadInput.value.trim();
+            const unitLoadNumber = parseFloat(unitLoadValue);
+            
+            if (isNaN(unitLoadNumber) || unitLoadNumber <= 0) {
+                unitLoadInput.parentElement.classList.add('error');
+                isValid = false;
+            } else {
+                unitLoadInput.parentElement.classList.remove('error');
+            }
+        }
         
         return isValid;
     }
-      // Reset form fields but keep program selection
+      // Reset form fields but keep department selection
     function resetFormFieldsPartial() {
-        // Keep program/strand AND faculty member selected, only clear subject/course
-        const programSelect = document.getElementById('programSelect');
-        const facultySelect = document.getElementById('facultySelect');
-        const subjectSelect = document.getElementById('subjectSelect');
+        // Keep department selection
         
-        // Only reset subject/course - keep program and faculty selected
-        if (window.choicesInstances) {
-            if (window.choicesInstances['subjectSelect']) {
-                window.choicesInstances['subjectSelect'].setChoiceByValue('');
-            }
-            // Don't reset programSelect or facultySelect - keep them selected
-        }
-        
-        // Reset subject select - load all subjects (no program requirement)
         if (subjectSelect) {
-            // Load all subjects regardless of program selection
-            if (typeof loadSubjects === 'function') {
-                loadSubjects();
-            } else {
-                // Fallback: just reset to initial state
-                if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
-                    window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Subject', disabled: true}], 'value', 'label', true);
-                } else {
-                    subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
-                }
+            // Re-enable and repopulate the subject dropdown based on current department
+            if (departmentSelect && departmentSelect.value) {
+                const selectedDepartment = departmentSelect.value;
+                
+                // Clear and populate subject dropdown
+                subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
+                
+                // Add subject options for selected department
+                subjectsByDepartment[selectedDepartment].forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject.id;
+                    option.textContent = subject.name;
+                    option.dataset.course = selectedDepartment;
+                    subjectSelect.appendChild(option);
+                });
+                
+                // Make sure the dropdown is enabled
+                subjectSelect.disabled = false;
             }
         }
         
-        // Hide subject details if visible
-        const subjectDetails = document.getElementById('subjectDetails');
-        if (subjectDetails) {
-            subjectDetails.style.display = 'none';
-        }
+        // Reset unit load to default (3 hours)
+        const unitLoadInput = document.getElementById('unitLoadInput');
+        if (unitLoadInput) unitLoadInput.value = '3';
         
         // Reset class type to default (lecture)
         const classTypeRadio = document.querySelector('input[name="classType"][value="lecture"]');
         if (classTypeRadio) classTypeRadio.checked = true;
-        
-        // Remove any error indications
-        document.querySelectorAll('.form-group.error').forEach(group => {
-            group.classList.remove('error');
-        });
     }
-    
-    // Reset all form fields
-    async function resetFormFieldsFull() {
-        const programSelect = document.getElementById('programSelect');
-        const facultySelect = document.getElementById('facultySelect');
-        const subjectSelect = document.getElementById('subjectSelect');
-        
-        // Reset Choices.js instances to initial state with placeholders
-        if (window.choicesInstances) {
-            // Reset program select to initial state
-            if (window.choicesInstances['programSelect'] && programSelect) {
-                try {
-                    // Clear selection first
-                    programSelect.value = '';
-                    window.choicesInstances['programSelect'].setChoiceByValue('');
-                } catch (e) {
-                    console.warn('Error clearing programSelect:', e);
-                    if (programSelect) programSelect.value = '';
-                }
-            }
-            
-            // Reset faculty select to initial state
-            if (window.choicesInstances['facultySelect'] && facultySelect) {
-                try {
-                    // Reset to initial placeholder state
-                    window.choicesInstances['facultySelect'].setChoices(
-                        [{value: '', label: 'Select Program/Strand First', disabled: true}], 
-                        'value', 
-                        'label', 
-                        true
-                    );
-                    window.choicesInstances['facultySelect'].setChoiceByValue('');
-                    // Disable the select
-                    facultySelect.disabled = true;
-                    if (typeof window.choicesInstances['facultySelect'].disable === 'function') {
-                        window.choicesInstances['facultySelect'].disable();
-                    }
-                } catch (e) {
-                    console.warn('Error resetting facultySelect:', e);
-                    if (facultySelect) {
-                        facultySelect.value = '';
-                        facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-                        facultySelect.disabled = true;
-                    }
-                }
-            }
-            
-            // Reset subject select to initial state
-            if (window.choicesInstances['subjectSelect'] && subjectSelect) {
-                try {
-                    // Reset to initial placeholder state
-                    window.choicesInstances['subjectSelect'].setChoices(
-                        [{value: '', label: 'Select Program/Strand First', disabled: true}], 
-                        'value', 
-                        'label', 
-                        true
-                    );
-                    window.choicesInstances['subjectSelect'].setChoiceByValue('');
-                    // Disable the select
-                    subjectSelect.disabled = true;
-                    if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
-                        window.choicesInstances['subjectSelect'].disable();
-                    }
-                } catch (e) {
-                    console.warn('Error resetting subjectSelect:', e);
-                    if (subjectSelect) {
-                        subjectSelect.value = '';
-                        subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-                        subjectSelect.disabled = true;
-                    }
-                }
-            }
+      // Reset all form fields
+    function resetFormFieldsFull() {
+        if (departmentSelect) {
+            // Reset department dropdown
+            departmentSelect.value = '';
         }
         
-        // Reset native select values to initial state (fallback if Choices.js not used)
-        if (programSelect && (!window.choicesInstances || !window.choicesInstances['programSelect'])) {
-            programSelect.value = '';
+        if (facultySelect) {
+            // Reset and disable faculty dropdown
+            facultySelect.innerHTML = '<option value="" selected disabled>Select Faculty Member</option>';
+            facultySelect.disabled = false;
         }
         
-        if (facultySelect && (!window.choicesInstances || !window.choicesInstances['facultySelect'])) {
-            facultySelect.value = '';
-            facultySelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
-            facultySelect.disabled = true;
-        }
-        
-        if (subjectSelect && (!window.choicesInstances || !window.choicesInstances['subjectSelect'])) {
-            subjectSelect.value = '';
-            subjectSelect.innerHTML = '<option value="" selected disabled>Select Program/Strand First</option>';
+        if (subjectSelect) {
+            // Reset and disable subject dropdown
+            subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
             subjectSelect.disabled = true;
         }
         
-        // Hide subject details if visible
-        const subjectDetails = document.getElementById('subjectDetails');
-        if (subjectDetails) {
-            subjectDetails.style.display = 'none';
-        }
-        
-        // Reload all programs to reset the dropdown to initial state
-        if (programSelect && typeof loadAllPrograms === 'function') {
-            try {
-                await loadAllPrograms();
-                // After reloading, ensure selection is cleared and shows placeholder
-                if (programSelect) {
-                    programSelect.value = '';
-                    if (window.choicesInstances && window.choicesInstances['programSelect']) {
-                        setTimeout(() => {
-                            try {
-                                window.choicesInstances['programSelect'].setChoiceByValue('');
-                            } catch (e) {
-                                console.warn('Error clearing programSelect after reload:', e);
-                            }
-                        }, 100);
-                    }
-                }
-            } catch (e) {
-                console.warn('Error reloading programs:', e);
-            }
-        }
+        // Reset unit load to default (3 hours)
+        const unitLoadInput = document.getElementById('unitLoadInput');
+        if (unitLoadInput) unitLoadInput.value = '3';
         
         // Reset class type to default (lecture)
         const classTypeRadio = document.querySelector('input[name="classType"][value="lecture"]');
@@ -1204,50 +730,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const classItem = document.createElement('div');
         classItem.className = `class-item ${classData.course.toLowerCase()}`;
         classItem.dataset.id = classData.id;
-        // Apply department color to the draggable card
-        try {
-            const deptColor = getDepartmentColorForClass(classData);
-            console.log('Applying department color to class item:', deptColor);
-            // Use !important to override any CSS rules
-            classItem.style.setProperty('background-color', deptColor, 'important');
-            classItem.style.setProperty('color', '#fff', 'important');
-            classItem.style.setProperty('border-left-color', deptColor, 'important');
-            classItem.dataset.departmentColor = deptColor;
-            console.log('Applied color:', deptColor, 'to element');
-        } catch (e) {
-            console.warn('Could not compute department color for class item', e);
-        }
-        
-        // Format subject display: code and name
-        const subjectDisplay = classData.subjectCode 
-            ? `${classData.subjectCode} - ${classData.subject}`
-            : classData.subject;
-        
-        // Format type display with hours
-        let typeDisplay = '';
-        if (classData.lectureHours > 0 && classData.labHours > 0) {
-            typeDisplay = `Lecture (${classData.lectureHours}h) & Lab (${classData.labHours}h)`;
-        } else if (classData.lectureHours > 0) {
-            typeDisplay = `Lecture (${classData.lectureHours}h)`;
-        } else if (classData.labHours > 0) {
-            typeDisplay = `Laboratory (${classData.labHours}h)`;
-        } else {
-            typeDisplay = `${classData.classType} (${classData.unitLoad}h)`;
-        }
-        
-        // Check if this class is merged
-        const isMerged = classData.mergedClassIds && classData.mergedClassIds.length > 0;
-        const mergedIndicator = isMerged ? `<span class="merged-badge" style="background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem; margin-left: 8px;">MERGED</span>` : '';
         
         classItem.innerHTML = `
-            <h3>${subjectDisplay}${mergedIndicator}</h3>
-            <div class="class-info"><i class="fas fa-building"></i> ${classData.department || classData.course}</div>
+            <h3>${classData.subject}</h3>
+            <div class="class-info"><i class="fas fa-graduation-cap"></i> ${classData.course}</div>
             <div class="class-info"><i class="fas fa-chalkboard-teacher"></i> ${classData.faculty}</div>
-            <div class="class-info"><i class="fas fa-book"></i> ${typeDisplay}</div>
+            <div class="class-info"><i class="fas fa-clock"></i> ${classData.unitLoad} hours (${classData.classType})</div>
             <div class="class-actions">
-                <button class="merge-class-btn" data-id="${classData.id}" title="Merge with other classes">
-                    <i class="fas fa-link"></i> ${isMerged ? 'Unmerge' : 'Merge'}
-                </button>
                 <button class="remove-class-btn" data-id="${classData.id}"><i class="fas fa-trash-alt"></i> Remove</button>
             </div>
         `;
@@ -1259,342 +748,45 @@ document.addEventListener('DOMContentLoaded', function() {
             removeClassItem(classData.id);
         });
         
-        // Add event listener to merge button
-        const mergeBtn = classItem.querySelector('.merge-class-btn');
-        if (mergeBtn) {
-            mergeBtn.addEventListener('click', function() {
-                showMergeClassesModal(classData);
-            });
-        }
-        
         // Make class draggable for manual placement
         makeClassDraggable(classItem, classData);
     }
     
     // Make class draggable to calendar
     function makeClassDraggable(element, classData) {
-        // Check if FullCalendar and Draggable are available
-        if (typeof FullCalendar === 'undefined' || !FullCalendar.Draggable) {
-            console.warn('FullCalendar.Draggable not available, skipping drag functionality');
-            return;
-        }
-        
-        // Get department color from the department settings (from superadmin dashboard)
-        const departmentColor = (element.dataset && element.dataset.departmentColor) 
-            ? element.dataset.departmentColor 
-            : getDepartmentColorForClass(classData);
-        
-        console.log('Making class draggable with department color:', departmentColor, 'for class:', classData);
-        
-        try {
-            new FullCalendar.Draggable(element, {
-                itemSelector: '.class-item',
-                eventData: function(dragEl) {
-                    // Generate a new unique ID for each instance of a dragged class
-                    // Format: original-id-timestamp to ensure uniqueness
-                    const uniqueInstanceId = classData.id + '-' + Date.now();
-                    
-                    // Ensure we have the department color
-                    const deptColor = dragEl.dataset?.departmentColor || 
-                                     element.dataset?.departmentColor || 
-                                     getDepartmentColorForClass(classData);
-                    
-                    console.log('Creating draggable event with color:', deptColor);
-                    
-                    // Check if this class is merged
-                    const isMerged = classData.mergedClassIds && classData.mergedClassIds.length > 0;
-                    const finalColor = isMerged ? '#000000' : deptColor; // Black for merged classes
-                    
-                    // Create title with merged info
-                    let dragTitle = classData.subject;
-                    if (isMerged && classData.mergedClassIds) {
-                        const mergedClasses = allClasses.filter(c => classData.mergedClassIds.includes(c.id));
-                        const mergedStrands = mergedClasses.map(c => c.course || c.department).filter(Boolean);
-                        if (mergedStrands.length > 0) {
-                            dragTitle += ` [MERGED: ${mergedStrands.join(', ')}]`;
-                        }
-                    }
-                    
-                    return {
-                        id: uniqueInstanceId, // Use the unique instance ID instead of the original class ID
-                        title: dragTitle,
-                        duration: { hours: classData.unitLoad },
-                        backgroundColor: finalColor,
-                        borderColor: finalColor,
-                        textColor: '#ffffff',
-                        classNames: [
-                            `${classData.course.toLowerCase()}-event`,
-                            `${classData.classType}-type`,
-                            'department-colored-event',
-                            ...(isMerged ? ['merged-class-event'] : [])
-                        ],
-                        extendedProps: {
-                            originalClassId: classData.id, // Store the original ID for reference
-                            subject: classData.subject,
-                            course: classData.course,
-                            courseId: classData.courseId,
-                            faculty: classData.faculty,
-                            facultyId: classData.facultyId,
-                            unitLoad: classData.unitLoad,
-                            classType: classData.classType,
-                            department: classData.department,
-                            departmentId: classData.departmentId,
-                            departmentColor: finalColor,
-                            isMerged: isMerged,
-                            mergedClassIds: classData.mergedClassIds || []
-                        }
-                    };
-                }
-            });
-            
-            console.log('Class item made draggable successfully');
-        } catch (error) {
-            console.error('Error making class draggable:', error);
-        }
-    }
-    
-    // Show merge classes modal
-    function showMergeClassesModal(classData) {
-        // Find all classes that can be merged (same subject, different strands/courses)
-        const mergeableClasses = allClasses.filter(c => 
-            c.id !== classData.id && 
-            c.subject === classData.subject &&
-            c.subjectId === classData.subjectId &&
-            (c.course !== classData.course || c.courseId !== classData.courseId)
-        );
-        
-        // Get currently merged classes
-        const currentMergedIds = classData.mergedClassIds || [];
-        const isCurrentlyMerged = currentMergedIds.length > 0;
-        
-        // Create modal
-        const modal = document.createElement('div');
-        modal.className = 'custom-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        `;
-        
-        const modalContent = `
-            <div style="
-                background: white;
-                border-radius: 8px;
-                padding: 0;
-                max-width: 600px;
-                width: 90%;
-                max-height: 80vh;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-                display: flex;
-                flex-direction: column;
-            ">
-                <div style="
-                    padding: 20px;
-                    border-bottom: 1px solid #e2e8f0;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                ">
-                    <h5 style="margin: 0; color: #1e293b;">${isCurrentlyMerged ? 'Unmerge' : 'Merge'} Classes</h5>
-                    <button type="button" class="close-btn" style="
-                        background: none;
-                        border: none;
-                        font-size: 24px;
-                        cursor: pointer;
-                        color: #64748b;
-                    ">&times;</button>
-                </div>
-                <div style="
-                    padding: 20px;
-                    overflow-y: auto;
-                    flex: 1;
-                ">
-                    <p style="margin: 0 0 20px 0; color: #64748b;">
-                        ${isCurrentlyMerged 
-                            ? `This class is currently merged with ${currentMergedIds.length} other class(es). Select "Unmerge" to separate them.`
-                            : mergeableClasses.length > 0
-                                ? `Select classes to merge with "${classData.subject}". Merged classes will share the same schedule and appear in black on the timetable.`
-                                : `No other classes found with the same subject "${classData.subject}" to merge with.`
-                        }
-                    </p>
-                    ${isCurrentlyMerged ? `
-                        <button id="unmergeBtn" style="
-                            width: 100%;
-                            padding: 12px;
-                            background: #dc2626;
-                            color: white;
-                            border: none;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            font-weight: 500;
-                            margin-top: 10px;
-                        ">Unmerge Classes</button>
-                    ` : mergeableClasses.length > 0 ? `
-                        <div style="max-height: 300px; overflow-y: auto;">
-                            ${mergeableClasses.map(c => {
-                                const isSelected = currentMergedIds.includes(c.id);
-                                return `
-                                    <div style="
-                                        padding: 12px;
-                                        margin-bottom: 8px;
-                                        border: 2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'};
-                                        border-radius: 6px;
-                                        background: ${isSelected ? '#eff6ff' : 'white'};
-                                        cursor: pointer;
-                                    " data-class-id="${c.id}" class="merge-class-option">
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <input type="checkbox" ${isSelected ? 'checked' : ''} 
-                                                style="width: 18px; height: 18px; cursor: pointer;" 
-                                                data-class-id="${c.id}">
-                                            <div style="flex: 1;">
-                                                <strong>${c.subject}</strong>
-                                                <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
-                                                    ${c.course || c.department} - ${c.faculty}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        <button id="mergeBtn" style="
-                            width: 100%;
-                            padding: 12px;
-                            background: #3b82f6;
-                            color: white;
-                            border: none;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            font-weight: 500;
-                            margin-top: 20px;
-                        ">Merge Selected Classes</button>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-        
-        modal.innerHTML = modalContent;
-        document.body.appendChild(modal);
-        
-        // Close handlers
-        const closeModal = () => document.body.removeChild(modal);
-        modal.querySelector('.close-btn').addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal();
-        });
-        
-        // Unmerge handler
-        if (isCurrentlyMerged) {
-            modal.querySelector('#unmergeBtn')?.addEventListener('click', () => {
-                unmergeClasses(classData.id);
-                closeModal();
-            });
-        }
-        
-        // Merge handler
-        if (!isCurrentlyMerged && mergeableClasses.length > 0) {
-            // Toggle selection on click
-            modal.querySelectorAll('.merge-class-option').forEach(option => {
-                option.addEventListener('click', (e) => {
-                    if (e.target.type !== 'checkbox') {
-                        const checkbox = option.querySelector('input[type="checkbox"]');
-                        checkbox.checked = !checkbox.checked;
-                    }
-                });
-            });
-            
-            modal.querySelector('#mergeBtn')?.addEventListener('click', () => {
-                const selectedIds = Array.from(modal.querySelectorAll('input[type="checkbox"]:checked'))
-                    .map(cb => cb.dataset.classId);
+        new FullCalendar.Draggable(element, {
+            itemSelector: '.class-item',
+            eventData: function() {
+                // Generate a new unique ID for each instance of a dragged class
+                // Format: original-id-timestamp to ensure uniqueness
+                const uniqueInstanceId = classData.id + '-' + Date.now();
                 
-                if (selectedIds.length > 0) {
-                    mergeClasses(classData.id, selectedIds);
-                } else {
-                    alert('Please select at least one class to merge with.');
-                }
-                closeModal();
-            });
-        }
-    }
-    
-    // Merge classes function
-    function mergeClasses(classId, otherClassIds) {
-        // Update all involved classes to have the same mergedClassIds array
-        const allMergedIds = [classId, ...otherClassIds];
-        
-        allClasses.forEach(c => {
-            if (allMergedIds.includes(c.id)) {
-                c.mergedClassIds = allMergedIds.filter(id => id !== c.id);
+                return {
+                    id: uniqueInstanceId, // Use the unique instance ID instead of the original class ID
+                    title: classData.subject,
+                    duration: { hours: classData.unitLoad },
+                    classNames: [
+                        `${classData.course.toLowerCase()}-event`,
+                        `${classData.classType}-type`
+                    ],
+                    extendedProps: {
+                        originalClassId: classData.id, // Store the original ID for reference
+                        subject: classData.subject,
+                        course: classData.course, 
+                        faculty: classData.faculty,
+                        unitLoad: classData.unitLoad,
+                        classType: classData.classType
+                    }
+                };
             }
         });
-        
-        window.allClasses = allClasses;
-        saveClassesToLocalStorage();
-        
-        // Refresh the UI
-        const classesList = document.getElementById('createdClasses');
-        if (classesList) {
-            classesList.innerHTML = '';
-            allClasses.forEach(c => addClassToList(c));
-        }
-        
-        showNotification(`Merged ${allMergedIds.length} classes. They will share the same schedule.`, 'success');
-    }
-    
-    // Unmerge classes function
-    function unmergeClasses(classId) {
-        const classData = allClasses.find(c => c.id === classId);
-        if (!classData || !classData.mergedClassIds) return;
-        
-        const mergedIds = [...classData.mergedClassIds, classId];
-        
-        // Remove mergedClassIds from all involved classes
-        allClasses.forEach(c => {
-            if (mergedIds.includes(c.id)) {
-                delete c.mergedClassIds;
-            }
-        });
-        
-        window.allClasses = allClasses;
-        saveClassesToLocalStorage();
-        
-        // Refresh the UI
-        const classesList = document.getElementById('createdClasses');
-        if (classesList) {
-            classesList.innerHTML = '';
-            allClasses.forEach(c => addClassToList(c));
-        }
-        
-        showNotification('Classes unmerged successfully.', 'success');
     }
     
     // Remove class item
     function removeClassItem(id) {
         // Remove from array
-        const classToRemove = allClasses.find(c => c.id === id);
-        
-        // If this class is merged, unmerge it first
-        if (classToRemove && classToRemove.mergedClassIds) {
-            unmergeClasses(id);
-        }
-        
         allClasses = allClasses.filter(item => item.id !== id);
         window.allClasses = allClasses;
-        
-        // Persist and update UI state
-        if (typeof saveClassesToLocalStorage === 'function') {
-            try { saveClassesToLocalStorage(); } catch (e) { console.warn('saveClassesToLocalStorage failed', e); }
-        }
-        if (typeof updateClassesCountBadge === 'function') {
-            try { updateClassesCountBadge(); } catch (e) { console.warn('updateClassesCountBadge failed', e); }
-        }
         
         // Remove from UI
         const element = document.querySelector(`.class-item[data-id="${id}"]`);
@@ -1665,101 +857,19 @@ document.addEventListener('DOMContentLoaded', function() {
         showModal('confirmModal');
     }
 
-    // Function to clear all classes (including fixed schedules)
-    async function clearAllClasses(classesList, classItems) {
-        console.log('clearAllClasses called - clearing everything');
-        
+    // Function to clear all classes
+    function clearAllClasses(classesList, classItems) {
         // Remove all class items from DOM
         classItems.forEach(item => item.remove());
         
-        // Clear ALL events from calendar including fixed schedules
-        if (window.calendar && typeof window.calendar.getEvents === 'function') {
+        // Clear calendar if FullCalendar instance exists
+        if (window.calendar && typeof window.calendar.removeAllEvents === 'function') {
             window.calendar.removeAllEvents();
-            console.log('All calendar events removed');
         }
         
         // Reset allClasses array
         window.allClasses = [];
         allClasses = [];
-        
-        // Clear from localStorage to prevent restoration
-        try {
-            localStorage.removeItem('allClasses');
-            localStorage.setItem('allClasses', JSON.stringify([]));
-            // Also clear fixed schedules from localStorage
-            localStorage.removeItem('fixedSchedules');
-            localStorage.setItem('fixedSchedules', JSON.stringify([]));
-            // Clear calendar events
-            localStorage.removeItem('calendarEvents');
-            localStorage.setItem('calendarEvents', JSON.stringify([]));
-            console.log('localStorage cleared');
-        } catch (e) {
-            console.warn('Error clearing allClasses from localStorage:', e);
-        }
-        
-        // Clear fixed schedules from server
-        try {
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                const clearResponse = await fetch('/api/fixed-schedules', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ schedules: [] }) // Save empty array
-                });
-                if (clearResponse.ok) {
-                    console.log('Fixed schedules cleared from server');
-                } else {
-                    console.error('Failed to clear fixed schedules from server:', clearResponse.status);
-                }
-            }
-        } catch (e) {
-            console.warn('Error clearing fixed schedules from server:', e);
-        }
-        
-        // Save empty schedule to server so it persists after reload
-        try {
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                const response = await fetch('/api/schedule', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ events: [] }) // Save empty array to server
-                });
-                if (response.ok) {
-                    console.log('Cleared schedule saved to server - will persist after refresh');
-                    // Also update localStorage timestamp
-                    localStorage.setItem('scheduleLastUpdated', Date.now().toString());
-                } else {
-                    console.error('Failed to save cleared schedule to server:', response.status);
-                }
-            }
-        } catch (e) {
-            console.error('Error saving cleared schedule to server:', e);
-        }
-        
-        // Also call saveScheduleToLocalStorage to ensure consistency
-        if (typeof window.saveScheduleToLocalStorage === 'function') {
-            try {
-                await window.saveScheduleToLocalStorage();
-                console.log('Schedule save function called to ensure empty state is saved');
-            } catch (e) {
-                console.warn('Error calling saveScheduleToLocalStorage:', e);
-            }
-        }
-        
-        // Persist and update UI state
-        if (typeof saveClassesToLocalStorage === 'function') {
-            try { saveClassesToLocalStorage(); } catch (e) { console.warn('saveClassesToLocalStorage failed', e); }
-        }
-        if (typeof updateClassesCountBadge === 'function') {
-            try { updateClassesCountBadge(); } catch (e) { console.warn('updateClassesCountBadge failed', e); }
-        }
         
         // Reset room usage counts
         if (roomUsageCount && rooms) {
@@ -1778,58 +888,17 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             classesList.appendChild(emptyState);
         }
-        
-        console.log('clearAllClasses completed - all data cleared and saved to server');
     }
     
     // Function to generate schedule
-    window.generateSchedule = async function() {
-        // Check user role permissions
-        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-        const userRole = userData.role || 'user';
-        
-        if (userRole === 'user') {
-            showNotification('Access denied. Only admins and superadmins can generate schedules.', 'error');
-            return;
-        }
-        
+    function generateSchedule() {
         if (allClasses.length === 0) {
             showNotification('Please add classes before generating a schedule', 'error');
             return;
         }
         
-        // Ensure rooms are loaded before scheduling
-        if (rooms.length === 0) {
-            showNotification('Loading rooms...', 'info');
-            await loadRooms();
-            if (rooms.length === 0) {
-                showNotification('No rooms available for scheduling. Please add rooms first.', 'error');
-                return;
-            }
-        }
-        
-        // Clear existing schedule first (but preserve fixed schedules)
-        const calendar = window.calendar;
-        if (calendar) {
-            // Remove only non-fixed schedule events
-            const events = calendar.getEvents();
-            events.forEach(event => {
-                if (!event.extendedProps?.isFixedSchedule) {
-                    event.remove();
-                }
-            });
-            console.log('Schedule cleared - non-fixed events removed');
-        }
-        
-        // Ensure fixed schedules are loaded from server/localStorage and added to calendar
-        if (typeof window.fixedSchedules !== 'undefined') {
-            if (window.fixedSchedules.load) {
-                await window.fixedSchedules.load();
-            }
-            if (window.fixedSchedules.loadToCalendar) {
-                window.fixedSchedules.loadToCalendar();
-            }
-        }
+        // Clear existing schedule
+        clearSchedule();
         
         // Show loading/progress indicator
         showModal('loadingModal');
@@ -1853,19 +922,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Create a deep copy of classes to schedule
                 const classesToSchedule = JSON.parse(JSON.stringify(allClasses));
                 
-                // Group classes by subject for same-time scheduling
-                const classesBySubject = {};
-                classesToSchedule.forEach(classItem => {
-                    const subjectKey = classItem.subjectId || classItem.subject;
-                    if (!classesBySubject[subjectKey]) {
-                        classesBySubject[subjectKey] = [];
-                    }
-                    classesBySubject[subjectKey].push(classItem);
-                });
-                
-                // Track scheduled times by subject
-                const subjectScheduledTimes = {}; // subjectKey -> { day, time }
-                
                 // Shuffle to randomize placement order
                 shuffleArray(classesToSchedule);
                 
@@ -1874,145 +930,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Process each class
                 for (const classItem of classesToSchedule) {
-                    // Check if this class has both lecture and lab hours - if so, create two separate schedules
-                    const hasLecture = (classItem.lectureHours && parseInt(classItem.lectureHours) > 0) || false;
-                    const hasLab = (classItem.labHours && parseInt(classItem.labHours) > 0) || false;
+                    // Update progress
+                    classesProcessed++;
+                    let progressPct = Math.floor((classesProcessed / totalClasses) * 100);
+                    if (progressBar) {
+                        progressBar.style.width = progressPct + '%';
+                    }
                     
-                    console.log('Processing class:', classItem.subject, 'Lecture:', hasLecture, 'Lab:', hasLab, 'lectureHours:', classItem.lectureHours, 'labHours:', classItem.labHours);
+                    if (statusElement) {
+                        statusElement.textContent = `Scheduling class ${classesProcessed} of ${totalClasses}: ${classItem.subject}`;
+                    }
                     
-                    if (hasLecture && hasLab) {
-                        console.log('Class has both lecture and lab - will create two schedules');
-                        // Get subject units - count units only once (on lecture), lab gets 0 units for counting
-                        const subjectUnits = parseFloat(classItem.units || classItem.unitLoad || 0);
-                        // Create two separate class items for scheduling
-                        const lectureClass = {
-                            ...classItem,
-                            id: classItem.id + '-lec',
-                            unitLoad: subjectUnits, // Full subject units counted on lecture
-                            units: subjectUnits,
-                            classType: 'lecture',
-                            lectureHours: classItem.lectureHours,
-                            labHours: 0
-                        };
-                        
-                        const labClass = {
-                            ...classItem,
-                            id: classItem.id + '-lab',
-                            unitLoad: 0, // Lab doesn't count units separately (units already counted on lecture)
-                            units: 0,
-                            classType: 'laboratory',
-                            lectureHours: 0,
-                            labHours: classItem.labHours
-                        };
-                        
-                        // Get subject key for same-time scheduling
-                        const subjectKey = classItem.subjectId || classItem.subject;
-                        const subjectScheduledTime = subjectScheduledTimes[subjectKey];
-                        
-                        // Schedule lecture first
-                        classesProcessed++;
-                        let progressPct = Math.floor((classesProcessed / totalClasses) * 100);
-                        if (progressBar) {
-                            progressBar.style.width = progressPct + '%';
-                        }
-                        if (statusElement) {
-                            statusElement.textContent = `Scheduling lecture for ${classItem.subject} (${classesProcessed} of ${totalClasses})`;
-                        }
-                        
-                        const lectureScheduled = scheduleClass(lectureClass, subjectScheduledTime);
-                        console.log('Lecture scheduled result:', lectureScheduled);
-                        
-                        if (lectureScheduled && lectureScheduled !== true && lectureScheduled.success) {
-                            scheduledClasses.push(lectureClass);
-                            console.log('Lecture successfully scheduled on', lectureScheduled.day, 'at', lectureScheduled.time);
-                            
-                            // Store the scheduled time for the lab to use (same time, different day)
-                            subjectScheduledTimes[subjectKey] = { 
-                                day: lectureScheduled.day, 
-                                time: lectureScheduled.time 
-                            };
-                            
-                            // Schedule lab on a different day but same time
-                            classesProcessed++;
-                            progressPct = Math.floor((classesProcessed / totalClasses) * 100);
-                            if (progressBar) {
-                                progressBar.style.width = progressPct + '%';
-                            }
-                            if (statusElement) {
-                                statusElement.textContent = `Scheduling lab for ${classItem.subject} (${classesProcessed} of ${totalClasses})`;
-                            }
-                            
-                            // Schedule lab on a different day but same time
-                            const labScheduled = scheduleClass(labClass, { 
-                                time: lectureScheduled.time, 
-                                excludeDay: lectureScheduled.day // Exclude the day lecture is on
-                            });
-                            
-                            console.log('Lab scheduled result:', labScheduled);
-                            
-                            if (labScheduled && labScheduled !== true && labScheduled.success) {
-                                scheduledClasses.push(labClass);
-                                console.log('Lab successfully scheduled on', labScheduled.day, 'at', labScheduled.time);
-                            } else {
-                                console.warn('Lab could not be scheduled');
-                                unscheduledClasses.push(labClass);
-                            }
-                        } else if (lectureScheduled === true) {
-                            // Already scheduled
-                            console.log('Lecture already scheduled');
-                            scheduledClasses.push(lectureClass);
-                        } else {
-                            console.warn('Lecture could not be scheduled');
-                            unscheduledClasses.push(lectureClass);
-                            unscheduledClasses.push(labClass);
-                        }
+                    // Try to schedule this class
+                    if (scheduleClass(classItem)) {
+                        scheduledClasses.push(classItem);
                     } else {
-                        // Regular class scheduling (only lecture OR only lab)
-                        classesProcessed++;
-                        let progressPct = Math.floor((classesProcessed / totalClasses) * 100);
-                        if (progressBar) {
-                            progressBar.style.width = progressPct + '%';
-                        }
-                        
-                        if (statusElement) {
-                            statusElement.textContent = `Scheduling class ${classesProcessed} of ${totalClasses}: ${classItem.subject}`;
-                        }
-                        
-                        // Get subject key for same-time scheduling
-                        const subjectKey = classItem.subjectId || classItem.subject;
-                        const subjectScheduledTime = subjectScheduledTimes[subjectKey];
-                        
-                        // Try to schedule this class
-                        const scheduled = scheduleClass(classItem, subjectScheduledTime);
-                        if (scheduled) {
-                            scheduledClasses.push(classItem);
-                            
-                            // If this is the first class for this subject, store the scheduled time
-                            if (!subjectScheduledTimes[subjectKey] && scheduled !== true && scheduled.success) {
-                                subjectScheduledTimes[subjectKey] = { 
-                                    day: scheduled.day, 
-                                    time: scheduled.time 
-                                };
-                            } else if (scheduled === true && !subjectScheduledTimes[subjectKey]) {
-                                // Class was already scheduled, try to get its time from calendar
-                                const calendar = window.calendar;
-                                if (calendar) {
-                                    const events = calendar.getEvents();
-                                    const scheduledEvent = events.find(e => 
-                                        e.extendedProps?.originalClassId === classItem.id
-                                    );
-                                    if (scheduledEvent && scheduledEvent.start) {
-                                        const eventDate = new Date(scheduledEvent.start);
-                                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                                        const dayName = dayNames[eventDate.getDay()];
-                                        const timeStr = eventDate.toTimeString().substring(0, 5);
-                                        subjectScheduledTimes[subjectKey] = { day: dayName, time: timeStr };
-                                    }
-                                }
-                            }
-                        } else {
-                            unscheduledClasses.push(classItem);
-                        }
+                        unscheduledClasses.push(classItem);
                     }
                 }
                 
@@ -2025,81 +958,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     statusElement.textContent = "Schedule generation complete!";
                 }
                 
-                // Force save the schedule
-                console.log('Force saving schedule after generation...');
-                
-                // Verify calendar is showing the week we generated events for
-                // Don't change the view - events were generated for whatever week is displayed
-                if (window.calendar) {
-                    try {
-                        const calendarDate = window.calendar.getDate();
-                        console.log('Calendar is showing week starting from:', calendarDate.toDateString());
-                        console.log('Events should appear on this week\'s timetable');
-                    } catch (e) {
-                        console.log('Could not get calendar view date');
-                    }
-                }
-                
-                // Save the schedule - events are already on the calendar
-                setTimeout(() => {
-                    window.isGeneratingSchedule = true;
-                    
-                    // Force calendar to refresh and show events
-                    if (window.calendar) {
-                        try {
-                            // Get all events to verify they exist
-                            const currentEvents = window.calendar.getEvents();
-                            console.log(`Calendar has ${currentEvents.length} events before save`);
-                            
-                            if (currentEvents.length === 0) {
-                                console.error('ERROR: No events found on calendar after generation!');
-                            }
-                            
-                            // Force calendar to re-render to ensure events are visible
-                            window.calendar.render();
-                            
-                            // Verify events again
-                            const eventsAfterRender = window.calendar.getEvents();
-                            console.log(`Calendar has ${eventsAfterRender.length} events after render`);
-                            
-                            // Log first few events for debugging
-                            if (eventsAfterRender.length > 0) {
-                                console.log('Sample events on calendar:', eventsAfterRender.slice(0, 3).map(e => ({
-                                    title: e.title,
-                                    start: e.start?.toISOString(),
-                                    day: e.extendedProps?.dayOfWeek
-                                })));
-                            } else {
-                                console.warn('WARNING: No events found on calendar after render!');
-                            }
-                        } catch (e) {
-                            console.error('Error refreshing calendar:', e);
-                        }
-                    }
-                    
-                    // Save to server
-                    saveScheduleToLocalStorage();
-                    console.log('Schedule saved to server. Events should remain visible on timetable.');
-                    
-                    // Clear the flag after save completes
-                    setTimeout(() => {
-                        window.isGeneratingSchedule = false;
-                    }, 2000);
-                }, 500);
-                
                 // Close the modal and show results
-                setTimeout(async () => {
+                setTimeout(() => {
                     hideModal('loadingModal');
-                    
-                    // Ensure fixed schedules are still visible after schedule generation
-                    if (typeof window.fixedSchedules !== 'undefined') {
-                        if (window.fixedSchedules.load) {
-                            await window.fixedSchedules.load();
-                        }
-                        if (window.fixedSchedules.loadToCalendar) {
-                            window.fixedSchedules.loadToCalendar();
-                        }
-                    }
                     
                     if (unscheduledClasses.length > 0) {
                         showConflictsModal(unscheduledClasses);
@@ -2114,8 +975,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showNotification('Error generating schedule: ' + error.message, 'error');
             }
         }, 300);
-    };
-    
+    }
     
     // Show conflicts modal
     function showConflictsModal(unscheduledClasses) {
@@ -2133,326 +993,16 @@ document.addEventListener('DOMContentLoaded', function() {
         showModal('conflictsModal');
     }
     
-    // Apply department colors to events after they're added to the DOM
-    function applyDepartmentColorsToEvents() {
-        const events = document.querySelectorAll('.fc-event');
-        events.forEach(event => {
-            const eventId = event.getAttribute('data-event-id');
-            if (eventId) {
-                // Try to get the event data from the calendar
-                const calendar = window.calendar;
-                if (calendar) {
-                    const eventObj = calendar.getEventById(eventId);
-                    if (eventObj && eventObj.extendedProps?.departmentColor) {
-                        const color = eventObj.extendedProps.departmentColor;
-                        event.style.backgroundColor = color;
-                        event.style.borderColor = color;
-                        event.style.opacity = '1';
-                        // Also set inner content container to avoid theme overrides
-                        const mainEl = event.querySelector('.fc-event-main');
-                        if (mainEl) {
-                            mainEl.style.backgroundColor = color;
-                            mainEl.style.borderColor = color;
-                        }
-                        event.classList.add('department-colored-event');
-                        console.log(`Applied department color ${color} to event ${eventId}`);
-                    }
-                }
-            }
-        });
-    }
-
-    // Set up observer to apply colors when new events are added
-    function setupEventColorObserver() {
-        const calendarContainer = document.querySelector('#calendar');
-        if (calendarContainer) {
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.type === 'childList') {
-                        mutation.addedNodes.forEach((node) => {
-                            if (node.nodeType === 1 && (node.classList?.contains('fc-event') || node.querySelector?.('.fc-event'))) {
-                                setTimeout(applyDepartmentColorsToEvents, 50);
-                            }
-                        });
-                    }
-                });
-            });
-            
-            observer.observe(calendarContainer, {
-                childList: true,
-                subtree: true
-            });
-        }
-    }
-
-    // Get department color for a class based on its course/program
-    function getDepartmentColorForClass(classItem) {
-        // FIRST: Try to get course color by courseId (highest priority)
-        const courseId = classItem.courseId || classItem.programId || '';
-        if (courseId) {
-            try {
-                // Get courses from localStorage or global
-                const courses = (Array.isArray(window.courses) && window.courses.length)
-                    ? window.courses
-                    : JSON.parse(localStorage.getItem('courses') || '[]');
-                
-                if (Array.isArray(courses) && courses.length > 0) {
-                    // Try to find course by ID
-                    const course = courses.find(c => 
-                        c.id && String(c.id) === String(courseId)
-                    );
-                    
-                    // If not found by ID, try by code
-                    const courseByCode = !course ? courses.find(c => 
-                        c.code && String(c.code).toLowerCase() === String(courseId).toLowerCase()
-                    ) : null;
-                    
-                    const foundCourse = course || courseByCode;
-                    
-                    if (foundCourse?.color) {
-                        console.log('Found course color by courseId:', foundCourse.color, 'for course:', foundCourse.code || foundCourse.name);
-                        return foundCourse.color;
-                    }
-                }
-            } catch (e) {
-                console.warn('Error looking up course color:', e);
-            }
-        }
-        
-        // SECOND: Try to get course color by course name/code
-        const courseValue = classItem.course || '';
-        if (courseValue) {
-            try {
-                const courses = (Array.isArray(window.courses) && window.courses.length)
-                    ? window.courses
-                    : JSON.parse(localStorage.getItem('courses') || '[]');
-                
-                if (Array.isArray(courses) && courses.length > 0) {
-                    const courseLc = String(courseValue).toLowerCase().trim();
-                    const foundCourse = courses.find(c => {
-                        const codeLc = String(c.code || '').toLowerCase();
-                        const nameLc = String(c.name || '').toLowerCase();
-                        return codeLc === courseLc || 
-                               nameLc === courseLc ||
-                               (codeLc && courseLc.includes(codeLc)) ||
-                               (codeLc && codeLc.includes(courseLc));
-                    });
-                    
-                    if (foundCourse?.color) {
-                        console.log('Found course color by course name/code:', foundCourse.color, 'for course:', foundCourse.code || foundCourse.name);
-                        return foundCourse.color;
-                    }
-                }
-            } catch (e) {
-                console.warn('Error looking up course color by name:', e);
-            }
-        }
-        
-        // THIRD: Fall back to department color lookup (original logic)
-        const departments = (Array.isArray(window.departments) && window.departments.length)
-            ? window.departments
-            : JSON.parse(localStorage.getItem('departments') || '[]');
-        
-        console.log('Looking up color for classItem:', classItem);
-        console.log('Available departments:', departments);
-        
-        if (Array.isArray(departments) && departments.length > 0) {
-            // 1) Try to match by department ID first (most accurate)
-            if (classItem.departmentId) {
-                const deptById = departments.find(dept => 
-                    dept.id && String(dept.id) === String(classItem.departmentId)
-                );
-                if (deptById?.color) {
-                    console.log('Found color by departmentId:', deptById.color, 'for dept:', deptById.code);
-                    return deptById.color;
-                }
-            }
-            
-            // 2) Try to match by department CODE (this is what's stored in classItem.department)
-            const departmentCode = classItem.department || '';
-            if (departmentCode) {
-                const deptByCode = departments.find(dept => {
-                    const deptCode = String(dept.code || '').toLowerCase();
-                    const searchCode = String(departmentCode).toLowerCase();
-                    return deptCode === searchCode || deptCode === searchCode.trim();
-                });
-                if (deptByCode?.color) {
-                    console.log('Found color by department code:', deptByCode.color, 'for dept:', deptByCode.code);
-                    return deptByCode.color;
-                }
-            }
-            
-            // 3) Try to match by course value against department code
-            if (courseValue) {
-                const courseLc = String(courseValue).toLowerCase().trim();
-                const deptByCourse = departments.find(dept => {
-                    const codeLc = String(dept.code || '').toLowerCase();
-                    const nameLc = String(dept.name || '').toLowerCase();
-                    return codeLc === courseLc || 
-                           nameLc === courseLc ||
-                           (codeLc && courseLc.includes(codeLc)) ||
-                           (codeLc && codeLc.includes(courseLc));
-                });
-                if (deptByCourse?.color) {
-                    console.log('Found color by course match:', deptByCourse.color, 'for dept:', deptByCourse.code);
-                    return deptByCourse.color;
-                }
-            }
-        }
-        
-        // 4) Fallback to default colors (only if no course or department found)
-        console.warn('No course or department color found, using default');
-        const defaultColors = {
-            'bsit': '#10b981',
-            'it': '#10b981',
-            'bsais': '#10b981',
-            'ais': '#10b981',
-            'bshm': '#f59e0b',
-            'hm': '#f59e0b',
-            'bstm': '#8b5cf6',
-            'tm': '#8b5cf6',
-            'default': '#6b7280'
-        };
-        const courseLc = String(courseValue || courseId).toLowerCase();
-        for (const [key, color] of Object.entries(defaultColors)) {
-            if (courseLc.includes(key)) {
-                console.log('Using default color for:', key);
-                return color;
-            }
-        }
-        
-        return defaultColors.default;
-    }
-    
-    // Expose getDepartmentColorForClass globally for use in other files
-    window.getDepartmentColorForClass = getDepartmentColorForClass;
-
-    // Resolve department object for a given course/program
-    function getDepartmentForCourse(courseOrClassItem) {
-        // If it's a class item object, check for department field first
-        if (typeof courseOrClassItem === 'object' && courseOrClassItem !== null) {
-            // Check if classItem has departmentId or department field directly
-            if (courseOrClassItem.departmentId) {
-                const departments = JSON.parse(localStorage.getItem('departments') || '[]');
-                const dept = departments.find(d => String(d.id) === String(courseOrClassItem.departmentId));
-                if (dept) return dept;
-            }
-            if (courseOrClassItem.department) {
-                const departments = JSON.parse(localStorage.getItem('departments') || '[]');
-                const dept = departments.find(d => 
-                    String(d.name).toLowerCase() === String(courseOrClassItem.department).toLowerCase() ||
-                    String(d.code).toLowerCase() === String(courseOrClassItem.department).toLowerCase() ||
-                    String(d.id) === String(courseOrClassItem.department)
-                );
-                if (dept) return dept;
-            }
-        }
-        
-        const course = typeof courseOrClassItem === 'string'
-            ? courseOrClassItem
-            : (courseOrClassItem.course || courseOrClassItem.courseId || '');
-        const courseLc = String(course).toLowerCase().trim();
-        const departments = JSON.parse(localStorage.getItem('departments') || '[]');
-
-        // exact id/code/name match
-        let dept = departments.find(d => d.code === course || d.name === course || d.id === course);
-        if (dept) return dept;
-        // substring/alias match
-        dept = departments.find(d => {
-            const codeLc = (d.code || '').toLowerCase();
-            const nameLc = (d.name || '').toLowerCase();
-            return (
-                (codeLc && (courseLc.includes(codeLc) || codeLc === courseLc)) ||
-                (nameLc && (courseLc.includes(nameLc) || nameLc === courseLc))
-            );
-        });
-        return dept || null;
-    }
-
     // Schedule a single class
-    function scheduleClass(classItem, subjectScheduledTime = null) {
+    function scheduleClass(classItem) {
         const calendar = window.calendar;
         if (!calendar) return false;
         
-        // FIRST: Check if this class is already scheduled anywhere
-        // This prevents creating multiple events for the same class
-        const existingEvents = calendar.getEvents();
-        const classAlreadyScheduled = existingEvents.some(existingEvent => {
-            return existingEvent.extendedProps?.originalClassId === classItem.id;
-        });
-        
-        if (classAlreadyScheduled) {
-            console.log('Class already scheduled, skipping:', classItem.subject, '(ID:', classItem.id, ')');
-            return true; // Return true since class is already scheduled
-        }
-        
-        // Check if this is a strand - limit to 4 days per week (excluding Saturday)
-        const isStrand = classItem.courseId && (() => {
-            try {
-                const courses = JSON.parse(localStorage.getItem('courses') || '[]');
-                const strands = JSON.parse(localStorage.getItem('strands') || '[]');
-                const allPrograms = [...courses, ...strands];
-                const program = allPrograms.find(p => p.id === classItem.courseId || p.code === classItem.courseId);
-                return program && program.type === 'strand';
-            } catch (e) {
-                return false;
-            }
-        })();
-        
-        // Get possible days - limit strands to 4 days (Mon-Fri, excluding Saturday)
-        let possibleDays = [...days];
-        if (isStrand) {
-            // For strands, only use Monday-Friday (exclude Saturday)
-            possibleDays = possibleDays.filter(d => d.id !== 'Saturday');
-            // Randomly select 4 days from Mon-Fri
-            shuffleArray(possibleDays);
-            possibleDays = possibleDays.slice(0, 4);
-        } else {
-            // For programs, use all days
-            shuffleArray(possibleDays);
-        }
-        
-        // Exclude a specific day if provided (for lab scheduling on different day)
-        if (subjectScheduledTime && subjectScheduledTime.excludeDay) {
-            possibleDays = possibleDays.filter(d => d.id !== subjectScheduledTime.excludeDay);
-        }
-        
-        // Get time slots - if subject already has a scheduled time, prioritize that time and day
-        let possibleTimes = timeSlots.slice();
-        let targetDay = null;
-        let targetTime = null;
-        let hasScheduledTime = false;
-        
-        if (subjectScheduledTime && subjectScheduledTime.time) {
-            // Use the same time as the first scheduled class for this subject
-            targetTime = subjectScheduledTime.time;
-            hasScheduledTime = true;
-            
-            // If a specific day is provided and not excluded, prioritize it
-            if (subjectScheduledTime.day && !subjectScheduledTime.excludeDay) {
-                targetDay = possibleDays.find(d => d.id === subjectScheduledTime.day);
-                if (targetDay) {
-                    // Move target day to front
-                    const dayIndex = possibleDays.indexOf(targetDay);
-                    if (dayIndex > -1) {
-                        possibleDays.splice(dayIndex, 1);
-                        possibleDays.unshift(targetDay);
-                    }
-                }
-            }
-            
-            // ALWAYS prioritize the target time (for same-time scheduling on different days)
-            const timeIndex = possibleTimes.indexOf(targetTime);
-            if (timeIndex > -1) {
-                possibleTimes.splice(timeIndex, 1);
-                possibleTimes.unshift(targetTime);
-            } else {
-                // If time not found in slots, add it at the beginning
-                possibleTimes.unshift(targetTime);
-            }
-        } else {
-            shuffleArray(possibleTimes);
-        }
+        // Get all possible days and time slots and shuffle them both for better distribution
+        const possibleDays = [...days];
+        shuffleArray(possibleDays); // Shuffle the days array so we don't always start with Monday
+        const possibleTimes = timeSlots.slice();
+        shuffleArray(possibleTimes); // Use our proper shuffle function instead of sort
         
         // Try each combination until we find a valid placement
         for (const day of possibleDays) {
@@ -2462,77 +1012,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const durationMinutes = durationHours * 60;
                 const endTime = addMinutes(startTime, durationMinutes);
                 
-                // Skip if end time would be after 7:30 PM (19:30)
-                const [endHour, endMin] = endTime.split(':').map(Number);
-                if (endHour > 19 || (endHour === 19 && endMin > 30)) {
+                // Skip if end time would be after 8:00 PM
+                if (endTime > '20:00') {
                     continue;
                 }
                 
-                // Calculate the date for the specific day of the week BEFORE finding rooms
-                // Use the CALENDAR's current view week (Monday-Saturday week being displayed)
-                // The timetable shows Monday-Saturday, so we need Monday of that visible week
-                let viewDate;
-                try {
-                    // Get the date of the week currently being displayed on the calendar
-                    viewDate = calendar.getDate();
-                } catch (e) {
-                    // Fallback: use today, but if it's Sunday, move to Monday
-                    viewDate = new Date();
-                    if (viewDate.getDay() === 0) {
-                        viewDate.setDate(viewDate.getDate() + 1); // Sunday -> Monday
-                    }
-                }
-                
-                // Normalize to noon to avoid timezone issues
-                viewDate.setHours(12, 0, 0, 0);
-                const currentDayOfWeek = viewDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-                
-                // Calculate Monday of the visible week (Monday-Saturday timetable)
-                // If viewDate is Sunday (shouldn't happen), move to next Monday
-                let daysToMonday;
-                if (currentDayOfWeek === 0) {
-                    // Sunday - move to Monday
-                    viewDate.setDate(viewDate.getDate() + 1);
-                    daysToMonday = 0;
-                } else {
-                    // Monday = 0 days back, Tuesday = 1 day back, etc.
-                    daysToMonday = currentDayOfWeek - 1;
-                }
-                
-                const mondayDate = new Date(viewDate);
-                mondayDate.setDate(viewDate.getDate() - daysToMonday);
-                mondayDate.setHours(0, 0, 0, 0); // Ensure we're at start of day
-                
-                // Debug log to verify calculation
-                console.log(`Generating for ${day.id}: View date=${viewDate.toDateString()}, Monday of week=${mondayDate.toDateString()}`);
-                
-                // Map day name to day of week index (Monday = 0, Tuesday = 1, ..., Saturday = 5)
-                const dayIndexMap = {
-                    'Monday': 0,
-                    'Tuesday': 1,
-                    'Wednesday': 2,
-                    'Thursday': 3,
-                    'Friday': 4,
-                    'Saturday': 5
-                };
-                const dayOffset = dayIndexMap[day.id] || 0;
-                
-                // Calculate the date for this specific day in the CURRENT week
-                const targetDate = new Date(mondayDate);
-                targetDate.setDate(mondayDate.getDate() + dayOffset);
-                targetDate.setHours(0, 0, 0, 0); // Ensure we're at start of day
-                
-                // Format the date string (YYYY-MM-DD) - this will be the current week's date
-                const year = targetDate.getFullYear();
-                const month = String(targetDate.getMonth() + 1).padStart(2, '0');
-                const dayOfMonth = String(targetDate.getDate()).padStart(2, '0');
-                const dateStr = `${year}-${month}-${dayOfMonth}`;
-                
-                console.log(`Generating event for ${day.id} on current week date: ${dateStr}`);
-                
                 // Find compatible AND available rooms for this time slot
-                // Pass the date string for proper room occupancy checking
-                let compatibleRooms = findCompatibleRooms(classItem, dateStr, startTime, endTime);
+                let compatibleRooms = findCompatibleRooms(classItem, day.id, startTime, endTime);
                 
                 // Sort rooms by usage count (less used rooms first)
                 // But maintain priority rooms at the top if applicable
@@ -2586,133 +1072,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 for (const room of compatibleRooms) {
-                    // dateStr is already calculated above before this loop
+                    // Create event data using today's date as the reference date
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const dayOfMonth = String(today.getDate()).padStart(2, '0'); // Renamed from day to dayOfMonth
+                    const fixedDateStr = `${year}-${month}-${dayOfMonth}`;
                     
-                    // Check if this class is merged
-                    const isMerged = classItem.mergedClassIds && classItem.mergedClassIds.length > 0;
-                    
-                    // Get department color for this class
-                    let departmentColor = getDepartmentColorForClass(classItem);
-                    // If merged, use black background with white text
-                    if (isMerged) {
-                        departmentColor = '#000000'; // Black for merged classes
-                    }
-                    console.log(`Generated department color: ${departmentColor} for class: ${classItem.subject} (${classItem.course})${isMerged ? ' [MERGED]' : ''}`);
-                    
-                    // Create event title with class type and merged indicator
-                    let eventTitle = classItem.subject;
-                    if (classItem.classType === 'lecture' || classItem.classType === 'laboratory') {
-                        eventTitle = `${classItem.subject} (${classItem.classType === 'lecture' ? 'Lecture' : 'Lab'})`;
-                    }
-                    
-                    // If merged, add merged classes info to title
-                    if (isMerged && classItem.mergedClassIds) {
-                        const mergedClasses = allClasses.filter(c => classItem.mergedClassIds.includes(c.id));
-                        const mergedStrands = mergedClasses.map(c => c.course || c.department).filter(Boolean);
-                        if (mergedStrands.length > 0) {
-                            eventTitle += ` [MERGED: ${mergedStrands.join(', ')}]`;
-                        }
-                    }
-                    
-                    // Create event data - for timeGridWeek, we use the actual date, not resourceId
+                    // Create a test event
                     const eventData = {
-                        id: classItem.id + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9), // Unique ID per instance
-                        title: eventTitle,
-                        start: `${dateStr}T${startTime}:00`,
-                        end: `${dateStr}T${endTime}:00`,
-                        backgroundColor: departmentColor,
-                        borderColor: departmentColor,
-                        textColor: isMerged ? '#ffffff' : '#ffffff', // White text for merged (black bg), white for normal
+                        id: classItem.id,
+                        title: classItem.subject,
+                        resourceId: day.id, // This is what matters - which day of week
+                        start: `${fixedDateStr}T${startTime}:00`,
+                        end: `${fixedDateStr}T${endTime}:00`,
                         classNames: [
                             `${classItem.course.toLowerCase()}-event`,
-                            `${classItem.classType}-type`,
-                            'department-colored-event',
-                            ...(isMerged ? ['merged-class-event'] : [])
+                            `${classItem.classType}-type`
                         ],
                         extendedProps: {
-                            originalClassId: classItem.id,
                             subject: classItem.subject,
-                            subjectId: classItem.subjectId || null,
                             course: classItem.course,
-                            courseId: classItem.courseId || classItem.programId || null,
                             faculty: classItem.faculty,
-                            facultyId: classItem.facultyId || null,
-                            unitLoad: classItem.unitLoad || classItem.units || 0,
+                            unitLoad: classItem.unitLoad,
                             classType: classItem.classType,
-                            lectureHours: classItem.lectureHours || 0,
-                            labHours: classItem.labHours || 0,
-                            room: room.name || room.title || room.id,
+                            room: room.title,
                             roomId: room.id,
-                                department: classItem.department,
-                                departmentId: classItem.departmentId,
-                            dayOfWeek: day.id,
-                            departmentColor: departmentColor,
-                            isMerged: isMerged,
-                            mergedClassIds: classItem.mergedClassIds || []
+                            dayOfWeek: day.id
                         }
                     };
-                        
-                        // Check for conflicts (faculty, room/time, and room exclusivity)
-                        if (!wouldCreateScheduleConflict(eventData)) {
-                        // Double-check for duplicates right before adding (in case something changed)
-                        const currentEvents = calendar.getEvents();
-                        const isDuplicate = currentEvents.some(existingEvent => {
-                            return existingEvent.extendedProps?.originalClassId === classItem.id;
-                        });
-                        
-                        if (isDuplicate) {
-                            console.log('Duplicate detected just before adding, skipping:', classItem.subject);
-                            return true; // Class was scheduled while we were processing
-                        }
-                        
-                        // No conflicts or duplicates - add the event to the calendar
-                        // Event is already set to current week date, so it will appear on the current timetable
-                        console.log('Adding event to calendar (current week):', {
-                            title: eventData.title,
-                            day: day.id,
-                            date: dateStr,
-                            time: `${startTime} - ${endTime}`
-                        });
-                        const addedEvent = calendar.addEvent(eventData);
-                        console.log('Event added to calendar:', {
-                            id: addedEvent.id,
-                            title: addedEvent.title,
-                            start: addedEvent.start?.toISOString(),
-                            end: addedEvent.end?.toISOString(),
-                            visible: addedEvent.isStart
-                        });
-                        
-                        // Force calendar to render/update after adding event
-                        try {
-                            calendar.render();
-                        } catch (e) {
-                            // render() might not be needed, just ensure update
-                            console.log('Calendar render attempted');
-                        }
-                        
-                        // Apply department color after event is added
-                        setTimeout(() => {
-                            const eventElement = document.querySelector(`[data-event-id="${eventData.id}"]`);
-                            if (eventElement) {
-                                eventElement.style.backgroundColor = departmentColor;
-                                eventElement.style.borderColor = departmentColor;
-                                eventElement.style.opacity = '1';
-                                const mainEl = eventElement.querySelector('.fc-event-main');
-                                if (mainEl) {
-                                    mainEl.style.backgroundColor = departmentColor;
-                                    mainEl.style.borderColor = departmentColor;
-                                }
-                                console.log(`Applied department color ${departmentColor} to event element`);
-                            }
-                        }, 100);
+                    
+                    // Check for faculty conflicts
+                    if (!wouldCreateFacultyConflict(eventData)) {
+                        // No conflicts - add the event to the calendar
+                        calendar.addEvent(eventData);
                         roomUsageCount[room.id] += 1;  // Track room usage
                         
-                        // Return success with scheduled time info for same-subject scheduling
-                        return { 
-                            success: true, 
-                            day: day.id, 
-                            time: startTime
-                        };
+                        return true;
                     }
                 }
             }
@@ -2722,7 +1118,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return false;
     }
     
-    // Print schedule - print the current timetable view
+    // Print schedule - simplified to only show the timetable
+    // Export schedule to Excel file
     function printSchedule() {
         const calendar = window.calendar;
         if (!calendar) {
@@ -2731,360 +1128,118 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            // Add print class to body to trigger print styles
-            document.body.classList.add('printing-timetable');
-            
-            // Add print date attribute
-            const now = new Date();
-            document.body.setAttribute('data-print-date', now.toLocaleString());
-            
-            // Hide elements that shouldn't be printed
-            const leftColumn = document.querySelector('.left-column');
-            const header = document.querySelector('.header');
-            const filterPanel = document.querySelector('.filter-panel');
-            const panelActions = document.querySelector('.panel-actions');
-            
-            if (leftColumn) leftColumn.style.display = 'none';
-            if (header) header.style.display = 'none';
-            if (filterPanel) filterPanel.style.display = 'none';
-            if (panelActions) panelActions.style.display = 'none';
-            
-            // Show notification
-            if (typeof showNotification === 'function') {
-                showNotification('Opening print dialog...', 'info');
-            }
-            
-            // Wait a moment for styles to apply, then print
-            setTimeout(() => {
-                window.print();
-                
-                // Restore elements after printing
-                setTimeout(() => {
-                    if (leftColumn) leftColumn.style.display = '';
-                    if (header) header.style.display = '';
-                    if (filterPanel) filterPanel.style.display = '';
-                    if (panelActions) panelActions.style.display = '';
-                    document.body.classList.remove('printing-timetable');
-                    document.body.removeAttribute('data-print-date');
-                }, 500);
-            }, 200);
-        } catch (error) {
-            console.error('Error printing schedule:', error);
-            if (typeof showNotification === 'function') {
-                showNotification('Error printing schedule: ' + error.message, 'error');
-            }
-            // Restore elements on error
-            const leftColumn = document.querySelector('.left-column');
-            const header = document.querySelector('.header');
-            const filterPanel = document.querySelector('.filter-panel');
-            const panelActions = document.querySelector('.panel-actions');
-            if (leftColumn) leftColumn.style.display = '';
-            if (header) header.style.display = '';
-            if (filterPanel) filterPanel.style.display = '';
-            if (panelActions) panelActions.style.display = '';
-            document.body.classList.remove('printing-timetable');
-        }
-    }
-    
-    // Export schedule to Excel file in timetable format (matching sample)
-    function exportScheduleToExcel() {
-        const calendar = window.calendar;
-        if (!calendar) {
-            showNotification('Calendar not initialized', 'error');
-            return;
-        }
-
-        try {
-            if (typeof XLSX === 'undefined') {
-                showNotification('Excel library not loaded. Please refresh the page.', 'error');
-                return;
-            }
-
             showNotification('Preparing Excel file...', 'info');
-            
-            // Get all events from the calendar
-            const allEvents = calendar.getEvents();
-            
-            // Filter events - check if they're visible (not filtered out)
-            // The filter system in schedule.js hides events by setting display: none on event.el
-            // and adding 'filtered-out' class
-            const visibleEvents = allEvents.filter(event => {
-                // Skip fixed schedules
-                if (event.extendedProps?.isFixedSchedule) {
-                    return false;
-                }
-                
-                // Check if event is visible by checking its DOM element
-                if (event.el) {
-                    // Check if element is hidden via display style or filtered-out class
-                    const isHidden = event.el.style.display === 'none' || 
-                                   event.el.classList.contains('filtered-out');
-                    return !isHidden;
-                }
-                
-                // If no element exists yet, assume it's visible
-                return true;
-            });
             
             // Create a new workbook
             const wb = XLSX.utils.book_new();
             wb.Props = {
-                Title: "Schedule Timetable",
+                Title: "Class Schedule",
                 Subject: "Timetable",
-                Author: "Scheduling System",
+                Author: "Automated Scheduling System",
                 CreatedDate: new Date()
             };
             
-            // Days of the week (Monday to Saturday)
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            // Add a worksheet for the timetable
+            wb.SheetNames.push("Schedule");
             
-            // Create 15-minute time intervals from 7:00 AM to 8:30 PM (or later if needed)
-            // Format: "7:00-7:15", "7:15-7:30", etc.
+            // Create the header row (time slots)
             const timeSlots = [];
-            for (let hour = 7; hour <= 20; hour++) {
-                for (let minute = 0; minute < 60; minute += 15) {
-                    const nextMinute = minute + 15;
-                    const nextHour = nextMinute >= 60 ? hour + 1 : hour;
-                    const actualNextMinute = nextMinute >= 60 ? 0 : nextMinute;
-                    
-                    const amPm1 = hour >= 12 ? 'PM' : 'AM';
-                    const hour12_1 = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
-                    const minuteStr1 = String(minute).padStart(2, '0');
-                    
-                    const amPm2 = nextHour >= 12 ? 'PM' : 'AM';
-                    const hour12_2 = nextHour > 12 ? nextHour - 12 : (nextHour === 0 ? 12 : nextHour);
-                    const minuteStr2 = String(actualNextMinute).padStart(2, '0');
-                    
-                    timeSlots.push({
-                        label: `${hour12_1}:${minuteStr1}-${hour12_2}:${minuteStr2}`,
-                        hour: hour,
-                        minute: minute
-                    });
-                }
+            for (let hour = 7; hour < 20; hour++) {
+                const amPm = hour >= 12 ? 'PM' : 'AM';
+                const hour12 = hour > 12 ? hour - 12 : hour;
+                timeSlots.push(`${hour12}:00 ${amPm}`);
+                timeSlots.push(`${hour12}:30 ${amPm}`);
             }
             
             // Prepare data structure for worksheet
             const wsData = [];
             
-            // Header row: TIME, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
-            wsData.push(['TIME', ...days]);
+            // Add header row with time slots
+            wsData.push(['Day/Time', ...timeSlots]);
             
-            // Get current week's Monday date
-            const today = new Date();
-            const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-            const daysToMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
-            const mondayDate = new Date(today);
-            mondayDate.setDate(today.getDate() - daysToMonday);
-            mondayDate.setHours(0, 0, 0, 0);
+            // Get all events from the calendar
+            const events = calendar.getEvents();
             
-            // Create a grid to store events: [dayIndex][timeSlotIndex] = event data
-            const eventGrid = {};
-            days.forEach((day, dayIdx) => {
-                eventGrid[dayIdx] = {};
-            });
-            
-            // Process each visible event
-            visibleEvents.forEach(event => {
-                if (!event.start || !event.end) return;
+            // Create a row for each day
+            days.forEach(day => {
+                const dayRow = [day.title]; // First cell is the day name
                 
-                const extendedProps = event.extendedProps || {};
-                const subject = extendedProps.subject || event.title || '';
-                const course = extendedProps.course || '';
-                const classType = extendedProps.classType || '';
-                const room = extendedProps.room || '';
-                const faculty = extendedProps.faculty || '';
-                
-                // Determine day of week
-                const eventDate = new Date(event.start);
-                const dayOfWeek = eventDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-                const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to 0-5 (Mon-Sat)
-                
-                if (dayIndex < 0 || dayIndex > 5) return; // Skip Sunday
-                
-                // Calculate time slot indices
-                const startHour = eventDate.getHours();
-                const startMinute = eventDate.getMinutes();
-                const endDate = new Date(event.end);
-                const endHour = endDate.getHours();
-                const endMinute = endDate.getMinutes();
-                
-                // Convert to 15-minute slot indices (starting from 7:00 AM)
-                const startSlot = ((startHour - 7) * 4) + Math.floor(startMinute / 15);
-                const endSlot = ((endHour - 7) * 4) + Math.ceil(endMinute / 15);
-                
-                // Format event content (matching sample format)
-                const classTypeLabel = classType ? (classType.toUpperCase() === 'LECTURE' ? 'LEC' : classType.toUpperCase() === 'LABORATORY' ? 'LAB' : classType.toUpperCase()) : '';
-                const sectionInfo = course ? `${course}${classTypeLabel ? ' ' + classTypeLabel : ''}` : classTypeLabel;
-                
-                // Create cell content: Subject, Section/Type, Room, Faculty
-                const cellContent = [
-                    subject,
-                    sectionInfo,
-                    room,
-                    faculty
-                ].filter(Boolean).join('\n');
-                
-                // Store event in grid for all time slots it spans
-                for (let slot = startSlot; slot < endSlot && slot < timeSlots.length && slot >= 0; slot++) {
-                    // Only set if not already set (to handle overlapping events)
-                    if (!eventGrid[dayIndex][slot]) {
-                        eventGrid[dayIndex][slot] = cellContent;
-                    }
+                // Fill the row with empty cells initially
+                for (let i = 0; i < timeSlots.length; i++) {
+                    dayRow.push('');
                 }
-            });
-            
-            // Create rows for each time slot
-            timeSlots.forEach((timeSlot, slotIndex) => {
-                const row = [timeSlot.label]; // First column is the time range
                 
-                // Add event data for each day
-                days.forEach((day, dayIndex) => {
-                    const eventContent = eventGrid[dayIndex][slotIndex] || '';
-                    row.push(eventContent);
+                // Find events for this day and fill in the cells
+                const dayEvents = events.filter(event => 
+                    event.getResources()[0]?.id === day.id
+                );
+                
+                dayEvents.forEach(event => {
+                    // Get event details
+                    const startTime = event.start;
+                    const endTime = event.end;
+                    const subject = event.extendedProps.subject;
+                    const course = event.extendedProps.course;
+                    const faculty = event.extendedProps.faculty;
+                    const room = event.extendedProps.room;
+                    
+                    // Calculate cell positions for this event
+                    const startHour = startTime.getHours();
+                    const startMinute = startTime.getMinutes();
+                    const endHour = endTime.getHours();
+                    const endMinute = endTime.getMinutes();
+                    
+                    // Calculate start and end column indices
+                    const startColIndex = ((startHour - 7) * 2) + (startMinute === 30 ? 1 : 0) + 1; // +1 because column 0 is the day name
+                    const endColIndex = ((endHour - 7) * 2) + (endMinute === 30 ? 1 : 0) + 1;
+                    
+                    // Fill in the cells for this event
+                    for (let col = startColIndex; col < endColIndex; col++) {
+                        if (col < dayRow.length) {
+                            dayRow[col] = `${subject}\n${room}\n${faculty}`;
+                        }
+                    }
                 });
                 
-                wsData.push(row);
+                // Add the day row to the worksheet
+                wsData.push(dayRow);
             });
-            
-            // Debug: Check if we have data
-            console.log('Export data:', {
-                visibleEventsCount: visibleEvents.length,
-                wsDataRows: wsData.length,
-                timeSlotsCount: timeSlots.length
-            });
-            
-            // Ensure we have at least header row
-            if (wsData.length === 0) {
-                throw new Error('No data to export. The schedule appears to be empty.');
-            }
             
             // Create the worksheet
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             
-            // Ensure worksheet has a valid range
-            if (!ws['!ref']) {
-                // If no range, manually set it based on data
-                const maxRow = wsData.length - 1;
-                const maxCol = days.length; // TIME column + 6 day columns
-                ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: maxCol } });
-            }
-            
             // Set column widths
-            ws['!cols'] = [
-                { wch: 12 }, // TIME column
-                { wch: 20 }, // Monday
-                { wch: 20 }, // Tuesday
-                { wch: 20 }, // Wednesday
-                { wch: 20 }, // Thursday
-                { wch: 20 }, // Friday
-                { wch: 20 }  // Saturday
-            ];
+            const colWidth = { wch: 18 }; // Width for time slot columns
+            const dayColWidth = { wch: 10 }; // Width for day name column
             
-            // Format cells
-            // Ensure worksheet has a valid range
-            if (!ws['!ref']) {
-                throw new Error('Worksheet has no data. Cannot export empty schedule.');
+            ws['!cols'] = [dayColWidth];
+            for (let i = 0; i < timeSlots.length; i++) {
+                ws['!cols'].push(colWidth);
             }
             
-            const range = XLSX.utils.decode_range(ws['!ref']);
-            
-            // Format header row
-            for (let c = 0; c <= range.e.c; c++) {
-                const cellRef = XLSX.utils.encode_cell({ r: 0, c: c });
-                if (!ws[cellRef]) continue;
-                ws[cellRef].s = {
-                    font: { bold: true, sz: 12 },
-                    alignment: { horizontal: 'center', vertical: 'center' },
-                    fill: { fgColor: { rgb: 'D3D3D3' } },
-                    border: {
-                        top: { style: 'thin' },
-                        bottom: { style: 'thin' },
-                        left: { style: 'thin' },
-                        right: { style: 'thin' }
-                    }
-                };
-            }
-            
-            // Format time column
-            for (let r = 1; r <= range.e.r; r++) {
-                const cellRef = XLSX.utils.encode_cell({ r: r, c: 0 });
-                if (!ws[cellRef]) continue;
-                ws[cellRef].s = {
-                    font: { bold: true, sz: 10 },
-                    alignment: { horizontal: 'center', vertical: 'center' },
-                    border: {
-                        top: { style: 'thin' },
-                        bottom: { style: 'thin' },
-                        left: { style: 'thin' },
-                        right: { style: 'thin' }
-                    }
-                };
-            }
-            
-            // Format data cells with content
-            for (let r = 1; r <= range.e.r; r++) {
-                for (let c = 1; c <= range.e.c; c++) {
-                    const cellRef = XLSX.utils.encode_cell({ r: r, c: c });
-                    if (!ws[cellRef] || !ws[cellRef].v) continue;
+            // Style and formatting
+            // Excel doesn't support as much styling through SheetJS, but we can set some properties
+            // Each cell is formatted as text to preserve line breaks
+            for (let r = 1; r < wsData.length; r++) {
+                for (let c = 1; c < wsData[r].length; c++) {
+                    const cell_ref = XLSX.utils.encode_cell({r: r, c: c});
+                    if (!ws[cell_ref]) continue;
                     
-                    ws[cellRef].s = {
-                        alignment: { 
-                            wrapText: true, 
-                            vertical: 'center', 
-                            horizontal: 'center' 
-                        },
-                        font: { sz: 9 },
-                        border: {
-                            top: { style: 'thin' },
-                            bottom: { style: 'thin' },
-                            left: { style: 'thin' },
-                            right: { style: 'thin' }
-                        }
-                    };
+                    // Format cells with content
+                    if (ws[cell_ref].v !== '') {
+                        ws[cell_ref].s = {
+                            alignment: { wrapText: true, vertical: 'center', horizontal: 'center' },
+                            font: { bold: true }
+                        };
+                    }
                 }
             }
             
-            // Set row heights for better visibility
-            ws['!rows'] = [];
-            for (let r = 0; r <= range.e.r; r++) {
-                ws['!rows'][r] = { hpt: r === 0 ? 20 : 40 }; // Header row shorter, data rows taller
-            }
-            
-            // Check if worksheet has data
-            if (!ws['!ref']) {
-                throw new Error('No data to export. Please ensure there are visible events in the schedule.');
-            }
-            
             // Add the worksheet to the workbook
-            // XLSX requires both SheetNames array and Sheets object
-            if (!wb.SheetNames) {
-                wb.SheetNames = [];
-            }
-            if (!wb.Sheets) {
-                wb.Sheets = {};
-            }
-            wb.SheetNames.push("Schedule");
             wb.Sheets["Schedule"] = ws;
             
-            // Verify workbook structure before writing
-            if (!wb.SheetNames || wb.SheetNames.length === 0) {
-                throw new Error('Workbook has no sheets. Cannot export.');
-            }
-            if (!wb.Sheets || Object.keys(wb.Sheets).length === 0) {
-                throw new Error('Workbook has no sheet data. Cannot export.');
-            }
-            
-            console.log('Workbook structure:', {
-                sheetNames: wb.SheetNames,
-                sheets: Object.keys(wb.Sheets),
-                worksheetRef: ws['!ref']
-            });
-            
             // Convert the workbook to a binary string
-            const wbout = XLSX.write(wb, { 
-                bookType: 'xlsx', 
-                type: 'binary'
-            });
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
             
             // Convert binary string to ArrayBuffer
             function s2ab(s) {
@@ -3097,20 +1252,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Create a Blob from the ArrayBuffer
-            const blob = new Blob([s2ab(wbout)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            
-            // Get filter info for filename
-            const filterDept = document.getElementById('filterDepartment')?.value || '';
-            const filterFaculty = document.getElementById('filterFaculty')?.value || '';
-            let fileName = 'schedule_timetable';
-            if (filterFaculty) {
-                fileName = `schedule_${filterFaculty.replace(/\s+/g, '_')}`;
-            } else if (filterDept) {
-                fileName = `schedule_${filterDept.replace(/\s+/g, '_')}`;
-            }
-            fileName += `_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
             
             // Create a download link and trigger the download
+            const fileName = `class_schedule_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            
             if (window.navigator && window.navigator.msSaveOrOpenBlob) {
                 // For IE
                 window.navigator.msSaveOrOpenBlob(blob, fileName);
@@ -3139,30 +1285,23 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!calendar) return false;
         
         const allEvents = calendar.getEvents();
-        const eventDate = event.start ? new Date(event.start) : null;
-        if (!eventDate) return false;
         
         for (let otherEvent of allEvents) {
             // Skip comparing with itself
             if (otherEvent.id === event.id) continue;
             
-            // Check if same date
-            const otherEventDate = otherEvent.start ? new Date(otherEvent.start) : null;
-            if (!otherEventDate) continue;
-            
-            const sameDate = eventDate.getFullYear() === otherEventDate.getFullYear() &&
-                           eventDate.getMonth() === otherEventDate.getMonth() &&
-                           eventDate.getDate() === otherEventDate.getDate();
-            
-            if (sameDate && datesOverlap(otherEvent.start, otherEvent.end, event.start, event.end)) {
-                // Check if same room (which would be a conflict)
-                if (otherEvent.extendedProps.roomId === event.extendedProps.roomId) {
-                    return true; // Room conflict found
-                }
-                
-                // Check for faculty conflicts (same faculty teaching two classes at once)
-                if (otherEvent.extendedProps.faculty === event.extendedProps.faculty) {
-                    return true; // Faculty conflict found
+            // Check if same day and time overlapping
+            if (otherEvent.getResources()[0]?.id === event.getResources()[0]?.id) {
+                if (datesOverlap(otherEvent.start, otherEvent.end, event.start, event.end)) {
+                    // Check if same room (which would be a conflict)
+                    if (otherEvent.extendedProps.roomId === event.extendedProps.roomId) {
+                        return true; // Room conflict found
+                    }
+                    
+                    // Check for faculty conflicts (same faculty teaching two classes at once)
+                    if (otherEvent.extendedProps.faculty === event.extendedProps.faculty) {
+                        return true; // Faculty conflict found
+                    }
                 }
             }
         }
@@ -3175,52 +1314,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Check for faculty conflicts
-    function wouldCreateFacultyConflict(newEventData, eventDateStr) {
+    function wouldCreateFacultyConflict(newEventData) {
         const calendar = window.calendar;
         if (!calendar) return true; // Assume conflict if no calendar
         
         const existingEvents = calendar.getEvents();
-        const newFaculty = newEventData.extendedProps?.faculty;
+        const newDay = newEventData.resourceId;
+        const newFaculty = newEventData.extendedProps.faculty;
         
-        if (!newFaculty) return false; // No faculty specified, no conflict
-        
-        // Parse the date from the event start string
-        const newEventDate = newEventData.start ? new Date(newEventData.start) : null;
-        if (!newEventDate) return false;
-        
-        // Get time from start/end strings
-        const newStartTime = newEventData.start ? newEventData.start.slice(-8, -3) : null;
-        const newEndTime = newEventData.end ? newEventData.end.slice(-8, -3) : null;
-        
-        if (!newStartTime || !newEndTime) return false;
-        
-        const newStart = convertTimeToMinutes(newStartTime);
-        const newEnd = convertTimeToMinutes(newEndTime);
+        // Convert time strings to comparable values
+        const newStart = convertTimeToMinutes(newEventData.start.slice(-8, -3));
+        const newEnd = convertTimeToMinutes(newEventData.end.slice(-8, -3));
         
         for (const event of existingEvents) {
             // Skip comparing with itself
             if (event.id === newEventData.id) continue;
             
-            // Check if events are on the same date
-            const existingEventDate = event.start ? new Date(event.start) : null;
-            if (!existingEventDate) continue;
-            
-            // Compare dates (year, month, day only - ignore time)
-            const sameDate = newEventDate.getFullYear() === existingEventDate.getFullYear() &&
-                           newEventDate.getMonth() === existingEventDate.getMonth() &&
-                           newEventDate.getDate() === existingEventDate.getDate();
-            
-            if (sameDate) {
+            // Only check for conflicts on the same day
+            if (event.getResources()[0]?.id === newDay) {
                 // Get event times and convert to minutes for comparison
-                const existingStart = event.start ? convertTimeToMinutes(event.start.toTimeString().substring(0, 5)) : 0;
-                const existingEnd = event.end ? convertTimeToMinutes(event.end.toTimeString().substring(0, 5)) : 0;
+                const existingStart = convertTimeToMinutes(event.start.toTimeString().substring(0, 5));
+                const existingEnd = convertTimeToMinutes(event.end.toTimeString().substring(0, 5));
                 
                 // Check for time overlap
                 if (newStart < existingEnd && existingStart < newEnd) {
                     // Check for faculty conflicts
-                    const existingFaculty = event.extendedProps?.faculty;
-                    if (existingFaculty && existingFaculty === newFaculty) {
-                        console.log(`Faculty conflict detected: ${newFaculty} has overlapping classes at ${newStartTime}-${newEndTime}`);
+                    if (event.extendedProps.faculty === newFaculty) {
                         return true; // Same faculty teaching two classes at once
                     }
                 }
@@ -3252,20 +1371,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return (hours * 60) + minutes;
     }
     
-    // Generate time slots for scheduling (7:00 AM to 10:00 PM in 30-min increments)
+    // Generate time slots for scheduling (7:00 AM to 7:30 PM in 30-min increments)
     function generateTimeSlots() {
         const slots = [];
         let currentHour = 7;
         let currentMinute = 0;
         
-        // Generate slots from 7:00 AM to 7:30 PM (19:30) in 15-minute increments
-        while (currentHour < 19 || (currentHour === 19 && currentMinute <= 30)) {
+        while (currentHour < 20) {
             const hourString = currentHour.toString().padStart(2, '0');
             const minuteString = currentMinute.toString().padStart(2, '0');
             slots.push(`${hourString}:${minuteString}`);
             
-            // Advance by 15 minutes
-            currentMinute += 15;
+            // Advance by 30 minutes
+            currentMinute += 30;
             if (currentMinute >= 60) {
                 currentHour++;
                 currentMinute = 0;
@@ -3289,14 +1407,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Clear schedule
     function clearSchedule() {
         const calendar = window.calendar;
-        if (calendar) {
-            // Clear all events from calendar
-            if (typeof calendar.removeAllEvents === 'function') {
-                calendar.removeAllEvents();
-            } else if (typeof calendar.getEvents === 'function') {
-                calendar.getEvents().forEach(event => event.remove());
-            }
-            console.log('Schedule cleared - calendar events removed');
+        if (calendar && typeof calendar.getEvents === 'function') {
+            calendar.getEvents().forEach(event => event.remove());
         }
     }
     
@@ -3372,15 +1484,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 classType: event.extendedProps.classType
             };
             
-            // Get the date string from the event
-            const eventDate = event.start ? new Date(event.start) : null;
-            const eventDateStr = eventDate ? 
-                `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}` : 
-                null;
+            const dayId = event.getResources()[0]?.id;
             const startTime2 = event.start.toTimeString().substring(0, 5);
             const endTime2 = event.end.toTimeString().substring(0, 5);
             
-            const compatibleRooms = findCompatibleRooms(classItem, eventDateStr, startTime2, endTime2);
+            const compatibleRooms = findCompatibleRooms(classItem, dayId, startTime2, endTime2);
             
             // Create options for each room
             compatibleRooms.forEach(room => {
@@ -3391,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Check if room is occupied (except by this event)
                 const isOccupied = isRoomOccupiedExcept(
                     room.id, 
-                    eventDateStr, 
+                    dayId, 
                     startTime2, 
                     endTime2, 
                     event.id
@@ -3421,27 +1529,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const deleteEventBtn = document.getElementById('deleteEventBtn');
         const changeRoomBtn = document.getElementById('changeRoomBtn');
         
-        // Only show delete button for superadmin users
-        if (deleteEventBtn) {
-            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-            const userRole = userData.role || 'user';
-            const isSuperAdmin = userRole === 'superadmin';
-            
-            if (!isSuperAdmin) {
-                deleteEventBtn.style.display = 'none';
-            } else {
-                deleteEventBtn.style.display = '';
-                deleteEventBtn.setAttribute('data-event-id', event.id);
-            }
-        }
-        
+        if (deleteEventBtn) deleteEventBtn.setAttribute('data-event-id', event.id);
         if (changeRoomBtn) changeRoomBtn.setAttribute('data-event-id', event.id);
         
         showModal('eventModal');
     }
 
     // Helper function to check if a room is occupied (except by a specific event)
-    function isRoomOccupiedExcept(roomId, dayIdOrDate, startTime, endTime, exceptEventId) {
+    function isRoomOccupiedExcept(roomId, dayId, startTime, endTime, exceptEventId) {
         const calendar = window.calendar;
         if (!calendar) return true; // Assume occupied if no calendar
         
@@ -3449,46 +1544,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const start = convertTimeToMinutes(startTime);
         const end = convertTimeToMinutes(endTime);
         
-        // Parse target date if it's a date string
-        let targetDate = null;
-        if (dayIdOrDate && dayIdOrDate.includes('-')) {
-            targetDate = new Date(dayIdOrDate + 'T00:00:00');
-        }
-        
         for (const event of existingEvents) {
             // Skip the excluded event
             if (event.id === exceptEventId) continue;
             
-            // Check if events are on the same date
-            if (targetDate && event.start) {
-                const eventDate = new Date(event.start);
-                const sameDate = targetDate.getFullYear() === eventDate.getFullYear() &&
-                               targetDate.getMonth() === eventDate.getMonth() &&
-                               targetDate.getDate() === eventDate.getDate();
-                
-                if (sameDate) {
-                    // Check if this event uses the room we're checking
-                    if (event.extendedProps.roomId === roomId) {
-                        // Get event times and convert to minutes for comparison
-                        const eventStart = convertTimeToMinutes(event.start.toTimeString().substring(0, 5));
-                        const eventEnd = convertTimeToMinutes(event.end.toTimeString().substring(0, 5));
-                        
-                        // Check for overlap
-                        if (start < eventEnd && eventStart < end) {
-                            return true; // Room is occupied during this time
-                        }
-                    }
-                }
-            } else {
-                // Fallback: check by day name (for backward compatibility)
-                const eventDayName = event.extendedProps?.dayOfWeek;
-                if (eventDayName === dayIdOrDate) {
-                    if (event.extendedProps.roomId === roomId) {
-                        const eventStart = convertTimeToMinutes(event.start.toTimeString().substring(0, 5));
-                        const eventEnd = convertTimeToMinutes(event.end.toTimeString().substring(0, 5));
-                        if (start < eventEnd && eventStart < end) {
-                            return true;
-                        }
+            // Only check for conflicts on the same day
+            if (event.getResources()[0]?.id === dayId) {
+                // Check if this event uses the room we're checking
+                if (event.extendedProps.roomId === roomId) {
+                    // Get event times and convert to minutes for comparison
+                    const eventStart = convertTimeToMinutes(event.start.toTimeString().substring(0, 5));
+                    const eventEnd = convertTimeToMinutes(event.end.toTimeString().substring(0, 5));
+                    
+                    // Check for overlap
+                    if (start < eventEnd && eventStart < end) {
+                        return true; // Room is occupied during this time
                     }
                 }
             }
@@ -3498,135 +1568,80 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Find compatible rooms based on class type and course
-    function findCompatibleRooms(classItem, dayIdOrDate, startTime, endTime) {
-        // Use the most up-to-date rooms list (from window.rooms or local rooms variable)
-        const currentRooms = (window.rooms && Array.isArray(window.rooms) && window.rooms.length > 0) 
-            ? window.rooms 
-            : (rooms && rooms.length > 0 ? rooms : []);
-        
-        if (currentRooms.length === 0) {
-            console.warn('No rooms available for scheduling');
-            return [];
-        }
-        
+    function findCompatibleRooms(classItem, dayId, startTime, endTime) {
         let compatibleRooms = [];
         
         // Apply specific rules based on course and class type
-        // For now, use all available rooms for any class type
-        // This ensures scheduling works even if specific room IDs don't exist
-        compatibleRooms = [...currentRooms];
-        
-        // Try to apply specific room preferences if they exist
         if (classItem.course === 'BSIT' && classItem.classType === 'laboratory') {
-            // BSIT lab classes - prefer rooms with 'CL' in name or ID
-            const priorityRooms = currentRooms.filter(r => 
-                r.id && (r.id.includes('CL') || (r.name && (r.name.includes('CL') || r.name.includes('Computer') || r.name.includes('Lab'))))
+            // BSIT lab classes MUST use CL1 and CL2 first
+            const priorityRooms = rooms.filter(r => r.id === 'CL1' || r.id === 'CL2');
+            const otherRooms = rooms.filter(r => 
+                r.id !== 'CL1' && 
+                r.id !== 'CL2' && 
+                r.id !== 'KITCHEN'
             );
-            const otherRooms = currentRooms.filter(r => 
-                !priorityRooms.includes(r)
-            );
-            if (priorityRooms.length > 0) {
-                shuffleArray(otherRooms);
-                compatibleRooms = [...priorityRooms, ...otherRooms];
-            }
+            // Randomize other rooms for better distribution
+            shuffleArray(otherRooms);
+            compatibleRooms = [...priorityRooms, ...otherRooms];
         } 
+        else if (classItem.course === 'BSIT') {
+            // BSIT lecture classes - can use any room except KITCHEN
+            const roomsExceptKitchen = rooms.filter(r => r.id !== 'KITCHEN');
+            // Randomize rooms for better distribution
+            shuffleArray(roomsExceptKitchen);
+            compatibleRooms = roomsExceptKitchen;
+        }
         else if (classItem.course === 'BSHM' && classItem.classType === 'laboratory') {
-            // BSHM lab classes - prefer rooms with 'KITCHEN' or 'DINING' in name
-            const kitchenRoom = currentRooms.find(r => 
-                (r.id && r.id.includes('KITCHEN')) || (r.name && (r.name.includes('Kitchen') || r.name.includes('kitchen')))
+            // BSHM lab classes MUST use KITCHEN first, then DINING
+            const kitchenRoom = rooms.find(r => r.id === 'KITCHEN');
+            const diningRoom = rooms.find(r => r.id === 'DINING');
+            const otherRooms = rooms.filter(r => 
+                r.id !== 'KITCHEN' && 
+                r.id !== 'DINING'
             );
-            const diningRoom = currentRooms.find(r => 
-                (r.id && r.id.includes('DINING')) || (r.name && (r.name.includes('Dining') || r.name.includes('dining')))
-            );
-            const otherRooms = currentRooms.filter(r => 
-                r !== kitchenRoom && r !== diningRoom
+            // Randomize other rooms for better distribution
+            shuffleArray(otherRooms);
+            compatibleRooms = [kitchenRoom, diningRoom, ...otherRooms];
+        }
+        else if (classItem.course === 'BSHM') {
+            // BSHM lecture classes - prioritize DINING but not KITCHEN
+            const diningRoom = rooms.find(r => r.id === 'DINING');
+            const otherRooms = rooms.filter(r => 
+                r.id !== 'KITCHEN' && 
+                r.id !== 'DINING'
             );
             
-            const priorityRooms = [kitchenRoom, diningRoom].filter(Boolean);
-            if (priorityRooms.length > 0) {
-                shuffleArray(otherRooms);
-                compatibleRooms = [...priorityRooms, ...otherRooms];
-            }
+            // Randomize rooms for better distribution
+            shuffleArray(otherRooms);
+            compatibleRooms = [diningRoom, ...otherRooms];
+        }
+        else if (classItem.course === 'BSTM') {
+            // BSTM courses can use any room, including KITCHEN (per requirement)
+            const kitchenRoom = rooms.find(r => r.id === 'KITCHEN');
+            const otherRooms = rooms.filter(r => r.id !== 'KITCHEN');
+            
+            // Randomize rooms for better distribution
+            shuffleArray(otherRooms);
+            compatibleRooms = [kitchenRoom, ...otherRooms];
         }
         else {
-            // Other courses can use any room
-            // If no specific room rules match, use all available rooms
-            compatibleRooms = [...currentRooms];
+            // Other courses can use any room except KITCHEN 
+            const roomsExceptKitchen = rooms.filter(r => r.id !== 'KITCHEN');
             // Randomize rooms for better distribution
-            shuffleArray(compatibleRooms);
+            shuffleArray(roomsExceptKitchen);
+            compatibleRooms = roomsExceptKitchen;
         }
-
-        // Enforce department-aware room availability/prioritization
-        const dept = getDepartmentForCourse(classItem);
-        const deptId = dept ? dept.id : null;
-        const deptName = dept ? dept.name : null;
-        const deptCode = dept ? dept.code : null;
-
-        // Helper function to check if two departments match (by ID, name, or code)
-        const sameDepartment = (roomDeptId, roomDeptName, classDeptId, classDeptName, classDeptCode) => {
-            // Match by ID first
-            if (roomDeptId && classDeptId && String(roomDeptId) === String(classDeptId)) return true;
-            // Match by name
-            if (roomDeptName && classDeptName && String(roomDeptName).toLowerCase() === String(classDeptName).toLowerCase()) return true;
-            // Match by code
-            if (roomDeptName && classDeptCode && String(roomDeptName).toLowerCase() === String(classDeptCode).toLowerCase()) return true;
-            return false;
-        };
-
-        // 1) Exclude rooms that are exclusive to a different department
-        // IMPORTANT: If a room is marked as exclusive, it can ONLY be used by the department it's assigned to
-        const beforeFilterCount = compatibleRooms.length;
-        compatibleRooms = compatibleRooms.filter(r => {
-            // If room is not exclusive, it's available to all departments
-            if (!r.exclusive) return true;
-            
-            // If room is exclusive but no department assigned, it's not available (shouldn't happen, but safety check)
-            if (!r.departmentId && !r.department) {
-                console.log(`[Room Filter] Excluding exclusive room "${r.name || r.id}" - no department assigned`);
-                return false;
-            }
-            
-            // If class has no department, exclude exclusive rooms
-            if (!deptId && !deptName && !deptCode) {
-                console.log(`[Room Filter] Excluding exclusive room "${r.name || r.id}" - class has no department`);
-                return false;
-            }
-            
-            // Room is exclusive - only allow if it matches the class's department
-            const matches = sameDepartment(r.departmentId, r.department, deptId, deptName, deptCode);
-            if (!matches) {
-                console.log(`[Room Filter] Excluding exclusive room "${r.name || r.id}" (dept: ${r.department || r.departmentId}) - class is for department: ${deptName || deptCode || deptId}`);
-            }
-            return matches;
-        });
         
-        const afterFilterCount = compatibleRooms.length;
-        if (beforeFilterCount !== afterFilterCount) {
-            console.log(`[Room Filter] Filtered ${beforeFilterCount - afterFilterCount} exclusive rooms. ${afterFilterCount} rooms remaining for class "${classItem.subject}" (dept: ${deptName || deptCode || deptId})`);
-        }
-
-        // 2) Prefer rooms of the matching department (priority rooms first), but keep shared rooms available
-        compatibleRooms.sort((a, b) => {
-            const aMatch = (deptId && a.departmentId === deptId) ? 1 : 0;
-            const bMatch = (deptId && b.departmentId === deptId) ? 1 : 0;
-            // Put matches first
-            if (aMatch !== bMatch) return bMatch - aMatch;
-            // Among matches, prioritize exclusive/priority
-            const aWeight = (a.priority ? 1 : 0) + (a.exclusive ? 1 : 0);
-            const bWeight = (b.priority ? 1 : 0) + (b.exclusive ? 1 : 0);
-            return bWeight - aWeight;
-        });
-        
-        // If day/date, start and end time are provided, filter out rooms that are already occupied
-        if (dayIdOrDate && startTime && endTime) {
-            return compatibleRooms.filter(room => !isRoomOccupied(room.id, dayIdOrDate, startTime, endTime));
+        // If day, start and end time are provided, filter out rooms that are already occupied
+        if (dayId && startTime && endTime) {
+            return compatibleRooms.filter(room => !isRoomOccupied(room.id, dayId, startTime, endTime));
         }
         
         return compatibleRooms;
     }
 
     // Helper function to check if a room is occupied at a specific time
-    function isRoomOccupied(roomId, dayIdOrDate, startTime, endTime) {
+    function isRoomOccupied(roomId, dayId, startTime, endTime) {
         const calendar = window.calendar;
         if (!calendar) return true; // Assume occupied if no calendar
         
@@ -3634,45 +1649,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const start = convertTimeToMinutes(startTime);
         const end = convertTimeToMinutes(endTime);
         
-        // dayIdOrDate can be either a day name (for compatibility) or a date string
-        // For timeGridWeek, we'll check by date
-        let targetDate = null;
-        if (dayIdOrDate && dayIdOrDate.includes('-')) {
-            // It's a date string (YYYY-MM-DD)
-            targetDate = new Date(dayIdOrDate + 'T00:00:00');
-        }
-        
         for (const event of existingEvents) {
-            // Check if events are on the same date
-            if (targetDate && event.start) {
-                const eventDate = new Date(event.start);
-                const sameDate = targetDate.getFullYear() === eventDate.getFullYear() &&
-                               targetDate.getMonth() === eventDate.getMonth() &&
-                               targetDate.getDate() === eventDate.getDate();
-                
-                if (sameDate) {
-                    // Check if this event uses the room we're checking
-                    if (event.extendedProps.roomId === roomId) {
-                        // Get event times and convert to minutes for comparison
-                        const eventStart = convertTimeToMinutes(event.start.toTimeString().substring(0, 5));
-                        const eventEnd = convertTimeToMinutes(event.end.toTimeString().substring(0, 5));
-                        
-                        // Check for overlap
-                        if (start < eventEnd && eventStart < end) {
-                            return true; // Room is occupied during this time
-                        }
-                    }
-                }
-            } else {
-                // Fallback: check by day name (for backward compatibility)
-                const eventDayName = event.extendedProps?.dayOfWeek;
-                if (eventDayName === dayIdOrDate) {
-                    if (event.extendedProps.roomId === roomId) {
-                        const eventStart = convertTimeToMinutes(event.start.toTimeString().substring(0, 5));
-                        const eventEnd = convertTimeToMinutes(event.end.toTimeString().substring(0, 5));
-                        if (start < eventEnd && eventStart < end) {
-                            return true;
-                        }
+            // Only check events on the same day
+            if (event.getResources()[0]?.id === dayId) {
+                // Check if this event uses the room we're checking
+                if (event.extendedProps.roomId === roomId) {
+                    // Get event times and convert to minutes for comparison
+                    const eventStart = convertTimeToMinutes(event.start.toTimeString().substring(0, 5));
+                    const eventEnd = convertTimeToMinutes(event.end.toTimeString().substring(0, 5));
+                    
+                    // Check for overlap
+                    if (start < eventEnd && eventStart < end) {
+                        return true; // Room is occupied during this time
                     }
                 }
             }
@@ -3835,31 +1823,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error loading strands from localStorage:', e);
         }
     }
-    // Ensure we have department colors from the server if missing locally
-    (async function ensureDepartmentsFromServer() {
-        try {
-            const hasColors = Array.isArray(departments) && departments.some(d => d && d.color);
-            if (!Array.isArray(departments) || departments.length === 0 || !hasColors) {
-                const resp = await fetch('/api/departments', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
-                });
-                if (resp.ok) {
-                    const serverDepts = await resp.json();
-                    if (Array.isArray(serverDepts) && serverDepts.length) {
-                        departments = serverDepts;
-                        window.departments = departments;
-                        try { localStorage.setItem('departments', JSON.stringify(departments)); } catch (_) {}
-                        updateDepartmentSelectOptions();
-                        console.log('Refreshed departments from server:', departments.length);
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('Could not refresh departments from server', e);
-        }
-    })();
-
-    // Department management moved to superadmin.html
+      // Department management moved to superadmin.html
     const addDepartmentLink = document.getElementById('addDepartmentLink');
     const manageDepartmentLink = document.getElementById('manageDepartmentLink');
     
@@ -3873,21 +1837,66 @@ document.addEventListener('DOMContentLoaded', function() {
         manageDepartmentLink.style.display = 'none';
     }
     
-    // Save department button handler - DISABLED to prevent conflicts with superadmin
-    const saveDepartmentBtn = document.getElementById('saveDepartmentBtn');
+    // Save department button handler
     if (saveDepartmentBtn) {
-        // Remove any existing event listeners
-        saveDepartmentBtn.replaceWith(saveDepartmentBtn.cloneNode(true));
-        // Don't add new event listener to prevent conflicts
-        console.log('Department button handler disabled to prevent conflicts');
+        saveDepartmentBtn.addEventListener('click', function() {
+            const departmentCodeField = document.getElementById('departmentCode');
+            const departmentNameField = document.getElementById('departmentName');
+            
+            // Basic validation
+            if (!departmentCodeField || !departmentCodeField.value.trim()) {
+                departmentCodeField.parentElement.classList.add('error');
+                return;
+            } else {
+                departmentCodeField.parentElement.classList.remove('error');
+            }
+            
+            if (!departmentNameField || !departmentNameField.value.trim()) {
+                departmentNameField.parentElement.classList.add('error');
+                return;
+            } else {
+                departmentNameField.parentElement.classList.remove('error');
+            }
+            
+            // Create new department
+            const newDepartment = {
+                code: departmentCodeField.value.trim().toUpperCase(),
+                name: departmentNameField.value.trim()
+            };
+            
+            // Check if department already exists
+            const existingDeptIndex = departments.findIndex(d => d.code === newDepartment.code);
+            if (existingDeptIndex >= 0) {
+                showNotification(`Department with code ${newDepartment.code} already exists.`, 'error');
+                return;
+            }
+            
+            // Add to departments array
+            departments.push(newDepartment);
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('departments', JSON.stringify(departments));
+            } catch (e) {
+                console.error('Error saving departments to localStorage:', e);
+            }
+            
+            // Update department dropdowns
+            updateDepartmentSelectOptions();
+            
+            // Hide modal
+            hideModal('addDepartmentModal');
+            
+            // Show notification
+            showNotification('Department added successfully!', 'success');
+        });
     }
     
-    // Cancel department button handler - DISABLED to prevent conflicts
-    const cancelDepartmentBtn = document.getElementById('cancelDepartmentBtn');
+    // Cancel department button handler
     if (cancelDepartmentBtn) {
-        // Remove any existing event listeners
-        cancelDepartmentBtn.replaceWith(cancelDepartmentBtn.cloneNode(true));
-        console.log('Cancel department button handler disabled to prevent conflicts');
+        cancelDepartmentBtn.addEventListener('click', function() {
+            hideModal('addDepartmentModal');
+        });
     }
     
     // Function to populate the departments list in the manage departments modal
@@ -4326,41 +2335,30 @@ document.addEventListener('DOMContentLoaded', function() {
             subjectsByDepartment = savedSubjects;
             
             console.log('Loaded subjects from localStorage');
-            
-            // Initialize subject dropdown after subjects are loaded
-            initializeSubjectDropdown();
         } catch (e) {
             console.error('Error loading subjects from localStorage:', e);
         }
     }
+
+    // Strand/Course management
+    const strandSection = document.createElement('div');
+    strandSection.className = 'form-group';
+    strandSection.innerHTML = `
+        <label for="strandSelect">Strand/Course</label>
+        <select id="strandSelect" class="form-control">
+            <option value="" selected disabled>Select Strand/Course</option>
+        </select>
+        <div class="form-error">Please select a strand/course</div>        <!-- Strand management moved to superadmin dashboard -->
+    `;
     
-    // Initialize subject dropdown if a department is already selected
-    function initializeSubjectDropdown() {
-        if (departmentSelect && departmentSelect.value && subjectSelect) {
-            const selectedDepartment = departmentSelect.value;
-            
-            // Clear and populate subject dropdown
-            subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
-            
-            // Add subject options for selected department
-            if (subjectsByDepartment[selectedDepartment] && Array.isArray(subjectsByDepartment[selectedDepartment])) {
-                subjectsByDepartment[selectedDepartment].forEach(subject => {
-                    const option = document.createElement('option');
-                    option.value = subject.id;
-                    option.textContent = subject.name;
-                    option.dataset.course = selectedDepartment;
-                    subjectSelect.appendChild(option);
-                });
-                
-                // Enable the subject dropdown
-                subjectSelect.disabled = false;
-            }
+    // Add the strand section to the form after the department select
+    const formEl = document.getElementById('scheduleForm');
+    if (formEl) {
+        const departmentFormGroup = document.querySelector('.form-group:has(#departmentSelect)');
+        if (departmentFormGroup) {
+            formEl.insertBefore(strandSection, departmentFormGroup.nextSibling);
         }
     }
-    
-    // Program/Strand management UI is handled by index.html via #programSelect populated by loadPrograms().
-    // Remove legacy dynamic insertion of a duplicate #strandSelect to avoid two Program/Strand fields.
-    // If any helper functions are invoked, they will first query the DOM for #strandSelect and no-op if absent.
     
     const strandSelect = document.getElementById('strandSelect');
     const addStrandLink = document.getElementById('addStrandLink');
@@ -4406,7 +2404,7 @@ document.addEventListener('DOMContentLoaded', function() {
             );
             
             if (existingStrandIndex >= 0) {
-                showNotification(`Program/Strand with this code or name already exists.`, 'error');
+                showNotification(`Strand/Course with this code or name already exists.`, 'error');
                 return;
             }
             
@@ -4427,7 +2425,7 @@ document.addEventListener('DOMContentLoaded', function() {
             hideModal('addStrandModal');
             
             // Show notification
-            showNotification('Program/Strand added successfully!', 'success');
+            showNotification('Strand/Course added successfully!', 'success');
         });
     }
     
@@ -4583,7 +2581,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideModal('addStrandModal');
                 
                 // Show notification
-                showNotification('Program/Strand updated successfully!', 'success');
+                showNotification('Strand/Course updated successfully!', 'success');
                 
                 // Update the manage strands modal
                 populateStrandsList();
@@ -4592,7 +2590,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Show the modal
         const modalTitle = document.querySelector('#addStrandModal .modal-header h3');
-        if (modalTitle) modalTitle.textContent = 'Edit Program/Strand';
+        if (modalTitle) modalTitle.textContent = 'Edit Strand/Course';
         
         showModal('addStrandModal');
         
@@ -4604,7 +2602,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.removeEventListener('click', onClose);
                 
                 // Restore original title
-                if (modalTitle) modalTitle.textContent = 'Add New Program/Strand';
+                if (modalTitle) modalTitle.textContent = 'Add New Strand/Course';
             });
         });
     }
@@ -4656,7 +2654,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideModal('confirmModal');
                 
                 // Show notification
-                showNotification(`Program/Strand has been removed.`, 'success');
+                showNotification(`Strand/Course has been removed.`, 'success');
             };
         }
         
@@ -4674,73 +2672,38 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to update strand select options
     function updateStrandSelectOptions() {
-        const el = document.getElementById('strandSelect');
-        if (!el) return; // No duplicate field on this page
-        const currentValue = el.value;
-        el.innerHTML = '<option value="" selected disabled>Select Program/Strand</option>';
-        (Array.isArray(window.strands) ? window.strands : []).forEach(strand => {
-            const option = document.createElement('option');
-            option.value = strand.code;
-            option.textContent = `${strand.code} - ${strand.name}`;
-            el.appendChild(option);
-        });
-        if (currentValue && (Array.isArray(window.strands) ? window.strands : []).some(s => s.code === currentValue)) {
-            el.value = currentValue;
+        if (strandSelect) {
+            const currentValue = strandSelect.value;
+            
+            strandSelect.innerHTML = '<option value="" selected disabled>Select Strand/Course</option>';
+            
+            strands.forEach(strand => {
+                const option = document.createElement('option');
+                option.value = strand.code;
+                option.textContent = `${strand.code} - ${strand.name}`;
+                strandSelect.appendChild(option);
+            });
+            
+            // Try to restore previous selection
+            if (currentValue && strands.some(s => s.code === currentValue)) {
+                strandSelect.value = currentValue;
+            }
         }
     }
     
     // Call updateStrandSelectOptions initially
     updateStrandSelectOptions();
 
-    // Save schedule to server (global - exposed for use in other files)
-    window.saveScheduleToLocalStorage = async function() {
-        console.log('saveScheduleToLocalStorage called');
+    // Save schedule to localStorage
+    function saveScheduleToLocalStorage() {
         const calendar = window.calendar;
-        if (!calendar) {
-            console.log('No calendar available for saving');
-            return;
-        }
+        if (!calendar) return;
         
         const events = calendar.getEvents();
-        console.log('Current events on calendar:', events.length);
-        
-        // Check for duplicate events before saving
-        const seenEvents = new Set();
         const eventsData = events.map(event => {
             // Extract the necessary data to recreate the event
-            // For timeGridWeek view, events don't have getResources() method
-            // We can get day of week from extendedProps or calculate from start date
-            let resourceId = null;
-            if (typeof event.getResources === 'function') {
-                // Only use getResources if it exists (for resource views)
-                const resources = event.getResources();
-                resourceId = resources && resources.length > 0 ? resources[0].id : null;
-            } else {
-                // For timeGridWeek, extract dayOfWeek from extendedProps if available
-                // If not in extendedProps, calculate from start date
-                if (event.extendedProps?.dayOfWeek) {
-                    resourceId = event.extendedProps.dayOfWeek;
-                } else if (event.start) {
-                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                    const eventDate = new Date(event.start);
-                    resourceId = dayNames[eventDate.getDay()];
-                    // Update the event's extendedProps
-                    event.setExtendedProp('dayOfWeek', resourceId);
-                }
-            }
-            
-            // Create a unique key to detect duplicates (same class, same day, same time)
-            const originalClassId = event.extendedProps?.originalClassId;
-            const startTime = event.start ? new Date(event.start).toTimeString().substring(0, 5) : null;
-            const duplicateKey = `${originalClassId}-${resourceId}-${startTime}`;
-            
-            // Skip if we've seen this exact event before (duplicate)
-            if (seenEvents.has(duplicateKey) && originalClassId) {
-                console.log('Skipping duplicate event when saving:', event.title, 'on', resourceId);
-                return null; // Return null to filter out later
-            }
-            
-            seenEvents.add(duplicateKey);
+            const resources = event.getResources();
+            const resourceId = resources && resources.length > 0 ? resources[0].id : null;
             
             return {
                 id: event.id,
@@ -4748,879 +2711,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 resourceId: resourceId,
                 start: event.start ? event.start.toISOString() : null,
                 end: event.end ? event.end.toISOString() : null,
-                backgroundColor: event.backgroundColor || null,
-                borderColor: event.borderColor || null,
-                classNames: Array.from(event.classNames || []),
-                extendedProps: event.extendedProps || {}
+                classNames: Array.from(event.classNames),
+                extendedProps: event.extendedProps
             };
-        }).filter(event => event !== null); // Remove null entries (duplicates)
+        });
         
         try {
-            // Save to server
-            const response = await fetch('/api/schedule', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({ events: eventsData })
-            });
-            
-            if (response.ok) {
-                console.log('Saved', eventsData.length, 'events to server');
-                console.log('Events data saved:', eventsData);
-                
-                // Store timestamp of last save
-                localStorage.setItem('scheduleLastUpdated', Date.now().toString());
-            } else {
-                console.error('Failed to save schedule to server:', response.status);
-            }
+            localStorage.setItem('calendarEvents', JSON.stringify(eventsData));
+            console.log('Saved', eventsData.length, 'events to localStorage');
         } catch (e) {
-            console.error('Error saving schedule to server:', e);
+            console.error('Error saving schedule to localStorage:', e);
         }
-    };
+    }
     
-    
-    /**
-     * Backup schedule to JSON file
-     * Excludes fixed schedules and allClasses data
-     */
-    function backupSchedule() {
+    // Load schedule from localStorage
+    function loadScheduleFromLocalStorage() {
         const calendar = window.calendar;
-        if (!calendar) {
-            if (typeof showNotification === 'function') {
-                showNotification('Calendar not available for backup', 'error');
-            } else {
-                alert('Calendar not available for backup');
-            }
-            return;
-        }
+        if (!calendar) return;
         
         try {
-            // Get all events from calendar
-            const allEvents = calendar.getEvents();
-            
-            // Filter out fixed schedules (they're managed separately)
-            const scheduleEvents = allEvents.filter(event => {
-                return !(event.extendedProps?.isFixedSchedule);
-            });
-            
-            console.log('Backing up', scheduleEvents.length, 'schedule events (excluding fixed schedules)');
-            
-            // Format events for backup (similar to saveScheduleToLocalStorage)
-            const eventsData = scheduleEvents.map(event => {
-                let resourceId = null;
-                if (typeof event.getResources === 'function') {
-                    const resources = event.getResources();
-                    resourceId = resources && resources.length > 0 ? resources[0].id : null;
-                } else {
-                    if (event.extendedProps?.dayOfWeek) {
-                        resourceId = event.extendedProps.dayOfWeek;
-                    } else if (event.start) {
-                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                        const eventDate = new Date(event.start);
-                        resourceId = dayNames[eventDate.getDay()];
-                    }
-                }
+            const eventsData = JSON.parse(localStorage.getItem('calendarEvents'));
+            if (eventsData && eventsData.length) {
+                console.log('Loading', eventsData.length, 'events from localStorage');
                 
-                return {
-                    id: event.id,
-                    title: event.title,
-                    resourceId: resourceId,
-                    start: event.start ? event.start.toISOString() : null,
-                    end: event.end ? event.end.toISOString() : null,
-                    backgroundColor: event.backgroundColor || null,
-                    borderColor: event.borderColor || null,
-                    classNames: Array.from(event.classNames || []),
-                    extendedProps: event.extendedProps || {}
-                };
-            });
-            
-            // Create backup object with metadata
-            const backupData = {
-                version: '1.0',
-                backupDate: new Date().toISOString(),
-                backupTimestamp: Date.now(),
-                eventCount: eventsData.length,
-                events: eventsData,
-                note: 'Schedule backup - excludes fixed schedules and class creation data (allClasses)'
-            };
-            
-            // Convert to JSON string
-            const jsonString = JSON.stringify(backupData, null, 2);
-            
-            // Create blob and download
-            const blob = new Blob([jsonString], { type: 'application/json' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            document.body.appendChild(a);
-            a.href = url;
-            
-            // Generate filename with timestamp
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            a.download = `schedule-backup-${timestamp}.json`;
-            a.click();
-            
-            // Cleanup
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            // Show success notification
-            if (typeof showNotification === 'function') {
-                showNotification(`Schedule backup completed! ${eventsData.length} events backed up.`, 'success');
-            } else {
-                alert(`Schedule backup completed! ${eventsData.length} events backed up.`);
-            }
-            
-            console.log('Schedule backup completed:', backupData);
-        } catch (error) {
-            console.error('Error backing up schedule:', error);
-            if (typeof showNotification === 'function') {
-                showNotification('Failed to backup schedule: ' + error.message, 'error');
-            } else {
-                alert('Failed to backup schedule: ' + error.message);
-            }
-        }
-    }
-    
-    /**
-     * Import schedule from JSON file
-     * Replaces current schedule with imported data
-     */
-    async function importSchedule(file) {
-        try {
-            // Read file
-            const fileContent = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(new Error('Failed to read file'));
-                reader.readAsText(file);
-            });
-            
-            // Parse JSON
-            let backupData;
-            try {
-                backupData = JSON.parse(fileContent);
-            } catch (e) {
-                throw new Error('Invalid JSON file format');
-            }
-            
-            // Validate backup data structure
-            if (!backupData.events || !Array.isArray(backupData.events)) {
-                throw new Error('Invalid backup file: missing events array');
-            }
-            
-            // Confirm import (this will replace current schedule)
-            const confirmMessage = `This will replace your current schedule with ${backupData.eventCount || backupData.events.length} events from the backup.\n\nBackup date: ${backupData.backupDate ? new Date(backupData.backupDate).toLocaleString() : 'Unknown'}\n\nDo you want to continue?`;
-            
-            if (!confirm(confirmMessage)) {
-                return;
-            }
-            
-            const calendar = window.calendar;
-            if (!calendar) {
-                throw new Error('Calendar not available');
-            }
-            
-            // Clear current schedule (except fixed schedules)
-            const currentEvents = calendar.getEvents();
-            currentEvents.forEach(event => {
-                if (!event.extendedProps?.isFixedSchedule) {
-                    event.remove();
-                }
-            });
-            
-            // Import events from backup
-            const importedEvents = [];
-            for (const eventData of backupData.events) {
-                try {
-                    // Create event object for FullCalendar
-                    const eventConfig = {
-                        id: eventData.id,
-                        title: eventData.title,
-                        start: eventData.start,
-                        end: eventData.end,
-                        backgroundColor: eventData.backgroundColor,
-                        borderColor: eventData.borderColor,
-                        classNames: eventData.classNames || [],
-                        extendedProps: eventData.extendedProps || {}
-                    };
-                    
-                    // Add resourceId if available (for resource views)
-                    if (eventData.resourceId) {
-                        eventConfig.resourceId = eventData.resourceId;
-                    }
-                    
-                    // Add event to calendar
-                    const event = calendar.addEvent(eventConfig);
-                    importedEvents.push(event);
-                } catch (e) {
-                    console.warn('Failed to import event:', eventData, e);
-                }
-            }
-            
-            // Save imported schedule to server
-            if (typeof window.saveScheduleToLocalStorage === 'function') {
-                await window.saveScheduleToLocalStorage();
-            }
-            
-            // Show success notification
-            if (typeof showNotification === 'function') {
-                showNotification(`Schedule imported successfully! ${importedEvents.length} events loaded.`, 'success');
-            } else {
-                alert(`Schedule imported successfully! ${importedEvents.length} events loaded.`);
-            }
-            
-            console.log('Schedule import completed:', importedEvents.length, 'events imported');
-        } catch (error) {
-            console.error('Error importing schedule:', error);
-            if (typeof showNotification === 'function') {
-                showNotification('Failed to import schedule: ' + error.message, 'error');
-            } else {
-                alert('Failed to import schedule: ' + error.message);
-            }
-        }
-    }
-    
-    // Manual schedule loading function for debugging
-    window.forceLoadSchedule = function() {
-        console.log('Force loading schedule...');
-        if (window.calendar) {
-            window.calendar.removeAllEvents();
-            window.loadScheduleFromLocalStorage();
-        } else {
-            console.log('Calendar not available');
-        }
-    };
-    
-    // Manual schedule saving function for debugging
-    window.forceSaveSchedule = function() {
-        console.log('Force saving schedule...');
-        if (window.calendar) {
-            const events = window.calendar.getEvents();
-            console.log('Current events on calendar:', events.length);
-            saveScheduleToLocalStorage();
-        } else {
-            console.log('Calendar not available');
-        }
-    };
-    
-    // Clear schedule function
-    window.clearSchedule = async function() {
-        console.log('Clearing schedule...');
-        localStorage.removeItem('calendarEvents');
-        if (window.calendar) {
-            // Remove ALL events including fixed schedules
-            window.calendar.removeAllEvents();
-        }
-        
-        // Also clear fixed schedules from localStorage and server
-        try {
-            localStorage.removeItem('fixedSchedules');
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                // Clear fixed schedules from server
-                try {
-                    const clearResponse = await fetch('/api/fixed-schedules', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({ schedules: [] }) // Save empty array
-                    });
-                    if (clearResponse.ok) {
-                        console.log('Fixed schedules cleared from server');
-                    }
-                } catch (e) {
-                    console.warn('Error clearing fixed schedules from server:', e);
-                }
-            }
-        } catch (e) {
-            console.warn('Error clearing fixed schedules:', e);
-        }
-        
-        // Save empty schedule to server so it persists after reload
-        try {
-            const response = await fetch('/api/schedule', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({ events: [] }) // Save empty array to server
-            });
-            
-            if (response.ok) {
-                console.log('Cleared schedule saved to server');
-            } else {
-                console.error('Failed to save cleared schedule to server:', response.status);
-            }
-        } catch (e) {
-            console.error('Error saving cleared schedule to server:', e);
-        }
-        
-        console.log('Schedule cleared (including fixed schedules)');
-    };
-    
-    // Debug function to check server and localStorage
-    window.debugLocalStorage = async function() {
-        console.log('=== DEBUG INFO ===');
-        console.log('allClasses (localStorage):', localStorage.getItem('allClasses'));
-        console.log('userData (localStorage):', localStorage.getItem('userData'));
-        
-        // Check server schedule
-        try {
-            const response = await fetch('/api/schedule', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            if (response.ok) {
-                const serverSchedule = await response.json();
-                console.log('Server schedule events:', serverSchedule.length);
-                console.log('Server schedule data:', serverSchedule);
-            } else {
-                console.log('Failed to fetch server schedule:', response.status);
-            }
-        } catch (e) {
-            console.log('Error fetching server schedule:', e);
-        }
-        
-        if (window.calendar) {
-            const events = window.calendar.getEvents();
-            console.log('Current calendar events:', events.length);
-            events.forEach((event, index) => {
-                console.log(`Event ${index}:`, {
-                    id: event.id,
-                    title: event.title,
-                    start: event.start ? event.start.toISOString() : null,
-                    end: event.end ? event.end.toISOString() : null
+                eventsData.forEach(eventData => {
+                    calendar.addEvent(eventData);
                 });
-            });
-        }
-        console.log('=== END DEBUG ===');
-    };
-    
-    // Load schedule from server (filtered by faculty for regular users)
-    window.loadScheduleFromLocalStorage = async function() {
-        const calendar = window.calendar;
-        console.log('loadScheduleFromLocalStorage called, calendar exists:', !!calendar);
-        if (!calendar) {
-            console.log('Calendar not yet initialized, skipping schedule load');
-            return;
-        }
-        
-        try {
-            // Get current user data
-            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-            const userRole = userData.role || 'user';
-            // Build user name from firstName + lastName or use email/name
-            const userFirstName = userData.firstName || '';
-            const userLastName = userData.lastName || '';
-            const userEmail = userData.email || '';
-            const userFullName = formatFullName(userFirstName, userData.middleName || '', userLastName) || (userData.name || '');
-            const userName = userFullName || userEmail || '';
-            
-            // Create array of possible user identifiers for matching
-            const userIdentifiers = [];
-            if (userFullName) userIdentifiers.push(userFullName.toLowerCase().trim());
-            if (userFirstName && userLastName) {
-                userIdentifiers.push(`${userFirstName} ${userLastName}`.toLowerCase().trim());
-                userIdentifiers.push(`${userFirstName}${userLastName}`.toLowerCase().trim());
-            }
-            if (userEmail) userIdentifiers.push(userEmail.toLowerCase().trim());
-            if (userData.name) userIdentifiers.push(userData.name.toLowerCase().trim());
-            
-            console.log('Loading schedule for user:', userName, 'with role:', userRole);
-            console.log('User identifiers for matching:', userIdentifiers);
-            
-            // Load schedule from server
-            const response = await fetch('/api/schedule', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            
-            if (response.ok) {
-                const eventsData = await response.json();
-                console.log('Found events data from server:', eventsData.length, 'events');
                 
-                // If events array is empty, it means schedule was cleared - don't load anything
-                if (!eventsData || eventsData.length === 0) {
-                    console.log('Schedule is empty (was cleared) - not loading any events');
-                    // Clear calendar if it has events
-                    if (calendar) {
-                        const existingEvents = calendar.getEvents();
-                        if (existingEvents.length > 0) {
-                            calendar.removeAllEvents();
-                            console.log('Cleared existing events from calendar (schedule was cleared)');
-                        }
-                    }
-                    return; // Exit early - don't load anything
-                }
-                
-                if (eventsData && eventsData.length) {
-                    // Filter events based on user role and faculty assignment
-                    let filteredEvents = eventsData;
-                    
-                    if (userRole === 'user' || userRole === 'faculty') {
-                        // For regular users and faculty, only show their assigned classes
-                        // BUT always include fixed schedules (they should be visible to everyone)
-                        filteredEvents = eventsData.filter(event => {
-                            // Always include fixed schedules
-                            if (event.extendedProps?.isFixedSchedule) {
-                                console.log(`Including fixed schedule "${event.title}" for user view`);
-                                return true;
-                            }
-                            
-                            const eventFaculty = (event.extendedProps?.faculty || '').toLowerCase().trim();
-                            if (!eventFaculty) {
-                                console.log(`Event "${event.title}" has no faculty assigned, skipping`);
-                                return false;
-                            }
-                            
-                            // Check if event faculty matches any of the user identifiers
-                            const isAssignedToUser = userIdentifiers.some(id => {
-                                const match = eventFaculty === id || eventFaculty.includes(id) || id.includes(eventFaculty);
-                                if (match) {
-                                    console.log(`Matched event "${event.title}" - Faculty: "${event.extendedProps?.faculty}", User ID: "${id}"`);
-                                }
-                                return match;
-                            });
-                            
-                            return isAssignedToUser;
-                        });
-                        console.log(`Filtered to ${filteredEvents.length} events for user: ${userName} (out of ${eventsData.length} total)`);
-                    } else {
-                        // For admins and superadmins, show all events
-                        console.log('Admin/Superadmin - showing all events');
-                    }
-                    
-                    if (filteredEvents.length > 0) {
-                        console.log('Loading', filteredEvents.length, 'filtered events from server');
-                        
-                        // Clear existing events first to prevent duplication
-                        // Remove only non-fixed schedule events to preserve fixed schedules
-                        const events = calendar.getEvents();
-                        events.forEach(event => {
-                            if (!event.extendedProps?.isFixedSchedule) {
-                                event.remove();
-                            }
-                        });
-                        
-                        // Use the calendar's current view date (Monday-Saturday week being displayed)
-                        // This allows events to show on the correct week when user navigates
-                        let viewDate;
-                        try {
-                            viewDate = calendar.getDate(); // Get the date of the week being viewed
-                        } catch (e) {
-                            // Fallback: use today, but if it's Sunday, move to Monday
-                            viewDate = new Date();
-                            if (viewDate.getDay() === 0) {
-                                viewDate.setDate(viewDate.getDate() + 1); // Sunday -> Monday
-                            }
-                        }
-                        
-                        // Normalize to noon to avoid timezone issues
-                        viewDate.setHours(12, 0, 0, 0);
-                        const currentDayOfWeek = viewDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-                        
-                        // Calculate Monday of the visible week (Monday-Saturday timetable)
-                        let daysToMonday;
-                        if (currentDayOfWeek === 0) {
-                            // Sunday - move to Monday
-                            viewDate.setDate(viewDate.getDate() + 1);
-                            daysToMonday = 0;
-                        } else {
-                            // Monday = 0 days back, Tuesday = 1 day back, etc.
-                            daysToMonday = currentDayOfWeek - 1;
-                        }
-                        
-                        const mondayDate = new Date(viewDate);
-                        mondayDate.setDate(viewDate.getDate() - daysToMonday);
-                        mondayDate.setHours(0, 0, 0, 0); // Start of day
-                        
-                        console.log('Calendar view date:', viewDate.toDateString());
-                        console.log('Converting events to Monday-Saturday week starting:', mondayDate.toDateString());
-                        console.log('Monday date:', mondayDate.toISOString().split('T')[0]);
-                        
-                        // Map day name to day of week offset (Monday = 0, Tuesday = 1, ..., Saturday = 5)
-                        const dayOffsetMap = {
-                            'Monday': 0,
-                            'Tuesday': 1,
-                            'Wednesday': 2,
-                            'Thursday': 3,
-                            'Friday': 4,
-                            'Saturday': 5
-                        };
-                        
-                        filteredEvents.forEach(eventData => {
-                            console.log('Adding event to calendar:', eventData);
-                            
-                            // Check if event has a valid date that's within the visible week
-                            // If the event's date is already in the visible week, use it as-is
-                            // Otherwise, convert to current week based on dayOfWeek
-                            let useOriginalDate = false;
-                            if (eventData.start) {
-                                const eventStartDate = new Date(eventData.start);
-                                const eventStartDay = eventStartDate.getDay();
-                                // Check if event date falls within the visible week (Monday-Saturday)
-                                // Compare with the Monday of the visible week
-                                const eventStartWeekStart = new Date(eventStartDate);
-                                eventStartWeekStart.setDate(eventStartDate.getDate() - (eventStartDay === 0 ? 6 : eventStartDay - 1));
-                                
-                                // If the event's week matches the visible week, use the original date
-                                if (eventStartWeekStart.getTime() === mondayDate.getTime()) {
-                                    useOriginalDate = true;
-                                    console.log('Using original event date (already in visible week):', eventStartDate.toDateString());
-                                }
-                            }
-                            
-                            // Convert event date to current week based on dayOfWeek if needed
-                            if (!useOriginalDate) {
-                                const dayOfWeek = eventData.extendedProps?.dayOfWeek || eventData.resourceId;
-                                if (dayOfWeek && dayOffsetMap.hasOwnProperty(dayOfWeek)) {
-                                    const targetDate = new Date(mondayDate);
-                                    targetDate.setDate(mondayDate.getDate() + dayOffsetMap[dayOfWeek]);
-                                    
-                                    // Format the date string (YYYY-MM-DD)
-                                    const year = targetDate.getFullYear();
-                                    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
-                                    const dayOfMonth = String(targetDate.getDate()).padStart(2, '0');
-                                    const dateStr = `${year}-${month}-${dayOfMonth}`;
-                                    
-                                    // Extract time from original start/end dates
-                                    // Handle both ISO string format and Date objects
-                                    const originalStart = new Date(eventData.start);
-                                    const originalEnd = new Date(eventData.end || eventData.start);
-                                    
-                                    // Extract time components (using local time, not UTC)
-                                    // FullCalendar interprets dates without timezone as local time
-                                    const startHours = String(originalStart.getHours()).padStart(2, '0');
-                                    const startMinutes = String(originalStart.getMinutes()).padStart(2, '0');
-                                    const endHours = String(originalEnd.getHours()).padStart(2, '0');
-                                    const endMinutes = String(originalEnd.getMinutes()).padStart(2, '0');
-                                    
-                                    // Update start and end dates to current week (using local time, no timezone)
-                                    eventData.start = `${dateStr}T${startHours}:${startMinutes}:00`;
-                                    eventData.end = `${dateStr}T${endHours}:${endMinutes}:00`;
-                                    
-                                    console.log(`Updated event date to current week: ${dayOfWeek} -> ${dateStr}`);
-                                }
-                            }
-                            
-                            // Check if merged
-                            const isMerged = eventData.extendedProps?.isMerged || false;
-                            
-                            // Apply department color if not already set
-                            if (!eventData.backgroundColor && eventData.extendedProps?.departmentColor) {
-                                eventData.backgroundColor = isMerged ? '#000000' : eventData.extendedProps.departmentColor;
-                                eventData.borderColor = isMerged ? '#000000' : eventData.extendedProps.departmentColor;
-                                eventData.textColor = '#ffffff';
-                                if (isMerged) {
-                                    eventData.classNames = [
-                                        ...(eventData.classNames || []),
-                                        'merged-class-event'
-                                    ];
-                                }
-                                console.log(`Applied stored color: ${eventData.backgroundColor} for event: ${eventData.title}${isMerged ? ' [MERGED]' : ''}`);
-                            } else if (!eventData.backgroundColor) {
-                                // Try to get course/department color for existing events
-                                const departmentColor = isMerged ? '#000000' : getDepartmentColorForClass({
-                                    course: eventData.extendedProps?.course || '',
-                                    courseId: eventData.extendedProps?.courseId || eventData.extendedProps?.programId,
-                                    department: eventData.extendedProps?.department || '',
-                                    departmentId: eventData.extendedProps?.departmentId
-                                });
-                                eventData.backgroundColor = departmentColor;
-                                eventData.borderColor = departmentColor;
-                                eventData.textColor = '#ffffff';
-                                if (isMerged) {
-                                    eventData.classNames = [
-                                        ...(eventData.classNames || []),
-                                        'merged-class-event'
-                                    ];
-                                }
-                                console.log(`Applied calculated color: ${departmentColor} for event: ${eventData.title}${isMerged ? ' [MERGED]' : ''}`);
-                            } else {
-                                // Ensure merged classes have black background
-                                if (isMerged) {
-                                    eventData.backgroundColor = '#000000';
-                                    eventData.borderColor = '#000000';
-                                    eventData.textColor = '#ffffff';
-                                    eventData.classNames = [
-                                        ...(eventData.classNames || []),
-                                        'merged-class-event'
-                                    ];
-                                }
-                                console.log(`Event already has color: ${eventData.backgroundColor} for event: ${eventData.title}${isMerged ? ' [MERGED]' : ''}`);
-                            }
-                            
-                            calendar.addEvent(eventData);
-                            
-                            // Apply department color after event is added
-                            setTimeout(() => {
-                                const eventElement = document.querySelector(`[data-event-id="${eventData.id}"]`);
-                                if (eventElement) {
-                                    const isMerged = eventData.extendedProps?.isMerged || false;
-                                    eventElement.style.backgroundColor = eventData.backgroundColor;
-                                    eventElement.style.borderColor = eventData.borderColor;
-                                    eventElement.style.color = '#ffffff';
-                                    eventElement.style.opacity = '1';
-                                    
-                                    const mainEl = eventElement.querySelector('.fc-event-main');
-                                    if (mainEl) {
-                                        mainEl.style.backgroundColor = eventData.backgroundColor;
-                                        mainEl.style.borderColor = eventData.borderColor;
-                                        mainEl.style.color = '#ffffff';
-                                    }
-                                    
-                                    // Ensure text is readable for merged classes
-                                    if (isMerged) {
-                                        const titleEl = eventElement.querySelector('.fc-event-title');
-                                        if (titleEl) {
-                                            titleEl.style.color = '#ffffff';
-                                            titleEl.style.fontWeight = '500';
-                                        }
-                                        // Add merged class styling
-                                        eventElement.classList.add('merged-class-event');
-                                    }
-                                    
-                                    console.log(`Applied color ${eventData.backgroundColor} to loaded event element${isMerged ? ' [MERGED]' : ''}`);
-                                }
-                            }, 100);
-                        });
-                        
-                        // Filter functionality removed
-                        
-                        // Load fixed schedules for all users (they should be visible to everyone)
-                        // Load AFTER all filtered events are added to ensure they're not removed
-                        // Use a small delay to ensure calendar has finished rendering the filtered events
-                        // Only load if fixed schedules haven't been explicitly cleared
-                        setTimeout(async () => {
-                            // Check if fixed schedules were cleared (empty array in localStorage means cleared)
-                            const clearedFixedSchedules = localStorage.getItem('fixedSchedules');
-                            if (clearedFixedSchedules === '[]' || clearedFixedSchedules === null) {
-                                console.log('Fixed schedules were cleared, skipping load');
-                                return;
-                            }
-                            
-                            if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                                // First ensure fixed schedules are loaded from server/localStorage
-                                if (window.fixedSchedules.load) {
-                                    const loadedSchedules = await window.fixedSchedules.load();
-                                    // If loaded schedules is empty, don't add to calendar
-                                    if (!loadedSchedules || loadedSchedules.length === 0) {
-                                        console.log('No fixed schedules to load (empty array)');
-                                        return;
-                                    }
-                                }
-                                if (window.fixedSchedules.loadToCalendar) {
-                                    window.fixedSchedules.loadToCalendar();
-                                }
-                                console.log('Fixed schedules loaded for user view (after filtered events)');
-                                
-                                // Filter functionality removed
-                            }
-                        }, 200);
-                    } else {
-                        // No events found for this faculty member
-                        console.log('No events found for faculty:', userName);
-                        // Remove only non-fixed schedule events
-                        const events = calendar.getEvents();
-                        events.forEach(event => {
-                            if (!event.extendedProps?.isFixedSchedule) {
-                                event.remove();
-                            }
-                        });
-                        
-                        // Still load fixed schedules even if no classes assigned
-                        // Use a small delay to ensure calendar is ready
-                        // Only load if fixed schedules haven't been explicitly cleared
-                        setTimeout(async () => {
-                            // Check if fixed schedules were cleared (empty array in localStorage means cleared)
-                            const clearedFixedSchedules = localStorage.getItem('fixedSchedules');
-                            if (clearedFixedSchedules === '[]' || clearedFixedSchedules === null) {
-                                console.log('Fixed schedules were cleared, skipping load');
-                                return;
-                            }
-                            
-                            if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                                // First ensure fixed schedules are loaded from server/localStorage
-                                if (window.fixedSchedules.load) {
-                                    const loadedSchedules = await window.fixedSchedules.load();
-                                    // If loaded schedules is empty, don't add to calendar
-                                    if (!loadedSchedules || loadedSchedules.length === 0) {
-                                        console.log('No fixed schedules to load (empty array)');
-                                        return;
-                                    }
-                                }
-                                if (window.fixedSchedules.loadToCalendar) {
-                                    window.fixedSchedules.loadToCalendar();
-                                }
-                                console.log('Fixed schedules loaded (no classes assigned)');
-                            } else {
-                                console.warn('Fixed schedules module not available yet, retrying...');
-                                setTimeout(async () => {
-                                    // Check again if fixed schedules were cleared
-                                    const clearedFixedSchedulesRetry = localStorage.getItem('fixedSchedules');
-                                    if (clearedFixedSchedulesRetry === '[]' || clearedFixedSchedulesRetry === null) {
-                                        console.log('Fixed schedules were cleared, skipping load (retry)');
-                                        return;
-                                    }
-                                    
-                                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                                        if (window.fixedSchedules.load) {
-                                            const loadedSchedules = await window.fixedSchedules.load();
-                                            // If loaded schedules is empty, don't add to calendar
-                                            if (!loadedSchedules || loadedSchedules.length === 0) {
-                                                console.log('No fixed schedules to load (empty array, retry)');
-                                                return;
-                                            }
-                                        }
-                                        if (window.fixedSchedules.loadToCalendar) {
-                                            window.fixedSchedules.loadToCalendar();
-                                        }
-                                        console.log('Fixed schedules loaded (no classes assigned, retry)');
-                                    }
-                                }, 1000);
-                            }
-                        }, 200);
-                        
-                        // Show a message to the user
-                        if (userRole === 'user' || userRole === 'faculty') {
-                            showNotification('No classes assigned to you yet. Please contact your administrator.', 'info');
-                            // Hide the schedule info notice when no events
-                            const scheduleInfo = document.getElementById('scheduleInfo');
-                            if (scheduleInfo) {
-                                scheduleInfo.style.display = 'none';
-                            }
-                        }
-                    }
-                    
-                    if (userRole === 'user' || userRole === 'faculty') {
-                        showNotification('Your schedule loaded successfully!', 'success');
-                        // Show the schedule info notice
-                        const scheduleInfo = document.getElementById('scheduleInfo');
-                        if (scheduleInfo) {
-                            scheduleInfo.style.display = 'flex';
-                        }
-                    } else {
-                        showNotification('Schedule loaded successfully!', 'success');
-                        // Hide the schedule info notice for admins
-                        const scheduleInfo = document.getElementById('scheduleInfo');
-                        if (scheduleInfo) {
-                            scheduleInfo.style.display = 'none';
-                        }
-                    }
-                } else {
-                    console.log('No events found on server');
-                    // Clear any existing events, but preserve fixed schedules
-                    const events = calendar.getEvents();
-                    events.forEach(event => {
-                        if (!event.extendedProps?.isFixedSchedule) {
-                            event.remove();
-                        }
-                    });
-                    
-                    // Still load fixed schedules even if no events from server
-                    // Use a small delay to ensure calendar is ready
-                    setTimeout(async () => {
-                        if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                            // First ensure fixed schedules are loaded from server/localStorage
-                            if (window.fixedSchedules.load) {
-                                await window.fixedSchedules.load();
-                            }
-                            if (window.fixedSchedules.loadToCalendar) {
-                                window.fixedSchedules.loadToCalendar();
-                            }
-                            console.log('Fixed schedules loaded (no server events)');
-                        } else {
-                            console.warn('Fixed schedules module not available yet, retrying...');
-                            setTimeout(async () => {
-                                if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                                    if (window.fixedSchedules.load) {
-                                        await window.fixedSchedules.load();
-                                    }
-                                    if (window.fixedSchedules.loadToCalendar) {
-                                        window.fixedSchedules.loadToCalendar();
-                                    }
-                                    console.log('Fixed schedules loaded (no server events, retry)');
-                                }
-                            }, 1000);
-                        }
-                    }, 200);
-                    
-                    if (userRole === 'user' || userRole === 'faculty') {
-                        showNotification('No classes assigned to you yet. Please contact your administrator.', 'info');
-                        // Hide the schedule info notice when no events
-                        const scheduleInfo = document.getElementById('scheduleInfo');
-                        if (scheduleInfo) {
-                            scheduleInfo.style.display = 'none';
-                        }
-                    } else {
-                        showNotification('No schedule available yet', 'info');
-                    }
-                }
-            } else {
-                console.error('Failed to load schedule from server:', response.status);
-                
-                // Still load fixed schedules even if server request fails
-                // Use a small delay to ensure calendar is ready
-                setTimeout(async () => {
-                    if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                        // First ensure fixed schedules are loaded from server/localStorage
-                        if (window.fixedSchedules.load) {
-                            await window.fixedSchedules.load();
-                        }
-                        if (window.fixedSchedules.loadToCalendar) {
-                            window.fixedSchedules.loadToCalendar();
-                        }
-                        console.log('Fixed schedules loaded (server request failed)');
-                    } else {
-                        console.warn('Fixed schedules module not available yet, retrying...');
-                        setTimeout(async () => {
-                            if (typeof window.fixedSchedules !== 'undefined' && window.fixedSchedules.loadToCalendar) {
-                                if (window.fixedSchedules.load) {
-                                    await window.fixedSchedules.load();
-                                }
-                                if (window.fixedSchedules.loadToCalendar) {
-                                    window.fixedSchedules.loadToCalendar();
-                                }
-                                console.log('Fixed schedules loaded (server request failed, retry)');
-                            }
-                        }, 1000);
-                    }
-                }, 200);
-                
-                if (userRole === 'user' || userRole === 'faculty') {
-                    showNotification('Failed to load schedule', 'error');
-                }
+                showNotification('Schedule loaded successfully!', 'success');
             }
         } catch (e) {
-            console.error('Error loading schedule from server:', e);
+            console.error('Error loading schedule from localStorage:', e);
         }
     }
     
     // Save classes to localStorage
     function saveClassesToLocalStorage() {
         try {
-            // Use window.allClasses as source of truth to ensure we save the latest state
-            const classesToSave = window.allClasses || allClasses || [];
-            localStorage.setItem('allClasses', JSON.stringify(classesToSave));
-            console.log('Saved', classesToSave.length, 'classes to localStorage');
+            localStorage.setItem('allClasses', JSON.stringify(allClasses));
+            console.log('Saved', allClasses.length, 'classes to localStorage');
         } catch (e) {
             console.error('Error saving classes to localStorage:', e);
         }
     }
     
     // Load classes from localStorage
-    async function loadClassesFromLocalStorage() {
+    function loadClassesFromLocalStorage() {
         try {
-            // Always load classes from localStorage - they exist independently of the schedule
-            // Classes are only cleared when explicitly cleared by the user or when schedule is generated
-            const savedClasses = JSON.parse(localStorage.getItem('allClasses') || '[]');
+            const savedClasses = JSON.parse(localStorage.getItem('allClasses'));
             if (savedClasses && savedClasses.length) {
                 console.log('Loading', savedClasses.length, 'classes from localStorage');
                 
@@ -5638,10 +2776,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update the allClasses array
                 allClasses = savedClasses;
                 window.allClasses = allClasses;
-            } else {
-                // No classes in localStorage - ensure arrays are empty
-                allClasses = [];
-                window.allClasses = [];
             }
         } catch (e) {
             console.error('Error loading classes from localStorage:', e);
@@ -5652,39 +2786,12 @@ document.addEventListener('DOMContentLoaded', function() {
     loadClassesFromLocalStorage();
     loadScheduleFromLocalStorage();
     
-    // Reload classes when user returns to the tab/window if they're missing
-    // This ensures persistence across tab navigation
-    document.addEventListener('visibilitychange', function() {
-        if (!document.hidden) {
-            // Tab/window is now visible - check if classes need to be reloaded
-            const savedClasses = JSON.parse(localStorage.getItem('allClasses') || '[]');
-            const currentClasses = window.allClasses || [];
-            
-            // Only reload if localStorage has classes but current state doesn't
-            if (savedClasses.length > 0 && currentClasses.length === 0) {
-                console.log('Classes missing in memory, reloading from localStorage');
-                if (typeof loadClassesFromLocalStorage === 'function') {
-                    loadClassesFromLocalStorage();
-                }
-            }
-        }
-    });
-    
-    // Also check on window focus to catch cases where visibilitychange might not fire
-    window.addEventListener('focus', function() {
-        const savedClasses = JSON.parse(localStorage.getItem('allClasses') || '[]');
-        const currentClasses = window.allClasses || [];
-        
-        if (savedClasses.length > 0 && currentClasses.length === 0) {
-            console.log('Classes missing in memory, reloading from localStorage on focus');
-            if (typeof loadClassesFromLocalStorage === 'function') {
-                loadClassesFromLocalStorage();
-            }
-        }
-    });
-    
-    // Save schedule whenever it changes - moved to after calendar initialization
-    // This will be set up in the calendar initialization section
+    // Save schedule whenever it changes
+    if (window.calendar) {
+        window.calendar.on('eventAdd', saveScheduleToLocalStorage);
+        window.calendar.on('eventChange', saveScheduleToLocalStorage);
+        window.calendar.on('eventRemove', saveScheduleToLocalStorage);
+    }
     
     // Save classes whenever they change
     const originalAddClassToList = addClassToList;
@@ -5699,11 +2806,12 @@ document.addEventListener('DOMContentLoaded', function() {
         saveClassesToLocalStorage();
     };
     
-    // Note: clearAllClasses is already properly implemented above to:
-    // 1. Only remove non-fixed schedule events
-    // 2. Clear localStorage properly
-    // 3. Preserve fixed schedules
-    // No override needed
+    const originalClearAllClasses = clearAllClasses;
+    clearAllClasses = function(classesList, classItems) {
+        originalClearAllClasses(classesList, classItems);
+        saveClassesToLocalStorage();
+        saveScheduleToLocalStorage(); // Clear the calendar events in storage too
+    };
 
     // Move the strand section to be after the faculty member section in the form
     function moveStrandSectionAfterFacultyMember() {
@@ -5949,7 +3057,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
                             
                             // Add subject options for the department
-                            if (subjectsByDepartment[selectedDepartment] && Array.isArray(subjectsByDepartment[selectedDepartment])) {
+                            if (subjectsByDepartment[selectedDepartment]) {
                                 subjectsByDepartment[selectedDepartment].forEach(subject => {
                                     const option = document.createElement('option');
                                     option.value = subject.id;
@@ -5959,10 +3067,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 });
                             }
                         }
-                        
-                        // Update the subjects list
-                        populateSubjectsList();
                     }
+                    
+                    // Update the subjects list
+                    populateSubjectsList();
                     
                     // Hide confirm modal
                     hideModal('confirmModal');
@@ -6196,13 +3304,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Get user info
         const userRole = userData.role || 'user';
-        const userName = formatFullName(userData.firstName || '', userData.middleName || '', userData.lastName || '') || userData.email || 'User';
-        
-        // Check if user is pending approval
-        if (userData.status === 'pending') {
-            showPendingApprovalModal();
-            return; // Don't proceed with normal authentication flow
-        }
+        const userName = userData.firstName ? `${userData.firstName} ${userData.lastName}` : userData.email || 'User';
         
         // Update user name in header
         const userNameElement = document.querySelector('.user-name');
@@ -6233,16 +3335,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
-        // Hide backup/import buttons for non-superadmin users
-        const backupMenu = document.querySelector('.schedule-backup-menu');
-        if (backupMenu && userRole !== 'superadmin') {
-            backupMenu.style.display = 'none';
-        }
-        
         // Modify UI based on role
         if (userRole === 'superadmin') {
-            // Start polling for new pending accounts if superadmin
-            startSuperAdminNotificationPolling();
             addAdminControls();
         } else if (userRole === 'admin') {
             addAdminControls(userData.department);
@@ -6260,13 +3354,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const adminNav = document.createElement('div');
             adminNav.className = 'admin-nav';
             
-            // Move existing user-menu first (so it appears on the left)
-            const userMenu = document.querySelector('.user-menu');
-            
-            // Append user menu only (dashboard link removed)
-            if (userMenu) {
-                adminNav.appendChild(userMenu);
-            }
+            adminNav.innerHTML = `
+                <a href="${department ? 'admin.html' : 'superadmin.html'}" class="admin-link">
+                    <i class="fas fa-cogs"></i> ${department ? 'Admin Dashboard' : 'Superadmin Dashboard'}
+                </a>
+            `;
             
             header.appendChild(adminNav);
         }    }
@@ -6309,6 +3401,24 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Hide any editing/deleting controls
         const allEditButtons = document.querySelectorAll('.edit-btn, .delete-btn, .add-btn, .remove-class-btn');
+        allEditButtons.forEach(btn => {
+            btn.style.display = 'none';        });
+        
+        // Add a compact view-only indicator at the very top of the page
+        const header = document.querySelector('.header');
+        if (!document.querySelector('.view-only-notice')) {
+            const viewOnlyNotice = document.createElement('div');
+            viewOnlyNotice.className = 'view-only-notice';
+            viewOnlyNotice.innerHTML = `<i class="fas fa-eye"></i> View Only Mode - ${department} Department`;
+            
+            // Insert at the beginning of the body
+            document.body.insertBefore(viewOnlyNotice, document.body.firstChild);
+        }
+        
+        // Hide all department-related management UI
+        document.querySelectorAll('#addDepartmentLink, #manageDepartmentLink').forEach(el => {
+            if (el) el.style.display = 'none';
+        });
         
         // Filter calendar or timetable to show only this department's data
         filterCalendarByDepartment(department);
@@ -6406,752 +3516,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.warn("Could not set calendar editable options:", e);            }
               // Add helper text about view-only mode
             const calendarContainer = document.querySelector('.calendar-container');
-            // Removed view-only help text
+            if (calendarContainer && !document.querySelector('.calendar-help-text')) {
+                const helpText = document.createElement('div');
+                helpText.className = 'calendar-help-text';
+                helpText.textContent = 'View-only mode: Schedule is displayed for reference only.';
+                calendarContainer.insertBefore(helpText, calendarContainer.firstChild);
+            }
         }
-    }
-    
-    // Function to show pending approval modal
-    function showPendingApprovalModal() {
-        // Remove any existing modal first
-        const existingModal = document.getElementById('pendingApprovalModal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-        
-        // Create modal HTML
-        const modalHTML = `
-            <div id="pendingApprovalModal" class="modal-overlay" style="display: flex; opacity: 0; visibility: hidden;">
-                <div class="modal-container" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3><i class="fas fa-clock"></i> Account Pending Approval</h3>
-                        <button class="close-btn" data-action="close">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div style="text-align: center; padding: 20px;">
-                            <i class="fas fa-user-clock" style="font-size: 48px; color: #ffc107; margin-bottom: 20px;"></i>
-                            <h4>Your account is pending approval</h4>
-                            <p>Your account has been created successfully, but it requires approval from an administrator before you can access the system.</p>
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <p><strong>What happens next?</strong></p>
-                                <ul style="text-align: left; margin: 10px 0;">
-                                    <li>An administrator will review your account</li>
-                                    <li>You will be notified once your account is approved</li>
-                                    <li>You can then log in and access the system</li>
-                                </ul>
-                            </div>
-                            <p style="color: #6c757d; font-size: 14px;">
-                                <i class="fas fa-info-circle"></i> 
-                                This process usually takes 24-48 hours. Thank you for your patience.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-primary" data-action="close">Understood</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Add modal to body
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Show modal
-        const modal = document.getElementById('pendingApprovalModal');
-        if (modal) {
-            // Prevent body scroll
-            document.body.style.overflow = 'hidden';
-            
-            // Show modal with animation
-            setTimeout(() => {
-                modal.style.opacity = '1';
-                modal.style.visibility = 'visible';
-                modal.classList.add('active');
-            }, 10);
-            
-            // Add event listeners
-            modal.addEventListener('click', (e) => {
-                const target = e.target.closest('button[data-action]');
-                if (!target) return;
-                
-                const action = target.getAttribute('data-action');
-                if (action === 'close') {
-                    closePendingApprovalModal();
-                }
-            });
-            
-            // Click outside to close
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closePendingApprovalModal();
-                }
-            });
-            
-            // Escape key to close
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') {
-                    closePendingApprovalModal();
-                    document.removeEventListener('keydown', handleEscape);
-                }
-            };
-            document.addEventListener('keydown', handleEscape);
-        }
-    }
-    
-    // Function to close pending approval modal
-    function closePendingApprovalModal() {
-        const modal = document.getElementById('pendingApprovalModal');
-        if (modal) {
-            // Start fade out animation
-            modal.style.opacity = '0';
-            modal.style.visibility = 'hidden';
-            modal.classList.remove('active');
-            
-            // Wait for animation to complete before removing
-            setTimeout(() => {
-                if (modal && modal.parentNode) {
-                    modal.remove();
-                }
-                
-                // Restore body scroll
-                document.body.style.overflow = 'auto';
-            }, 300);
-        } else {
-            // If modal doesn't exist, just restore body scroll
-            document.body.style.overflow = 'auto';
-        }
-    }
-    
-    // Initialize Created Classes (now always visible)
-    initializeCreatedClasses();
-    
-    // Update classes count badge on page load
-    updateClassesCountBadge();
-    // Initialize generate schedule button handlers (moved button location)
-    if (typeof initializeGenerateScheduleButton === 'function') {
-        initializeGenerateScheduleButton();
     }
 });
-
-// Created Classes Functions (now always visible, no modal)
-function initializeCreatedClasses() {
-    // Update the created classes list on page load
-    updateCreatedClassesList();
-    
-    // Set up search functionality for created classes
-    const createdClassesSearch = document.getElementById('createdClassesSearch');
-    if (createdClassesSearch) {
-        createdClassesSearch.addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase().trim();
-            const classesList = document.getElementById('createdClasses');
-            if (!classesList) return;
-            
-            const classItems = classesList.querySelectorAll('.class-item');
-            let visibleCount = 0;
-            
-            classItems.forEach(item => {
-                const subject = (item.querySelector('h3')?.textContent || '').toLowerCase();
-                const department = (item.querySelector('.class-info')?.textContent || '').toLowerCase();
-                const faculty = (Array.from(item.querySelectorAll('.class-info')).find(el => el.textContent.includes('chalkboard'))?.textContent || '').toLowerCase();
-                
-                const matches = searchTerm === '' || 
-                    subject.includes(searchTerm) || 
-                    department.includes(searchTerm) || 
-                    faculty.includes(searchTerm);
-                
-                if (matches) {
-                    item.style.display = '';
-                    visibleCount++;
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-            
-            // Show/hide empty state
-            const emptyState = classesList.querySelector('.empty-state');
-            if (emptyState) {
-                if (visibleCount === 0 && searchTerm !== '') {
-                    emptyState.style.display = 'block';
-                    emptyState.innerHTML = `
-                        <i class="fas fa-search"></i>
-                        <h4>No classes found</h4>
-                        <p>Try adjusting your search</p>
-                    `;
-                } else if (visibleCount === 0 && searchTerm === '') {
-                    emptyState.style.display = 'block';
-                    emptyState.innerHTML = `
-                        <i class="fas fa-calendar-plus"></i>
-                        <h4>No classes created yet</h4>
-                        <p>Start by filling the form above to create your first class</p>
-                    `;
-                } else {
-                    emptyState.style.display = 'none';
-                }
-            }
-        });
-        
-        // Add focus styles
-        createdClassesSearch.addEventListener('focus', function() {
-            this.style.borderColor = '#4a90e2';
-            this.style.boxShadow = '0 0 0 3px rgba(74, 144, 226, 0.1)';
-        });
-        
-        createdClassesSearch.addEventListener('blur', function() {
-            this.style.borderColor = '#e2e8f0';
-            this.style.boxShadow = 'none';
-        });
-    }
-    
-    // Set up view classes details button
-    const viewClassesDetailsBtn = document.getElementById('viewClassesDetailsBtn');
-    const classesDetailsModal = document.getElementById('createdClassesDetailsModal');
-    if (viewClassesDetailsBtn && classesDetailsModal) {
-        viewClassesDetailsBtn.addEventListener('click', function() {
-            showClassesDetailsModal();
-        });
-    }
-    
-    // Close classes details modal handlers
-    if (classesDetailsModal) {
-        document.querySelectorAll('[data-close-modal="createdClassesDetailsModal"]').forEach(btn => {
-            btn.addEventListener('click', function() {
-                classesDetailsModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-                // Clear search when modal closes
-                const searchInput = document.getElementById('classesDetailsSearch');
-                if (searchInput) {
-                    searchInput.value = '';
-                }
-            });
-        });
-        
-        classesDetailsModal.addEventListener('click', function(e) {
-            if (e.target === classesDetailsModal) {
-                classesDetailsModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-                // Clear search when modal closes
-                const searchInput = document.getElementById('classesDetailsSearch');
-                if (searchInput) {
-                    searchInput.value = '';
-                }
-            }
-        });
-    }
-    
-    // Set up clear classes button
-    const clearClassesBtn = document.getElementById('clearClassesBtn');
-    if (clearClassesBtn) {
-        clearClassesBtn.addEventListener('click', function() {
-            const classesList = document.getElementById('createdClasses');
-            if (!classesList) return;
-            
-            const classItems = classesList.querySelectorAll('.class-item');
-            if (classItems.length === 0) {
-                if (typeof showNotification === 'function') {
-                    showNotification('No classes to clear.', 'info');
-                }
-                return;
-            }
-            
-            // Show confirmation modal
-            const clearModal = document.getElementById('clearClassesModal');
-            if (clearModal) {
-                clearModal.style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-                
-                // Set up confirm button
-                const confirmBtn = document.getElementById('confirmClearClassesBtn');
-                const cancelBtn = document.getElementById('cancelClearClassesBtn');
-                
-                // Ensure button is enabled
-                if (confirmBtn) {
-                    confirmBtn.disabled = false;
-                    confirmBtn.style.opacity = '1';
-                    confirmBtn.style.cursor = 'pointer';
-                }
-                
-                // Remove existing listeners by cloning
-                const newConfirmBtn = confirmBtn.cloneNode(true);
-                const newCancelBtn = cancelBtn.cloneNode(true);
-                newConfirmBtn.disabled = false; // Ensure it's enabled
-                newConfirmBtn.style.opacity = '1';
-                newConfirmBtn.style.cursor = 'pointer';
-                confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-                cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-                
-                // Add new listener
-                newConfirmBtn.addEventListener('click', function() {
-                    // Clear all classes
-                    if (typeof clearAllClasses === 'function') {
-                        clearAllClasses(classesList, classItems);
-                    } else {
-                        // Fallback clearing
-                        classItems.forEach(item => item.remove());
-                        window.allClasses = [];
-                        if (window.calendar) {
-                            window.calendar.removeAllEvents();
-                        }
-                        updateClassesCountBadge();
-                        
-                        // Add empty state
-                        if (!classesList.querySelector('.empty-state')) {
-                            const emptyState = document.createElement('div');
-                            emptyState.className = 'empty-state';
-                            emptyState.innerHTML = `
-                                <i class="fas fa-calendar-plus"></i>
-                                <h4>No classes created yet</h4>
-                                <p>Start by filling the form above to create your first class</p>
-                            `;
-                            classesList.appendChild(emptyState);
-                        }
-                    }
-                    
-                    // Close modal
-                    clearModal.style.display = 'none';
-                    document.body.style.overflow = 'auto';
-                    
-                    if (typeof showNotification === 'function') {
-                        showNotification('All classes have been cleared.', 'success');
-                    }
-                });
-                
-                // Cancel button
-                newCancelBtn.addEventListener('click', function() {
-                    clearModal.style.display = 'none';
-                    document.body.style.overflow = 'auto';
-                });
-                
-                // Close modal handlers
-                document.querySelectorAll('[data-close-modal="clearClassesModal"]').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        clearModal.style.display = 'none';
-                        document.body.style.overflow = 'auto';
-                    });
-                });
-                
-                // Close on backdrop click
-                clearModal.addEventListener('click', function(e) {
-                    if (e.target === clearModal) {
-                        clearModal.style.display = 'none';
-                        document.body.style.overflow = 'auto';
-                    }
-                });
-            }
-        });
-    }
-}
-
-function updateCreatedClassesList() {
-    // This function is called by addClassToList, so the list should already be updated
-    // But we can ensure it's initialized on page load
-    const classesList = document.getElementById('createdClasses');
-    if (classesList && window.allClasses && window.allClasses.length > 0) {
-        // List should already be populated by addClassToList
-        // Just make sure empty state is removed if classes exist
-        const emptyState = classesList.querySelector('.empty-state');
-        if (emptyState && window.allClasses.length > 0) {
-            emptyState.remove();
-        }
-    }
-}
-
-function showClassesDetailsModal() {
-    const modal = document.getElementById('createdClassesDetailsModal');
-    if (!modal) return;
-    
-    const classes = window.allClasses || [];
-    const totalClasses = classes.length;
-    const totalHours = classes.reduce((sum, cls) => {
-        const hours = cls.lectureHours && cls.labHours ? 
-            (parseInt(cls.lectureHours) || 0) + (parseInt(cls.labHours) || 0) : 
-            (parseInt(cls.unitLoad) || 3);
-        return sum + hours;
-    }, 0);
-    
-    // Update stats
-    const totalClassesEl = document.getElementById('detailsTotalClasses');
-    const totalHoursEl = document.getElementById('detailsTotalHours');
-    
-    if (totalClassesEl) totalClassesEl.textContent = totalClasses;
-    if (totalHoursEl) totalHoursEl.textContent = totalHours;
-    
-    // Calculate teacher unit loads
-    const teacherUnitLoads = {};
-    classes.forEach(cls => {
-        const facultyName = cls.faculty || 'Unassigned';
-        const units = parseFloat(cls.units || cls.unitLoad || 0);
-        if (!teacherUnitLoads[facultyName]) {
-            teacherUnitLoads[facultyName] = 0;
-        }
-        teacherUnitLoads[facultyName] += units;
-    });
-    
-    // Display teacher unit loads
-    const teacherUnitLoadsEl = document.getElementById('teacherUnitLoads');
-    if (teacherUnitLoadsEl) {
-        const teachers = Object.keys(teacherUnitLoads).sort();
-        if (teachers.length === 0) {
-            teacherUnitLoadsEl.innerHTML = '<div style="color: #64748b; font-style: italic;">No teachers assigned</div>';
-        } else {
-            teacherUnitLoadsEl.innerHTML = teachers.map(teacher => {
-                const totalUnits = teacherUnitLoads[teacher].toFixed(1);
-                return `
-                    <div style="padding: 8px 12px; background: white; border-radius: 6px; border: 1px solid #e2e8f0;">
-                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${teacher}</div>
-                        <div style="color: #64748b; font-size: 0.85rem;">
-                            <i class="fas fa-book"></i> ${totalUnits} units
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-    }
-    
-    // Function to render classes list
-    function renderClassesList(filteredClasses = classes) {
-        const classesListEl = document.getElementById('createdClassesDetailsList');
-        if (classesListEl) {
-            if (filteredClasses.length === 0) {
-                classesListEl.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-search"></i>
-                        <h4>No classes found</h4>
-                        <p>Try adjusting your search</p>
-                    </div>
-                `;
-            } else {
-                classesListEl.innerHTML = filteredClasses.map(cls => {
-                    const lectureHours = parseInt(cls.lectureHours) || 0;
-                    const labHours = parseInt(cls.labHours) || 0;
-                    const totalClassHours = lectureHours + labHours || (parseInt(cls.unitLoad) || 3);
-                    const classType = cls.classType || (lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : 'laboratory'));
-                    const units = parseFloat(cls.units || cls.unitLoad || 0).toFixed(1);
-                    
-                    return `
-                        <div class="class-detail-item" style="padding: 16px; margin-bottom: 12px; background: white; border-radius: 8px; border-left: 4px solid #4a90e2; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #333;">${cls.subject || 'Unknown Subject'}</h3>
-                                <span style="background: #4a90e2; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
-                                    ${classType}
-                                </span>
-                            </div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.9rem; color: #666;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-graduation-cap" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Program:</strong> ${cls.course || 'N/A'}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-chalkboard-teacher" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Faculty:</strong> ${cls.faculty || 'N/A'}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-book" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Units:</strong> ${units}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-clock" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Hours:</strong> ${totalClassHours} ${lectureHours > 0 && labHours > 0 ? `(${lectureHours}L + ${labHours}Lab)` : ''}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-building" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Department:</strong> ${cls.department || 'N/A'}</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        }
-    }
-    
-    // Initial render
-    renderClassesList();
-    
-    // Set up search functionality
-    const searchInput = document.getElementById('classesDetailsSearch');
-    if (searchInput) {
-        searchInput.addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase().trim();
-            if (searchTerm === '') {
-                renderClassesList(classes);
-            } else {
-                const filtered = classes.filter(cls => {
-                    const subject = (cls.subject || '').toLowerCase();
-                    const faculty = (cls.faculty || '').toLowerCase();
-                    const course = (cls.course || '').toLowerCase();
-                    const department = (cls.department || '').toLowerCase();
-                    return subject.includes(searchTerm) || 
-                           faculty.includes(searchTerm) || 
-                           course.includes(searchTerm) || 
-                           department.includes(searchTerm);
-                });
-                renderClassesList(filtered);
-            }
-        });
-    }
-    
-    // Show modal with proper positioning
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    
-    // Scroll to top to ensure header is visible after a brief delay
-    setTimeout(() => {
-        modal.scrollTop = 0;
-        const modalContent = modal.querySelector('.modal-content');
-        if (modalContent) {
-            modalContent.scrollTop = 0;
-        }
-        // Also scroll the window to top if needed
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 10);
-    document.body.style.overflow = 'hidden';
-}
-
-// Create class element for modal display
-function createClassElement(classData) {
-    const classElement = document.createElement('div');
-    classElement.className = 'class-item';
-    classElement.style.cssText = `
-        padding: 16px;
-        margin-bottom: 12px;
-        background: white;
-        border-radius: 8px;
-        border-left: 4px solid var(--primary-color);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    `;
-    classElement.onmouseenter = function() {
-        this.style.transform = 'translateY(-2px)';
-        this.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.12)';
-    };
-    classElement.onmouseleave = function() {
-        this.style.transform = 'translateY(0)';
-        this.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.08)';
-    };
-    
-    // Apply department color if available
-    try {
-        const deptColor = getDepartmentColorForClass(classData);
-        classElement.style.borderLeftColor = deptColor;
-    } catch (e) {
-        console.warn('Could not apply department color to modal class element', e);
-    }
-    
-    classElement.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--text-color);">${classData.subject || 'Unknown Subject'}</h3>
-            <span style="background: var(--primary-color); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
-                ${classData.classType || 'lecture'}
-            </span>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.9rem; color: var(--dark-gray);">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-graduation-cap" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.course || 'N/A'}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-chalkboard-teacher" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.faculty || 'N/A'}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-clock" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.unitLoad || 3} hours</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-building" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.department || 'N/A'}</span>
-            </div>
-        </div>
-    `;
-    
-    return classElement;
-}
-
-function updateModalClassesList() {
-    const modalClassesList = document.getElementById('modalClassesList');
-    if (!modalClassesList) return;
-    
-    if (window.allClasses && window.allClasses.length > 0) {
-        modalClassesList.innerHTML = '';
-        window.allClasses.forEach(classItem => {
-            const classElement = createClassElement(classItem);
-            modalClassesList.appendChild(classElement);
-        });
-    } else {
-        modalClassesList.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-calendar-plus"></i>
-                <h4>No classes created yet</h4>
-                <p>Start by filling the form above to create your first class</p>
-            </div>
-        `;
-    }
-}
-
-function updateModalStats() {
-    const totalClasses = window.allClasses ? window.allClasses.length : 0;
-    const totalHours = window.allClasses ? window.allClasses.reduce((sum, cls) => sum + (cls.unitLoad || 3), 0) : 0;
-    const conflicts = 0; // You can implement conflict detection here
-    
-    const modalClassCount = document.getElementById('modalClassCount');
-    const modalTotalHours = document.getElementById('modalTotalHours');
-    const modalConflictCount = document.getElementById('modalConflictCount');
-    
-    if (modalClassCount) modalClassCount.textContent = totalClasses;
-    if (modalTotalHours) modalTotalHours.textContent = totalHours;
-    if (modalConflictCount) modalConflictCount.textContent = conflicts;
-}
-
-function updateClassesCountBadge() {
-    const badge = document.getElementById('classesCountBadge');
-    const count = window.allClasses ? window.allClasses.length : 0;
-    if (badge) {
-        badge.textContent = count;
-    }
-    
-    // Also update the Generate Schedule button state
-    updateGenerateScheduleButtonState();
-}
-
-// Initialize Generate Schedule Button
-function initializeGenerateScheduleButton() {
-    const generateScheduleBtn = document.getElementById('generateScheduleBtn');
-    
-    if (generateScheduleBtn) {
-        // Add click event listener
-        generateScheduleBtn.addEventListener('click', function() {
-            console.log('Generate Schedule button clicked');
-            generateSchedule();
-        });
-        
-        // Update button state based on classes count
-        updateGenerateScheduleButtonState();
-    }
-}
-
-// Superadmin notification polling for new user registrations
-let superAdminNotificationInterval = null;
-let lastPendingCountForSuperAdmin = 0;
-
-function startSuperAdminNotificationPolling() {
-    // Clear any existing interval
-    if (superAdminNotificationInterval) {
-        clearInterval(superAdminNotificationInterval);
-    }
-    
-    // Initial load
-    checkForNewPendingAccounts();
-    
-    // Poll every 5 seconds for new pending accounts
-    superAdminNotificationInterval = setInterval(() => {
-        checkForNewPendingAccounts();
-    }, 5000);
-}
-
-async function checkForNewPendingAccounts() {
-    try {
-        const authToken = localStorage.getItem('authToken');
-        if (!authToken) return;
-        
-        const response = await fetch('/api/users/pending', {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        if (!response.ok) return;
-        
-        const pendingUsers = await response.json();
-        const currentCount = pendingUsers ? pendingUsers.length : 0;
-        
-        // If count increased, show notification
-        if (currentCount > lastPendingCountForSuperAdmin && lastPendingCountForSuperAdmin > 0) {
-            const newUsers = pendingUsers.slice(0, currentCount - lastPendingCountForSuperAdmin);
-            if (newUsers.length > 0) {
-                const newUser = newUsers[0];
-                showSuperAdminNewUserNotification(newUser);
-            }
-        }
-        
-        lastPendingCountForSuperAdmin = currentCount;
-    } catch (error) {
-        console.error('Error checking pending accounts:', error);
-    }
-}
-
-function showSuperAdminNewUserNotification(user) {
-    // Remove any existing notification
-    const existing = document.querySelector('.superadmin-new-user-notification');
-    if (existing) {
-        existing.remove();
-    }
-    
-    const userName = user.name || formatFullName(user.firstName || '', user.middleName || '', user.lastName || '') || user.email;
-    
-    const notification = document.createElement('div');
-    notification.className = 'superadmin-new-user-notification';
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 10000;
-        background: linear-gradient(135deg, #3b82f6, #2563eb);
-        color: white;
-        padding: 16px 20px;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        max-width: 400px;
-        animation: slideInRight 0.3s ease;
-        cursor: pointer;
-    `;
-    
-    notification.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="font-size: 24px;">
-                <i class="fas fa-user-plus"></i>
-            </div>
-            <div style="flex: 1;">
-                <div style="font-weight: 600; margin-bottom: 4px;">New Account Registered</div>
-                <div style="font-size: 13px; opacity: 0.9;">${userName} is waiting for approval</div>
-            </div>
-            <button style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 4px 8px;" onclick="this.parentElement.parentElement.remove()">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `;
-    
-    notification.addEventListener('click', function(e) {
-        if (e.target.closest('button')) return;
-        // Navigate to superadmin dashboard
-        window.location.href = 'superadmin.html#pending-accounts';
-    });
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 10 seconds
-    setTimeout(() => {
-        if (notification.parentElement) {
-            notification.style.animation = 'slideOutRight 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
-        }
-    }, 10000);
-}
-
-// Update Generate Schedule button state
-function updateGenerateScheduleButtonState() {
-    const generateScheduleBtn = document.getElementById('generateScheduleBtn');
-    if (!generateScheduleBtn) return;
-    
-    const hasClasses = window.allClasses && window.allClasses.length > 0;
-    
-    if (hasClasses) {
-        generateScheduleBtn.disabled = false;
-        generateScheduleBtn.innerHTML = `
-            <i class="fas fa-calendar-check"></i> Generate Schedule (${window.allClasses.length} classes)
-        `;
-    } else {
-        generateScheduleBtn.disabled = true;
-        generateScheduleBtn.innerHTML = `
-            <i class="fas fa-calendar-check"></i> Generate Schedule
-        `;
-    }
-}
