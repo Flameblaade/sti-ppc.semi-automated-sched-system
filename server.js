@@ -3163,7 +3163,7 @@ app.get('/api/subjects/:id', isAuthenticated, (req, res) => {
 app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   try {
     const { id } = req.params;
-    const { name, code, departmentId, units, lectureHours, labHours } = req.body;
+    const { name, code, departmentId, units, lectureHours, labHours, splitLectureHours, splitLabHours } = req.body;
     
     // Find the subject
     const subjectIndex = subjects.findIndex(subject => subject.id === id);
@@ -3197,6 +3197,8 @@ app.put('/api/subjects/:id', isAuthenticated, isAdminOrSuperAdmin, (req, res) =>
       units: parseFloat(units) || subjects[subjectIndex].units || 1,
       lectureHours: parseInt(lectureHours) || 0,
       labHours: parseInt(labHours) || 0,
+      splitLectureHours: !!splitLectureHours,
+      splitLabHours: !!splitLabHours,
       updatedAt: new Date().toISOString()
     };
     
@@ -3249,8 +3251,17 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
   console.log('POST /api/subjects endpoint called');
   console.log('Request body:', req.body);
   try {
-    const { name, code, departmentId, units = 1, lectureHours = 0, labHours = 0 } = req.body;
-    console.log('Extracted data:', { name, code, departmentId, units, lectureHours, labHours });
+    const {
+      name,
+      code,
+      departmentId,
+      units = 1,
+      lectureHours = 0,
+      labHours = 0,
+      splitLectureHours = false,
+      splitLabHours = false
+    } = req.body;
+    console.log('Extracted data:', { name, code, departmentId, units, lectureHours, labHours, splitLectureHours, splitLabHours });
     
     // Validate input
     if (!name || !code) {
@@ -3278,6 +3289,8 @@ app.post('/api/subjects', isAuthenticated, isAdminOrSuperAdmin, (req, res) => {
       units: parseFloat(units) || 1,
       lectureHours: parseInt(lectureHours) || 0,
       labHours: parseInt(labHours) || 0,
+      splitLectureHours: !!splitLectureHours,
+      splitLabHours: !!splitLabHours,
       createdAt: new Date().toISOString(),
       createdBy: req.user.id
     };
@@ -4475,23 +4488,32 @@ function calculateFacultyUnits(facultyId) {
   schedule.forEach(event => {
     const extendedProps = event.extendedProps || {};
     if (extendedProps.facultyId === facultyId) {
-      // Try to get units from extendedProps first
-      if (extendedProps.unitLoad) {
-        totalUnits += parseFloat(extendedProps.unitLoad) || 0;
-      } else if (extendedProps.subjectId) {
-        // If subjectId is available, look up the subject
+      // Prioritize reading units from subjects first
+      let unitsFound = false;
+      
+      // First, try to get units from subjectId (most reliable)
+      if (extendedProps.subjectId) {
         const subject = subjects.find(s => s.id === extendedProps.subjectId);
         if (subject && subject.units) {
           totalUnits += parseFloat(subject.units) || 0;
+          unitsFound = true;
         }
-      } else if (extendedProps.subject) {
-        // Try to find subject by name
+      }
+      
+      // If not found by subjectId, try to find by subject name
+      if (!unitsFound && extendedProps.subject) {
         const subject = subjects.find(s => 
           s.name && s.name.toLowerCase() === extendedProps.subject.toLowerCase()
         );
         if (subject && subject.units) {
           totalUnits += parseFloat(subject.units) || 0;
+          unitsFound = true;
         }
+      }
+      
+      // Fallback to unitLoad if no subject units found
+      if (!unitsFound && extendedProps.unitLoad) {
+        totalUnits += parseFloat(extendedProps.unitLoad) || 0;
       }
     }
   });
@@ -4551,26 +4573,38 @@ app.put('/api/schedule/assign-faculty', isAuthenticated, isAdminOrSuperAdmin, (r
       const currentUnits = calculateFacultyUnits(facultyId);
       
       // Calculate units for new assignments
+      // Prioritize reading units from subjects first
       let newUnits = 0;
       schedule.forEach(event => {
         if (scheduleIds.includes(event.id)) {
           const extendedProps = event.extendedProps || {};
           // Only count if not already assigned to this faculty
           if (extendedProps.facultyId !== facultyId) {
-            if (extendedProps.unitLoad) {
-              newUnits += parseFloat(extendedProps.unitLoad) || 0;
-            } else if (extendedProps.subjectId) {
+            let unitsFound = false;
+            
+            // First, try to get units from subjectId (most reliable)
+            if (extendedProps.subjectId) {
               const subject = subjects.find(s => s.id === extendedProps.subjectId);
               if (subject && subject.units) {
                 newUnits += parseFloat(subject.units) || 0;
+                unitsFound = true;
               }
-            } else if (extendedProps.subject) {
+            }
+            
+            // If not found by subjectId, try to find by subject name
+            if (!unitsFound && extendedProps.subject) {
               const subject = subjects.find(s => 
                 s.name && s.name.toLowerCase() === extendedProps.subject.toLowerCase()
               );
               if (subject && subject.units) {
                 newUnits += parseFloat(subject.units) || 0;
+                unitsFound = true;
               }
+            }
+            
+            // Fallback to unitLoad if no subject units found
+            if (!unitsFound && extendedProps.unitLoad) {
+              newUnits += parseFloat(extendedProps.unitLoad) || 0;
             }
           }
         }

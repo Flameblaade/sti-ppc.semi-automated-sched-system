@@ -558,12 +558,14 @@ async function loadSubjects(programId) {
     
     try {
         let subjects = [];
+        let loadedFromApi = false;
         try {
             // Fetch ALL subjects from API (no programId filter)
             const response = await fetchWithAuth(`/api/subjects`);
             if (response && response.ok) {
                 subjects = await response.json();
                 console.log(`Loaded ${subjects.length} subjects from API`);
+                loadedFromApi = true;
             }
         } catch (e) { 
             console.log('API call failed, using localStorage fallback:', e);
@@ -574,6 +576,17 @@ async function loadSubjects(programId) {
             // Fallback to localStorage
             subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
             console.log(`Loaded ${subjects.length} subjects from localStorage`);
+            loadedFromApi = false;
+        }
+
+        // Persist freshest subject data so other modules (e.g., unit validation) read correct units
+        if (loadedFromApi && Array.isArray(subjects)) {
+            try {
+                localStorage.setItem('subjects', JSON.stringify(subjects));
+                console.log('Subjects cached to localStorage for unit syncing');
+            } catch (storageError) {
+                console.warn('Unable to cache subjects in localStorage:', storageError);
+            }
         }
 
         // Prepare options for Choices.js
@@ -1806,6 +1819,13 @@ document.addEventListener('DOMContentLoaded', function() {
             eventDetailType.textContent = typeDisplay;
         }
         
+        // Update faculty label to show current faculty
+        const facultyLabel = document.querySelector('label[for="eventFacultySelect"]');
+        if (facultyLabel) {
+            const currentTeacher = eventData.teacher || 'Not assigned';
+            facultyLabel.innerHTML = `<i class="fas fa-user-check"></i> Assign Faculty Member (Current: ${currentTeacher}):`;
+        }
+        
         // Load faculty for the dropdown (only if user can edit)
         const facultySelectContainer = document.getElementById('eventFacultySelect')?.parentElement;
         const facultySelect = document.getElementById('eventFacultySelect');
@@ -1817,29 +1837,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const saveRoomBtn = document.getElementById('saveRoomBtn');
         const deleteEventBtn = document.getElementById('deleteEventBtn');
         
-        // Load verified faculty members for assignment
-        if (allowEdit && facultySelect && eventData.departmentId) {
+        // Load verified faculty members for assignment (load ALL faculty like the faculty tab)
+        if (allowEdit && facultySelect) {
             facultySelect.innerHTML = '<option value="">Loading faculty...</option>';
             facultySelect.disabled = true;
             
             try {
-                // Resolve department ID properly (handle codes, IDs, or malformed values)
-                const resolvedDeptId = resolveDepartmentId(eventData.departmentId);
-                if (!resolvedDeptId) {
-                    console.warn('Could not resolve department ID:', eventData.departmentId);
-                    facultySelect.innerHTML = '<option value="">No department found</option>';
-                    facultySelect.disabled = false;
-                    return;
-                }
-                
-                // Load faculty for the event's department
-                const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(resolvedDeptId)}`);
+                // Load ALL faculty from API (no department filter) - same as faculty tab
+                const response = await fetchWithAuth(`/api/faculty`);
                 if (response && response.ok) {
                     const faculty = await response.json();
                     
-                    // Filter to only verified faculty and exclude superadmin
-                    const verifiedFaculty = faculty.filter(f => 
-                        f.verified === true &&
+                    // Filter to exclude superadmin only (show all faculty regardless of verification status)
+                    const allFaculty = faculty.filter(f => 
                         f.email !== 'superadmin@school.edu' &&
                         f.role !== 'superadmin' &&
                         String(f.role || '').toLowerCase() !== 'superadmin'
@@ -1847,25 +1857,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     facultySelect.innerHTML = '<option value="">Select a faculty member...</option>';
                     
-                    if (verifiedFaculty.length > 0) {
-                        verifiedFaculty.forEach(member => {
+                    if (allFaculty.length > 0) {
+                        // Get current faculty ID for selection
+                        const currentFacultyId = eventData.eventId ? (() => {
+                            const calendar = window.calendar;
+                            if (calendar) {
+                                const event = calendar.getEventById(eventData.eventId);
+                                if (event && event.extendedProps) {
+                                    return event.extendedProps.facultyId;
+                                }
+                            }
+                            return null;
+                        })() : null;
+                        
+                        allFaculty.forEach(member => {
                             const option = document.createElement('option');
                             option.value = member.id;
                             const name = formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || 'Faculty';
-                            option.textContent = name;
+                            // Include department in display for clarity
+                            const displayName = member.department ? `${name} - ${member.department}` : name;
+                            option.textContent = displayName;
                             
                             // Mark current faculty as selected
-                            const currentFacultyId = eventData.eventId ? (() => {
-                                const calendar = window.calendar;
-                                if (calendar) {
-                                    const event = calendar.getEventById(eventData.eventId);
-                                    if (event && event.extendedProps) {
-                                        return event.extendedProps.facultyId;
-                                    }
-                                }
-                                return null;
-                            })() : null;
-                            
                             if (member.id === currentFacultyId) {
                                 option.selected = true;
                             }
@@ -1873,15 +1886,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             facultySelect.appendChild(option);
                         });
                     } else {
-                        facultySelect.innerHTML = '<option value="">No verified faculty available</option>';
+                        facultySelect.innerHTML = '<option value="">No faculty available</option>';
                     }
                     
                     facultySelect.disabled = false;
+                } else {
+                    // Handle case where response is null or not ok
+                    console.warn('Failed to load faculty. Response:', response);
+                    if (facultySelect) {
+                        facultySelect.innerHTML = '<option value="">Error loading faculty</option>';
+                        facultySelect.disabled = false;
+                    }
                 }
             } catch (error) {
                 console.error('Error loading faculty:', error);
                 if (facultySelect) {
                     facultySelect.innerHTML = '<option value="">Error loading faculty</option>';
+                    facultySelect.disabled = false;
                 }
             }
         } else {
@@ -2012,6 +2033,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             const teacherElement = document.getElementById('eventDetailTeacher');
                             if (teacherElement) {
                                 teacherElement.textContent = facultyName;
+                            }
+                            
+                            // Update the faculty label to show the new faculty
+                            const facultyLabel = document.querySelector('label[for="eventFacultySelect"]');
+                            if (facultyLabel) {
+                                facultyLabel.innerHTML = `<i class="fas fa-user-check"></i> Assign Faculty Member (Current: ${facultyName}):`;
                             }
                             
                             // Save to server
