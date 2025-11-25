@@ -1,0 +1,20 @@
+flowchart LR
+    %% Content Diagram (External context around the system)
+
+    SuperAdmin[Superadmin]
+    Faculty[User / Faculty]
+    System["Web-Based Automated<br/>Scheduling System"]
+
+    SuperAdmin -->|Credentials / Admin Actions| System
+    Faculty -->|Credentials / View Requests| System
+
+    System -->|Approvals / Confirmations| SuperAdmin
+    System -->|Schedules / Info| Faculty
+
+    classDef external fill:#fff,stroke:#000,stroke-width:2px
+    classDef system fill:#fff,stroke:#000,stroke-width:2px
+
+    class SuperAdmin,Faculty external
+    class System system
+
+

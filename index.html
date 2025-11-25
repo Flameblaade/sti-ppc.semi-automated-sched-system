@@ -145,6 +145,34 @@
                                     <p>Start by filling the form above to create your first class</p>
                                 </div>
                             </div>
+                            
+                            <!-- Merge Classes Section -->
+                            <div id="mergeClassesSection" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e0e0e0; display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <h4 style="margin: 0; font-size: 0.95rem; color: #374151;">
+                                        <i class="fas fa-link"></i> Merge Classes
+                                    </h4>
+                                    <button type="button" id="enableMergeModeBtn" class="btn btn-secondary btn-sm" style="padding: 6px 12px; font-size: 0.85rem;">
+                                        <i class="fas fa-check-square"></i> Select to Merge
+                                    </button>
+                                </div>
+                                <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">
+                                    Select multiple classes with the same subject to merge them. Merged classes will share the same schedule.
+                                </p>
+                                <div id="mergeActionsContainer" style="display: none;">
+                                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                                        <button type="button" id="mergeSelectedBtn" class="btn btn-primary btn-sm" style="flex: 1; padding: 8px 12px;" disabled>
+                                            <i class="fas fa-link"></i> Merge Selected (<span id="mergeCount">0</span>)
+                                        </button>
+                                        <button type="button" id="cancelMergeBtn" class="btn btn-secondary btn-sm" style="padding: 8px 12px;">
+                                            <i class="fas fa-times"></i> Cancel
+                                        </button>
+                                    </div>
+                                    <div id="mergeInfo" style="font-size: 0.8rem; color: #059669; padding: 8px; background: #d1fae5; border-radius: 4px; display: none;">
+                                        <i class="fas fa-info-circle"></i> <span id="mergeInfoText"></span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     

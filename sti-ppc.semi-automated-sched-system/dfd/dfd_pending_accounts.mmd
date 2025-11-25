@@ -1,0 +1,40 @@
+flowchart TB
+    %% Data Flow Diagram - Pending Accounts (Approvals)
+
+    SuperAdmin[Superadmin]
+
+    subgraph Processes[" "]
+      direction LR
+      Pending["3.0 Pending Accounts"]
+      Review["3.1 Review Applicant"]
+      Decide["3.2 Approve / Reject"]
+      Assign["3.3 Assign Role & Department"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      Departments[("departments")]
+    end
+
+    SuperAdmin -->|Open| Pending
+    Pending --> Review
+    Review <--> UserInfo
+    Review --> Decide
+    Decide <--> UserInfo
+    Decide --> Assign
+    Assign <--> UserInfo
+    Assign <--> Departments
+
+    Pending -->|Confirmation| SuperAdmin
+    Assign -->|Confirmation| SuperAdmin
+
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class SuperAdmin ext
+    class Pending,Review,Decide,Assign proc
+    class UserInfo,Departments store
+
+

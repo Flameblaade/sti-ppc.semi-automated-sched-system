@@ -1,0 +1,370 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Montserrat';
+}
+
+body {
+    background-color: #D9D9D9;
+}
+
+nav {
+    background-color: #1A609B;
+    height: 60px;
+    width: 100%; 
+    display: flex;
+    justify-content: center;
+    position: relative; /* Add this to contain the logo */
+}
+
+.sti_logo {
+    height: 90px;
+    width: auto;
+    background-color: transparent;
+    position: absolute;
+    margin: 15px;
+    margin-left: 30px;
+    left: 0; /* Add this to explicitly set the position */
+    transform: none; /* Will be used later in media queries */
+    transition: all 0.3s ease; /* Add smooth transition when repositioning */
+}
+
+.blue_box {
+    padding: min(5em, 8%);
+    background-color: #457B9D;
+    height: 450px;
+    width: 500px;
+    position: relative;
+    margin-left: 480px;
+    margin-top: 90px; /* Adjusted for better positioning */
+    z-index: 1; /* Lower z-index than white box */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Adds shadow for depth */
+}
+
+.white_box {
+    background-color: #ffffff;
+    height: 450px; /* Slightly smaller than blue box */
+    width: 500px; /* Slightly smaller than blue box */
+    position: absolute; /* Changed from fixed to absolute */
+    top: 35px; /* Position from top of page */
+    left: 45px; /* Position from left of page */
+    z-index: 2; /* Higher z-index to appear above blue box */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Adds shadow for depth */
+}
+
+#lbllogin {
+    background-color: transparent;
+    font-family: 'Montserrat';
+    font-size: 30px; 
+    text-align: left;
+    margin-left: 30px;
+    margin-top: 30px;
+    margin-bottom: 20px; 
+    padding: 10px;
+    font-weight: 400;
+    letter-spacing: 1px; 
+}
+
+form {
+    padding: 0 30px;
+    background-color: transparent;
+    font-family: "Montserrat";
+    font-weight: 700;   
+}
+
+.form-username {
+    margin-bottom: 20px;
+    background-color: transparent;
+    position: relative;
+}
+
+.form-password {
+    margin-bottom: 20px;
+    background-color: transparent;
+    position: relative;
+}
+
+#email {
+    width: 100%;
+    margin: 10px 0;
+    padding: 12px 45px 12px 15px;
+    font-size: 16px;
+    border: 1px solid #D9D9D9;
+    background-color: #D9D9D9;
+    font-weight: 700;
+    border-radius: 20px;
+    box-sizing: border-box;
+}
+
+#username {
+    /* For backward compatibility */
+    width: 100%;
+    margin: 10px 0;
+    padding: 12px 45px 12px 15px;
+    font-size: 16px;
+    border: 1px solid #D9D9D9;
+    background-color: #D9D9D9;
+    font-weight: 700;
+    border-radius: 20px;
+    box-sizing: border-box;
+}
+
+#password {
+    width: 100%;
+    margin: 10px 0;
+    padding: 12px 45px 12px 15px;
+    font-size: 16px;
+    border: 1px solid #D9D9D9;
+    background-color: #D9D9D9;
+    font-weight: 700;
+    border-radius: 20px;
+    box-sizing: border-box;
+}
+
+.input-container {
+    position: relative;
+    width: 100%;
+}
+
+.input-container i {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+    cursor: default;
+    z-index: 10;
+}
+
+.password-container {
+    position: relative;
+    width: 100%;
+}
+
+.password-container i {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+    cursor: pointer;
+    z-index: 10;
+}
+
+/* Remove the conflicting password icon styles */
+.password-container .fa-eye,
+.password-container .fa-solid {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: transparent;
+    cursor: pointer;
+    color: #666;
+    z-index: 10;
+}
+
+.sign-in-btn {
+    width: 25%;
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #457B9D;
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.signup-link {
+    text-align: center;
+    margin-top: 20px;
+    padding: 0 20px;
+}
+
+.signup-link p {
+    color: #666;
+    font-size: 14px;
+}
+
+.signup-link a {
+    color: #1A609B;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.signup-link a:hover {
+    color: #0D4A7A;
+    text-decoration: underline;
+}
+
+/* Media queries to make the design responsive only when screen gets smaller */
+@media screen and (max-width: 1200px) {
+    .blue_box {
+        margin-left: auto;
+        margin-right: auto;
+        left: 0;
+        right: 0;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    /* Center the logo at this breakpoint */
+    .sti_logo {
+        left: 50%; /* Position at 50% from the left of the screen */
+        transform: translateX(-50%); /* Pull back by half its width to center it */
+        margin-left: 0; /* Reset the left margin */
+    }
+    
+    /* Adjust the blue box position as needed */
+    .blue_box {
+        margin-top: 120px; /* Increase top margin to account for centered logo */
+    }
+}
+
+@media screen and (max-width: 600px) {
+    .blue_box {
+        width: 90%;
+        max-width: 500px;
+        margin-top: 120px; /* Keep this adjustment for the logo */
+    }
+    
+    .white_box {
+        width: 90%;
+        left: 5%;
+    }
+    
+    .sti_logo {
+        height: 70px; /* Make logo smaller */
+        /* Keep the centering from the previous media query */
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .blue_box {
+        height: 400px;
+        margin-top: 100px;
+    }
+    
+    .white_box {
+        height: 400px;
+        top: 25px;
+    }
+    
+    #lbllogin {
+        font-size: 24px;
+    }
+    
+    .sti_logo {
+        height: 60px; /* Make logo even smaller */
+    }
+}
+
+.verification-message {
+    margin-bottom: 25px;
+    text-align: center;
+}
+
+.verification-code {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 25px 0;
+}
+
+.verification-code input {
+    width: 45px;
+    height: 50px;
+    font-size: 24px;
+    text-align: center;
+    border: 1px solid #D9D9D9;
+    background-color: #D9D9D9;
+    border-radius: 10px;
+}
+
+.verification-code input:focus {
+    outline: none;
+    border-color: #457B9D;
+    background-color: #e5e5e5;
+}
+
+.resend-link {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+}
+
+.resend-link a {
+    color: #457B9D;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.resend-link a:hover {
+    text-decoration: underline;
+    color: #1A609B;
+}
+
+#twoFABox {
+    background: #457B9D;
+    min-height: 100vh;
+    width: 100vw;
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    padding: 0;
+}
+
+#twoFABox .white_box {
+    background-color: #fff;
+    width: 500px;
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border-radius: 20px;
+    padding: 40px 30px 30px 30px;
+    text-align: center;
+}
+
+#twoFABox h3 {
+    font-size: 26px;
+    font-weight: 400;
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+    color: #1A609B;
+}
+
+#backToLoginBtn {
+    background: #e5e7eb;
+    color: #1e293b;
+    border: none;
+    border-radius: 20px;
+    padding: 0.8rem 2.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 1.5rem;
+    width: 100%;
+    font-size: 14px;
+}
+#backToLoginBtn:hover {
+    background: #d1d5db;
+}
+
+#loginBox.hide {
+    display: none !important;
+}
+
+body, #twoFABox, #twoFABox .white_box {
+    font-family: 'Montserrat', sans-serif;
+}

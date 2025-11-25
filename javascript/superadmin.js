@@ -600,6 +600,8 @@ function initializeSearch() {
                             <td>${subject.code || ''}</td>
                             <td>${subject.name || ''}</td>
                             <td>${subject.units || ''}</td>
+                            <td>${subject.lectureHours || 0}</td>
+                            <td>${subject.labHours || 0}</td>
                             <td>
                                 <button class="btn btn-sm btn-primary" data-action="edit-subject" data-id="${subject.id}">
                                     <i class="fas fa-edit"></i> Edit
@@ -1383,7 +1385,7 @@ async function loadDepartments() {
         if (!departments || departments.length === 0) {
             tbody.innerHTML = `
                 <tr class="empty-row">
-                    <td colspan="4">
+                    <td colspan="3">
                         <div class="empty-state">
                             <i class="fas fa-building"></i>
                             <p>No departments found</p>
@@ -1401,7 +1403,6 @@ async function loadDepartments() {
             <tr>
                 <td>${dept.code || ''}</td>
                 <td>${dept.name || ''}</td>
-                <td>${dept.description || 'No description'}</td>
                 <td>
                     <button class="btn btn-sm btn-primary" data-action="edit-department" data-id="${dept.id}">
                         <i class="fas fa-edit"></i> Edit
@@ -1709,7 +1710,7 @@ async function loadSubjects() {
             console.log('No subjects found, showing empty state');
             tbody.innerHTML = `
                 <tr class="empty-row">
-                    <td colspan="4">
+                    <td colspan="6">
                         <div class="empty-state">
                             <i class="fas fa-book"></i>
                             <p>No subjects found</p>
@@ -1725,6 +1726,8 @@ async function loadSubjects() {
                 <td>${subject.code || ''}</td>
                 <td>${subject.name || ''}</td>
                 <td>${subject.units || ''}</td>
+                <td>${subject.lectureHours || 0}</td>
+                <td>${subject.labHours || 0}</td>
                 <td>
                     <button class="btn btn-sm btn-primary" data-action="edit-subject" data-id="${subject.id}">
                         <i class="fas fa-edit"></i> Edit
@@ -4181,7 +4184,7 @@ window.forceLoadSubjects = async function() {
             console.log('No subjects found in force load');
             tbody.innerHTML = `
                 <tr class="empty-row">
-                    <td colspan="4">
+                    <td colspan="6">
                         <div class="empty-state">
                             <i class="fas fa-book"></i>
                             <p>No subjects found</p>
@@ -4198,6 +4201,8 @@ window.forceLoadSubjects = async function() {
                 <td>${subject.code || ''}</td>
                 <td>${subject.name || ''}</td>
                 <td>${subject.units || ''}</td>
+                <td>${subject.lectureHours || 0}</td>
+                <td>${subject.labHours || 0}</td>
                 <td>
                     <button class="btn btn-sm btn-primary" data-action="edit-subject" data-id="${subject.id}">
                         <i class="fas fa-edit"></i> Edit

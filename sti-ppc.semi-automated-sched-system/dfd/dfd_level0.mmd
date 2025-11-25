@@ -1,0 +1,36 @@
+flowchart TB
+    %% Data Flow Diagram - Level 0 (Top-level processes)
+
+    SuperAdmin[Superadmin]
+    Faculty[User / Faculty]
+
+    subgraph System["0 Scheduling System"]
+      direction TB
+      P1["1.0 Authentication"]
+      P2["2.0 Dashboard"]
+      P3["3.0 Academic Management"]
+      P4["4.0 Data Management"]
+      P5["5.0 View Schedules"]
+    end
+
+    %% External interactions
+    SuperAdmin -->|Login / Manage| P1
+    SuperAdmin -->|Navigate| P2
+    SuperAdmin -->|Manage Academics| P3
+    SuperAdmin -->|Manage Data| P4
+    SuperAdmin -->|Review Schedules| P5
+
+    Faculty -->|Login / View| P1
+    Faculty -->|Navigate| P2
+    Faculty -->|View Academic Info| P3
+    Faculty -->|View Data| P4
+    Faculty -->|View Schedules| P5
+
+    %% Styling
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+
+    class SuperAdmin,Faculty ext
+    class P1,P2,P3,P4,P5 proc
+
+

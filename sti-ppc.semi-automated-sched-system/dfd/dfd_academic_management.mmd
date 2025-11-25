@@ -1,0 +1,52 @@
+flowchart TB
+    %% Data Flow Diagram - Academic Management
+
+    SuperAdmin[Superadmin]
+
+    subgraph Processes[" "]
+      direction LR
+      Academic["5.0 Academic Management"]
+      Depts["5.1 Departments"]
+      Subjects["5.2 Subjects"]
+      Rooms["5.3 Rooms"]
+      Courses["5.4 Courses"]
+      Strands["5.5 Strands"]
+      FacultyP["5.6 Faculty"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      Departments[("departments")]
+      SubjectsDB[("subjects")]
+      RoomsDB[("rooms")]
+      CoursesDB[("courses")]
+      StrandsDB[("strands")]
+      FacultyDB[("faculty")]
+    end
+
+    SuperAdmin -->|Open| Academic
+    Academic --> Depts
+    Academic --> Subjects
+    Academic --> Rooms
+    Academic --> Courses
+    Academic --> Strands
+    Academic --> FacultyP
+
+    Depts <--> Departments
+    Subjects <--> SubjectsDB
+    Rooms <--> RoomsDB
+    Courses <--> CoursesDB
+    Strands <--> StrandsDB
+    FacultyP <--> FacultyDB
+
+    Academic -->|Confirmation| SuperAdmin
+
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class SuperAdmin ext
+    class Academic,Depts,Subjects,Rooms,Courses,Strands,FacultyP proc
+    class Departments,SubjectsDB,RoomsDB,CoursesDB,StrandsDB,FacultyDB store
+
+

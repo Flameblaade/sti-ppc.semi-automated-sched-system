@@ -1,0 +1,43 @@
+flowchart TB
+    %% Data Flow Diagram - Manage Users
+
+    SuperAdmin[Superadmin]
+
+    subgraph Processes[" "]
+      direction LR
+      ManageUsers["4.0 Manage Users"]
+      Create["4.1 Create User"]
+      Update["4.2 Update User"]
+      Deactivate["4.3 Deactivate User"]
+      Import["4.4 Batch Import"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      UserAccounts[("user_accounts")]
+    end
+
+    SuperAdmin -->|Open| ManageUsers
+    ManageUsers --> Create
+    ManageUsers --> Update
+    ManageUsers --> Deactivate
+    ManageUsers --> Import
+
+    Create <--> UserInfo
+    Create <--> UserAccounts
+    Update <--> UserInfo
+    Deactivate <--> UserInfo
+    Import <--> UserInfo
+
+    ManageUsers -->|Confirmation| SuperAdmin
+
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class SuperAdmin ext
+    class ManageUsers,Create,Update,Deactivate,Import proc
+    class UserInfo,UserAccounts store
+
+

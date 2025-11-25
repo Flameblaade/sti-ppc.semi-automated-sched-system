@@ -1,0 +1,41 @@
+flowchart TB
+    %% Data Flow Diagram - Dashboard
+
+    Actor[Superadmin / Faculty]
+
+    subgraph Processes[" "]
+      direction LR
+      Dashboard["2.0 Dashboard"]
+      Widgets["2.1 Widgets"]
+      Reports["2.2 Reports"]
+      QuickActions["2.3 Quick Actions"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+    end
+
+    Actor -->|Open| Dashboard
+    Dashboard -->|Confirm| Actor
+
+    Dashboard --> Widgets
+    Dashboard --> Reports
+    Dashboard --> QuickActions
+
+    Widgets <--> UserInfo
+    Widgets <--> SchedulesDB
+    Reports <--> SchedulesDB
+    Reports <--> Departments
+
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class Actor ext
+    class Dashboard,Widgets,Reports,QuickActions proc
+    class UserInfo,SchedulesDB,Departments store
+
+

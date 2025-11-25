@@ -558,14 +558,12 @@ async function loadSubjects(programId) {
     
     try {
         let subjects = [];
-        let loadedFromApi = false;
         try {
             // Fetch ALL subjects from API (no programId filter)
             const response = await fetchWithAuth(`/api/subjects`);
             if (response && response.ok) {
                 subjects = await response.json();
                 console.log(`Loaded ${subjects.length} subjects from API`);
-                loadedFromApi = true;
             }
         } catch (e) { 
             console.log('API call failed, using localStorage fallback:', e);
@@ -576,17 +574,6 @@ async function loadSubjects(programId) {
             // Fallback to localStorage
             subjects = JSON.parse(localStorage.getItem('subjects') || '[]');
             console.log(`Loaded ${subjects.length} subjects from localStorage`);
-            loadedFromApi = false;
-        }
-
-        // Persist freshest subject data so other modules (e.g., unit validation) read correct units
-        if (loadedFromApi && Array.isArray(subjects)) {
-            try {
-                localStorage.setItem('subjects', JSON.stringify(subjects));
-                console.log('Subjects cached to localStorage for unit syncing');
-            } catch (storageError) {
-                console.warn('Unable to cache subjects in localStorage:', storageError);
-            }
         }
 
         // Prepare options for Choices.js
@@ -1404,38 +1391,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Create HTML content
                 const content = document.createElement('div');
-                content.style.cssText = 'padding: 4px 6px; font-size: 11px; line-height: 1.3; overflow: hidden; word-wrap: break-word; word-break: break-word; white-space: normal; max-height: 100%;';
+                content.style.cssText = 'padding: 4px 6px; font-size: 11px; line-height: 1.3;';
                 
                 // Clean subject title (remove [MERGED: ...] if present, we'll show it separately)
                 let cleanSubject = subject.replace(/\s*\[MERGED:.*?\]/gi, '').trim();
                 
-                // Truncate long subject names to prevent overflow
-                const maxSubjectLength = 30;
-                const displaySubject = cleanSubject.length > maxSubjectLength 
-                    ? cleanSubject.substring(0, maxSubjectLength) + '...' 
-                    : cleanSubject;
-                
-                let html = `<div style="font-weight: 600; margin-bottom: 2px; word-wrap: break-word; overflow-wrap: break-word;">${displaySubject}</div>`;
+                let html = `<div style="font-weight: 600; margin-bottom: 2px;">${cleanSubject}</div>`;
                 
                 // Show merged strands prominently if merged
                 if (mergedStrandsInfo) {
-                    html += `<div style="font-size: 9px; font-weight: 600; color: #ffffff; background-color: rgba(255, 255, 255, 0.25); padding: 2px 4px; border-radius: 3px; margin-bottom: 3px; display: inline-block; word-wrap: break-word; max-width: 100%;"><i class="fas fa-link" style="margin-right: 3px; font-size: 0.8em;"></i>Merged: ${mergedStrandsInfo}</div>`;
+                    html += `<div style="font-size: 9px; font-weight: 600; color: #ffffff; background-color: rgba(255, 255, 255, 0.25); padding: 2px 4px; border-radius: 3px; margin-bottom: 3px; display: inline-block;"><i class="fas fa-link" style="margin-right: 3px; font-size: 0.8em;"></i>Merged: ${mergedStrandsInfo}</div>`;
                 }
                 
                 if (timeStr) {
-                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-clock" style="margin-right: 4px;"></i>${timeStr}</div>`;
+                    html += `<div style="font-size: 10px; opacity: 0.9;"><i class="fas fa-clock" style="margin-right: 4px;"></i>${timeStr}</div>`;
                 }
                 
                 if (department && !mergedStrandsInfo) {
-                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-building" style="margin-right: 4px;"></i>${department}</div>`;
+                    html += `<div style="font-size: 10px; opacity: 0.9;"><i class="fas fa-building" style="margin-right: 4px;"></i>${department}</div>`;
                 }
                 
                 if (teacher) {
-                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-chalkboard-teacher" style="margin-right: 4px;"></i>${teacher}</div>`;
+                    html += `<div style="font-size: 10px; opacity: 0.9;"><i class="fas fa-chalkboard-teacher" style="margin-right: 4px;"></i>${teacher}</div>`;
                 }
                 
                 if (room) {
-                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-door-open" style="margin-right: 4px;"></i>${room}</div>`;
+                    html += `<div style="font-size: 10px; opacity: 0.9;"><i class="fas fa-door-open" style="margin-right: 4px;"></i>${room}</div>`;
                 }
                 
                 content.innerHTML = html;
@@ -1825,13 +1806,6 @@ document.addEventListener('DOMContentLoaded', function() {
             eventDetailType.textContent = typeDisplay;
         }
         
-        // Update faculty label to show current faculty
-        const facultyLabel = document.querySelector('label[for="eventFacultySelect"]');
-        if (facultyLabel) {
-            const currentTeacher = eventData.teacher || 'Not assigned';
-            facultyLabel.innerHTML = `<i class="fas fa-user-check"></i> Assign Faculty Member (Current: ${currentTeacher}):`;
-        }
-        
         // Load faculty for the dropdown (only if user can edit)
         const facultySelectContainer = document.getElementById('eventFacultySelect')?.parentElement;
         const facultySelect = document.getElementById('eventFacultySelect');
@@ -1843,14 +1817,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const saveRoomBtn = document.getElementById('saveRoomBtn');
         const deleteEventBtn = document.getElementById('deleteEventBtn');
         
-        // Load verified faculty members for assignment (load ALL faculty like the faculty tab)
-        if (allowEdit && facultySelect) {
+        // Load verified faculty members for assignment
+        if (allowEdit && facultySelect && eventData.departmentId) {
             facultySelect.innerHTML = '<option value="">Loading faculty...</option>';
             facultySelect.disabled = true;
             
             try {
-                // Load ALL faculty from API (no department filter) - same as faculty tab
-                const response = await fetchWithAuth(`/api/faculty`);
+                // Resolve department ID properly (handle codes, IDs, or malformed values)
+                const resolvedDeptId = resolveDepartmentId(eventData.departmentId);
+                if (!resolvedDeptId) {
+                    console.warn('Could not resolve department ID:', eventData.departmentId);
+                    facultySelect.innerHTML = '<option value="">No department found</option>';
+                    facultySelect.disabled = false;
+                    return;
+                }
+                
+                // Load faculty for the event's department
+                const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(resolvedDeptId)}`);
                 if (response && response.ok) {
                     const faculty = await response.json();
                     
@@ -1865,27 +1848,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     facultySelect.innerHTML = '<option value="">Select a faculty member...</option>';
                     
                     if (verifiedFaculty.length > 0) {
-                        // Get current faculty ID for selection
-                        const currentFacultyId = eventData.eventId ? (() => {
-                            const calendar = window.calendar;
-                            if (calendar) {
-                                const event = calendar.getEventById(eventData.eventId);
-                                if (event && event.extendedProps) {
-                                    return event.extendedProps.facultyId;
-                                }
-                            }
-                            return null;
-                        })() : null;
-                        
                         verifiedFaculty.forEach(member => {
                             const option = document.createElement('option');
                             option.value = member.id;
                             const name = formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || 'Faculty';
-                            // Include department in display for clarity
-                            const displayName = member.department ? `${name} - ${member.department}` : name;
-                            option.textContent = displayName;
+                            option.textContent = name;
                             
                             // Mark current faculty as selected
+                            const currentFacultyId = eventData.eventId ? (() => {
+                                const calendar = window.calendar;
+                                if (calendar) {
+                                    const event = calendar.getEventById(eventData.eventId);
+                                    if (event && event.extendedProps) {
+                                        return event.extendedProps.facultyId;
+                                    }
+                                }
+                                return null;
+                            })() : null;
+                            
                             if (member.id === currentFacultyId) {
                                 option.selected = true;
                             }
@@ -1897,19 +1877,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     facultySelect.disabled = false;
-                } else {
-                    // Handle case where response is null or not ok
-                    console.warn('Failed to load faculty. Response:', response);
-                    if (facultySelect) {
-                        facultySelect.innerHTML = '<option value="">Error loading faculty</option>';
-                        facultySelect.disabled = false;
-                    }
                 }
             } catch (error) {
                 console.error('Error loading faculty:', error);
                 if (facultySelect) {
                     facultySelect.innerHTML = '<option value="">Error loading faculty</option>';
-                    facultySelect.disabled = false;
                 }
             }
         } else {
@@ -2040,12 +2012,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             const teacherElement = document.getElementById('eventDetailTeacher');
                             if (teacherElement) {
                                 teacherElement.textContent = facultyName;
-                            }
-                            
-                            // Update the faculty label to show the new faculty
-                            const facultyLabel = document.querySelector('label[for="eventFacultySelect"]');
-                            if (facultyLabel) {
-                                facultyLabel.innerHTML = `<i class="fas fa-user-check"></i> Assign Faculty Member (Current: ${facultyName}):`;
                             }
                             
                             // Save to server

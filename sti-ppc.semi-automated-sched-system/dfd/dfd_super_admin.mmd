@@ -1,0 +1,65 @@
+flowchart TB
+    %% Data Flow Diagram - Super Admin
+
+    SuperAdmin[Superadmin]
+
+    subgraph Processes[" "]
+      direction LR
+      Login["1.0 Login"]
+      Dashboard["2.0 Dashboard"]
+      Pending["3.0 Pending Accounts"]
+      ManageUsers["4.0 Manage Users"]
+      Academic["5.0 Academic Management"]
+      DataMgmt["6.0 Data Management"]
+      Schedules["7.0 View Schedules"]
+    end
+
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      Departments[("departments")]
+      Subjects[("subjects")]
+      Rooms[("rooms")]
+      Courses[("courses")]
+      Strands[("strands")]
+      Faculty[("faculty")]
+      SchedulesDB[("schedules")]
+    end
+
+    %% Interactions
+    SuperAdmin -->|Credentials| Login
+    Login -->|Confirm| SuperAdmin
+    SuperAdmin -->|Navigate| Dashboard
+
+    SuperAdmin -->|Review / Approve| Pending
+    Pending <--> UserInfo
+
+    SuperAdmin -->|CRUD| ManageUsers
+    ManageUsers <--> UserInfo
+
+    SuperAdmin -->|CRUD| Academic
+    Academic <--> Departments
+    Academic <--> Subjects
+    Academic <--> Rooms
+    Academic <--> Courses
+    Academic <--> Strands
+    Academic <--> Faculty
+
+    SuperAdmin -->|CRUD| DataMgmt
+    DataMgmt <--> UserAccounts
+    DataMgmt <--> SchedulesDB
+
+    SuperAdmin -->|View / Export| Schedules
+    Schedules <--> SchedulesDB
+
+    %% Styling
+    classDef ext fill:#fff,stroke:#000,stroke-width:2px
+    classDef proc fill:#fff,stroke:#000,stroke-width:2px
+    classDef store fill:#fff,stroke:#000,stroke-width:2px
+
+    class SuperAdmin ext
+    class Login,Dashboard,Pending,ManageUsers,Academic,DataMgmt,Schedules proc
+    class UserAccounts,UserInfo,Departments,Subjects,Rooms,Courses,Strands,Faculty,SchedulesDB store
+
+

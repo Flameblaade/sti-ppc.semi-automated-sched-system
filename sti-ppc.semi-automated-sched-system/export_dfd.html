@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFD Export Tool</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .diagram-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+        .diagram-section h2 {
+            margin-top: 0;
+            color: #555;
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .export-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .export-btn:hover {
+            background: #45a049;
+        }
+        .export-all-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px;
+            margin: 20px 0;
+            display: block;
+            width: 200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .export-all-btn:hover {
+            background: #0b7dda;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Data Flow Diagrams - Export Tool</h1>
+        
+        <div class="instructions">
+            <h3>Instructions:</h3>
+            <ol>
+                <li>Click "Export as PNG" below each diagram to save individual diagrams</li>
+                <li>Or click "Export All as PNG" to download all diagrams</li>
+                <li>Diagrams will be saved to: <strong>C:\Users\Flameblade\Downloads\dfd\</strong></li>
+                <li>If files download to the default Downloads folder, run <code>move_dfd_files.bat</code> to move them to the correct location</li>
+                <li>You can also right-click on any diagram and select "Save image as..." and choose the folder manually</li>
+            </ol>
+        </div>
+
+        <button class="export-all-btn" onclick="exportAllDiagrams()">Export All as PNG</button>
+
+        <div class="diagram-section">
+            <h2>Content Diagram</h2>
+            <div class="mermaid" id="content-diagram">
+flowchart LR
+    SuperAdmin[Superadmin]
+    System["Web-Based Automated<br/>Scheduling System"]
+    Faculty[User / Faculty]
+    SuperAdmin -->|Credentials / Admin Actions| System
+    Faculty -->|Credentials / View Requests| System
+    System -->|Approvals / Confirmations| SuperAdmin
+    System -->|Schedules / Info| Faculty
+            </div>
+            <button class="export-btn" onclick="exportDiagram('content-diagram', 'Content_Diagram')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Level 0)</h2>
+            <div class="mermaid" id="dfd-level0">
+flowchart TB
+    SuperAdmin[Superadmin]
+    Faculty[User / Faculty]
+    subgraph System["0 Scheduling System"]
+      direction TB
+      P1["1.0 Authentication"]
+      P2["2.0 Dashboard"]
+      P3["3.0 Academic Management"]
+      P4["4.0 Data Management"]
+      P5["5.0 View Schedules"]
+    end
+    SuperAdmin -->|Login / Manage| P1
+    SuperAdmin -->|Navigate| P2
+    SuperAdmin -->|Manage Academics| P3
+    SuperAdmin -->|Manage Data| P4
+    SuperAdmin -->|Review Schedules| P5
+    Faculty -->|Login / View| P1
+    Faculty -->|Navigate| P2
+    Faculty -->|View Academic Info| P3
+    Faculty -->|View Data| P4
+    Faculty -->|View Schedules| P5
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-level0', 'DFD_Level0')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Super Admin)</h2>
+            <div class="mermaid" id="dfd-superadmin">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      Login["1.0 Login"]
+      Dashboard["2.0 Dashboard"]
+      Pending["3.0 Pending Accounts"]
+      ManageUsers["4.0 Manage Users"]
+      Academic["5.0 Academic Management"]
+      DataMgmt["6.0 Data Management"]
+      Schedules["7.0 View Schedules"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      Departments[("departments")]
+      Subjects[("subjects")]
+      Rooms[("rooms")]
+      Courses[("courses")]
+      Strands[("strands")]
+      Faculty[("faculty")]
+      SchedulesDB[("schedules")]
+    end
+    SuperAdmin -->|Credentials| Login
+    Login -->|Confirm| SuperAdmin
+    SuperAdmin -->|Navigate| Dashboard
+    SuperAdmin -->|Review / Approve| Pending
+    Pending <--> UserInfo
+    SuperAdmin -->|CRUD| ManageUsers
+    ManageUsers <--> UserInfo
+    SuperAdmin -->|CRUD| Academic
+    Academic <--> Departments
+    Academic <--> Subjects
+    Academic <--> Rooms
+    Academic <--> Courses
+    Academic <--> Strands
+    Academic <--> Faculty
+    SuperAdmin -->|CRUD| DataMgmt
+    DataMgmt <--> UserAccounts
+    DataMgmt <--> SchedulesDB
+    SuperAdmin -->|View / Export| Schedules
+    Schedules <--> SchedulesDB
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-superadmin', 'DFD_SuperAdmin')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (User / Faculty)</h2>
+            <div class="mermaid" id="dfd-user-faculty">
+flowchart TB
+    Faculty[User / Faculty]
+    subgraph Processes[" "]
+      direction LR
+      Login["1.0 Login"]
+      Dashboard["2.0 Dashboard"]
+      ViewSchedules["3.0 View Schedules"]
+      Profile["4.0 Profile"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+      Subjects[("subjects")]
+      Rooms[("rooms")]
+    end
+    Faculty -->|Credentials| Login
+    Login -->|Confirm| Faculty
+    Faculty -->|Navigate| Dashboard
+    Faculty -->|Open| ViewSchedules
+    Faculty -->|Open| Profile
+    Login <--> UserAccounts
+    Profile <--> UserInfo
+    ViewSchedules <--> SchedulesDB
+    ViewSchedules <--> Departments
+    ViewSchedules <--> Subjects
+    ViewSchedules <--> Rooms
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-user-faculty', 'DFD_User_Faculty')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Dashboard)</h2>
+            <div class="mermaid" id="dfd-dashboard">
+flowchart TB
+    Actor[Superadmin / Faculty]
+    subgraph Processes[" "]
+      direction LR
+      Dashboard["2.0 Dashboard"]
+      Widgets["2.1 Widgets"]
+      Reports["2.2 Reports"]
+      QuickActions["2.3 Quick Actions"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+    end
+    Actor -->|Open| Dashboard
+    Dashboard -->|Confirm| Actor
+    Dashboard --> Widgets
+    Dashboard --> Reports
+    Dashboard --> QuickActions
+    Widgets <--> UserInfo
+    Widgets <--> SchedulesDB
+    Reports <--> SchedulesDB
+    Reports <--> Departments
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-dashboard', 'DFD_Dashboard')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Pending Accounts)</h2>
+            <div class="mermaid" id="dfd-pending">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      Pending["3.0 Pending Accounts"]
+      Review["3.1 Review Applicant"]
+      Decide["3.2 Approve / Reject"]
+      Assign["3.3 Assign Role & Department"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      Departments[("departments")]
+    end
+    SuperAdmin -->|Open| Pending
+    Pending --> Review
+    Review <--> UserInfo
+    Review --> Decide
+    Decide <--> UserInfo
+    Decide --> Assign
+    Assign <--> UserInfo
+    Assign <--> Departments
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-pending', 'DFD_Pending_Accounts')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Manage Users)</h2>
+            <div class="mermaid" id="dfd-manage-users">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      ManageUsers["4.0 Manage Users"]
+      Create["4.1 Create User"]
+      Update["4.2 Update User"]
+      Deactivate["4.3 Deactivate User"]
+      Import["4.4 Batch Import"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserInfo[("user_info")]
+      UserAccounts[("user_accounts")]
+    end
+    SuperAdmin -->|Open| ManageUsers
+    ManageUsers --> Create
+    ManageUsers --> Update
+    ManageUsers --> Deactivate
+    ManageUsers --> Import
+    Create <--> UserInfo
+    Create <--> UserAccounts
+    Update <--> UserInfo
+    Deactivate <--> UserInfo
+    Import <--> UserInfo
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-manage-users', 'DFD_Manage_Users')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Academic Management)</h2>
+            <div class="mermaid" id="dfd-academic">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      Academic["5.0 Academic Management"]
+      Depts["5.1 Departments"]
+      Subjects["5.2 Subjects"]
+      Rooms["5.3 Rooms"]
+      Courses["5.4 Courses"]
+      Strands["5.5 Strands"]
+      FacultyP["5.6 Faculty"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      Departments[("departments")]
+      SubjectsDB[("subjects")]
+      RoomsDB[("rooms")]
+      CoursesDB[("courses")]
+      StrandsDB[("strands")]
+      FacultyDB[("faculty")]
+    end
+    SuperAdmin -->|Open| Academic
+    Academic --> Depts
+    Academic --> Subjects
+    Academic --> Rooms
+    Academic --> Courses
+    Academic --> Strands
+    Academic --> FacultyP
+    Depts <--> Departments
+    Subjects <--> SubjectsDB
+    Rooms <--> RoomsDB
+    Courses <--> CoursesDB
+    Strands <--> StrandsDB
+    FacultyP <--> FacultyDB
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-academic', 'DFD_Academic_Management')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (Data Management)</h2>
+            <div class="mermaid" id="dfd-data-mgmt">
+flowchart TB
+    SuperAdmin[Superadmin]
+    subgraph Processes[" "]
+      direction LR
+      DataMgmt["6.0 Data Management"]
+      Backup["6.1 Backup / Export"]
+      Import["6.2 Import / Restore"]
+      Clean["6.3 Clear / Reset"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      UserAccounts[("user_accounts")]
+      UserInfo[("user_info")]
+      SchedulesDB[("schedules")]
+    end
+    SuperAdmin -->|Open| DataMgmt
+    DataMgmt --> Backup
+    DataMgmt --> Import
+    DataMgmt --> Clean
+    Backup <--> UserAccounts
+    Backup <--> UserInfo
+    Backup <--> SchedulesDB
+    Import <--> UserAccounts
+    Import <--> UserInfo
+    Import <--> SchedulesDB
+    Clean <--> UserAccounts
+    Clean <--> UserInfo
+    Clean <--> SchedulesDB
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-data-mgmt', 'DFD_Data_Management')">Export as PNG</button>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Data Flow Diagram (View Schedules)</h2>
+            <div class="mermaid" id="dfd-view-schedules">
+flowchart TB
+    Actor[Superadmin / Faculty]
+    subgraph Processes[" "]
+      direction LR
+      ViewSchedules["7.0 View Schedules"]
+      Filters["7.1 Apply Filters"]
+      Export["7.2 Export / Print"]
+    end
+    subgraph Stores[" "]
+      direction LR
+      SchedulesDB[("schedules")]
+      Departments[("departments")]
+      Rooms[("rooms")]
+      Subjects[("subjects")]
+    end
+    Actor -->|Open| ViewSchedules
+    ViewSchedules --> Filters
+    Filters <--> Departments
+    Filters <--> Rooms
+    Filters <--> Subjects
+    ViewSchedules <--> SchedulesDB
+    ViewSchedules --> Export
+            </div>
+            <button class="export-btn" onclick="exportDiagram('dfd-view-schedules', 'DFD_View_Schedules')">Export as PNG</button>
+        </div>
+    </div>
+
+    <script>
+        let diagramsReady = false;
+        
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        // Wait for all diagrams to render
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait a bit for Mermaid to render
+            setTimeout(function() {
+                const allDiagrams = document.querySelectorAll('.mermaid svg');
+                if (allDiagrams.length >= 10) {
+                    diagramsReady = true;
+                    console.log('All diagrams rendered:', allDiagrams.length);
+                } else {
+                    console.log('Waiting for diagrams to render...', allDiagrams.length, 'of 10');
+                    // Check again after a delay
+                    setTimeout(function() {
+                        diagramsReady = true;
+                    }, 2000);
+                }
+            }, 1000);
+        });
+
+        function svgToPng(svg, callback) {
+            const svgData = new XMLSerializer().serializeToString(svg);
+            
+            // Get SVG dimensions
+            const svgRect = svg.getBoundingClientRect();
+            const svgWidth = svg.viewBox.baseVal.width || svgRect.width || 1200;
+            const svgHeight = svg.viewBox.baseVal.height || svgRect.height || 800;
+            
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            const padding = 20;
+            canvas.width = svgWidth + (padding * 2);
+            canvas.height = svgHeight + (padding * 2);
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Transparent background: do not fill canvas
+            
+            // Create image from SVG
+            const img = new Image();
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            
+            img.onload = function() {
+                try {
+                    // Draw SVG on canvas with padding
+                    ctx.drawImage(img, padding, padding, svgWidth, svgHeight);
+                    
+                    // Convert to PNG
+                    canvas.toBlob(function(blob) {
+                        URL.revokeObjectURL(url);
+                        if (blob) {
+                            callback(blob);
+                        } else {
+                            callback(null);
+                        }
+                    }, 'image/png');
+                } catch (error) {
+                    console.error('Error drawing on canvas:', error);
+                    URL.revokeObjectURL(url);
+                    callback(null);
+                }
+            };
+            
+            img.onerror = function() {
+                console.error('Error loading SVG as image');
+                URL.revokeObjectURL(url);
+                callback(null);
+            };
+            
+            img.src = url;
+        }
+
+        async function exportDiagram(elementId, filename) {
+            try {
+                const element = document.getElementById(elementId);
+                if (!element) {
+                    console.error('Element not found:', elementId);
+                    return false;
+                }
+                
+                // Wait a bit if diagrams aren't ready
+                if (!diagramsReady) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                const svg = element.querySelector('svg');
+                if (!svg) {
+                    console.error('SVG not found in:', elementId);
+                    // Try waiting a bit more
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    const svgRetry = element.querySelector('svg');
+                    if (!svgRetry) {
+                        alert('Diagram "' + elementId + '" not rendered yet. Please wait a moment and try again.');
+                        return false;
+                    }
+                    return await exportDiagramWithSVG(svgRetry, filename);
+                }
+                
+                return await exportDiagramWithSVG(svg, filename);
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('Error exporting ' + filename + ': ' + error.message);
+                return false;
+            }
+        }
+
+        function exportDiagramWithSVG(svg, filename) {
+            return new Promise((resolve) => {
+                svgToPng(svg, function(blob) {
+                    if (blob) {
+                        downloadFile(blob, filename);
+                        console.log('Successfully exported:', filename);
+                        resolve(true);
+                    } else {
+                        console.error('Failed to create PNG for:', filename);
+                        // Fallback: try direct SVG download
+                        try {
+                            const svgData = new XMLSerializer().serializeToString(svg);
+                            const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
+                            downloadFile(svgBlob, filename.replace('.png', '') + '_as_svg');
+                            alert('PNG export failed for ' + filename + '. Saved as SVG instead. You can convert it manually.');
+                        } catch (e) {
+                            alert('Failed to export ' + filename + '. Please try right-clicking on the diagram and selecting "Save image as..."');
+                        }
+                        resolve(false);
+                    }
+                });
+            });
+        }
+
+        function downloadFile(blob, filename) {
+            // Note: Browsers save to default Downloads folder
+            // Use move_dfd_files.bat to move files to C:\Users\Flameblade\Downloads\dfd\
+            try {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename + '.png';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                
+                // Trigger download
+                link.click();
+                
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                console.log('Download triggered for:', filename + '.png');
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Error downloading ' + filename + '. Please check your browser download settings.');
+            }
+        }
+
+        async function exportAllDiagrams() {
+            // Check if diagrams are ready
+            if (!diagramsReady) {
+                const rendered = document.querySelectorAll('.mermaid svg').length;
+                alert(`Please wait for all diagrams to finish loading.\n\nCurrently rendered: ${rendered} of 10 diagrams.\n\nPlease wait a few more seconds and try again.`);
+                return;
+            }
+
+            const diagrams = [
+                { id: 'content-diagram', name: 'Content_Diagram' },
+                { id: 'dfd-level0', name: 'DFD_Level0' },
+                { id: 'dfd-superadmin', name: 'DFD_SuperAdmin' },
+                { id: 'dfd-user-faculty', name: 'DFD_User_Faculty' },
+                { id: 'dfd-dashboard', name: 'DFD_Dashboard' },
+                { id: 'dfd-pending', name: 'DFD_Pending_Accounts' },
+                { id: 'dfd-manage-users', name: 'DFD_Manage_Users' },
+                { id: 'dfd-academic', name: 'DFD_Academic_Management' },
+                { id: 'dfd-data-mgmt', name: 'DFD_Data_Management' },
+                { id: 'dfd-view-schedules', name: 'DFD_View_Schedules' }
+            ];
+
+            let successCount = 0;
+            let failCount = 0;
+            const results = [];
+
+            // First, verify all diagrams are rendered
+            console.log('Checking diagram readiness...');
+            for (let i = 0; i < diagrams.length; i++) {
+                const element = document.getElementById(diagrams[i].id);
+                const svg = element ? element.querySelector('svg') : null;
+                if (!svg) {
+                    console.warn('⚠️ Diagram not ready:', diagrams[i].id);
+                } else {
+                    console.log('✅ Diagram ready:', diagrams[i].id);
+                }
+            }
+
+            // Export each diagram with delays
+            for (let i = 0; i < diagrams.length; i++) {
+                console.log(`\n📤 Exporting ${i + 1}/${diagrams.length}:`, diagrams[i].name);
+                try {
+                    const result = await exportDiagram(diagrams[i].id, diagrams[i].name);
+                    results.push({ name: diagrams[i].name, success: result });
+                    if (result) {
+                        successCount++;
+                        console.log('✅ Success:', diagrams[i].name);
+                    } else {
+                        failCount++;
+                        console.log('❌ Failed:', diagrams[i].name);
+                    }
+                    // Longer delay between exports to avoid browser blocking
+                    if (i < diagrams.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                    }
+                } catch (error) {
+                    console.error('❌ Exception exporting:', diagrams[i].name, error);
+                    results.push({ name: diagrams[i].name, success: false, error: error.message });
+                    failCount++;
+                }
+            }
+            
+            // Show detailed results
+            let message = `📊 Export Complete!\n\n`;
+            message += `✅ Successfully exported: ${successCount} diagram(s)\n`;
+            if (failCount > 0) {
+                message += `❌ Failed: ${failCount} diagram(s)\n\n`;
+                message += `Failed diagrams:\n`;
+                results.filter(r => !r.success).forEach(r => {
+                    message += `  • ${r.name}\n`;
+                });
+            }
+            message += `\n📁 Files are saved to your Downloads folder.\n`;
+            message += `💡 Run move_dfd_files.bat to move them to:\n`;
+            message += `   C:\\Users\\Flameblade\\Downloads\\dfd\\`;
+            
+            if (failCount > 0) {
+                message += `\n\n💡 Troubleshooting:\n`;
+                message += `   1. Open browser console (F12) to see detailed errors\n`;
+                message += `   2. Right-click each failed diagram → "Save image as..."\n`;
+                message += `   3. Make sure all diagrams are fully visible on the page`;
+            }
+            
+            alert(message);
+            console.log('📋 Export results:', results);
+        }
+    </script>
+</body>
+</html>
+

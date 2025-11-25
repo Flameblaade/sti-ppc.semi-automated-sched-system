@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Verify your faculty account - STI Scheduling System">
+    <title>Verify Account | STI Scheduling System</title>
+    <link rel="stylesheet" href="css/signup.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Additional styles to improve the UI */
+        .white_box {
+            height: auto;
+            min-height: 400px;
+            padding-bottom: 30px;
+            overflow-y: auto;
+        }
+        
+        .blue_box {
+            height: auto;
+            min-height: 450px;
+        }
+        
+        .form-name, .form-email, .form-password, .form-repassword {
+            margin-bottom: 20px;
+        }
+        
+        input:focus {
+            outline: none;
+            border: 1px solid #1A609B;
+            background-color: #eaf4fd;
+        }
+        
+        .error-message {
+            color: #d9534f;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+        
+        .info-display {
+            background-color: #f0f7ff;
+            border: 1px solid #1A609B;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .info-display label {
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 4px;
+            display: block;
+        }
+        
+        .info-display .value {
+            font-size: 14px;
+            color: #1e293b;
+            font-weight: 600;
+        }
+        
+        .form-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        /* Progress bar for strong password */
+        .password-strength {
+            height: 4px;
+            background-color: #e0e0e0;
+            margin-top: 8px;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .password-strength-meter {
+            height: 100%;
+            width: 0%;
+            background-color: #d9534f;
+            transition: width 0.3s, background-color 0.3s;
+        }
+        
+        input[readonly] {
+            background-color: #f8f9fa;
+            cursor: not-allowed;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-title">STI Scheduling System</div>
+    </nav>
+
+    <div class="blue_box">
+        <div class="white_box">
+            <h3 id="lbl-signup">Verify Your Account</h3>
+            <form id="verification-form" novalidate>
+                <!-- Display Name (Read-only) -->
+                <div class="info-display">
+                    <label>FULL NAME</label>
+                    <div class="value" id="display-name">Loading...</div>
+                </div>
+
+                <!-- Display Email (Read-only) -->
+                <div class="info-display">
+                    <label>EMAIL</label>
+                    <div class="value" id="display-email">Loading...</div>
+                </div>
+
+                <div class="form-password">
+                    <label for="password">PASSWORD</label>
+                    <div class="password-container">
+                        <input type="password" id="password" name="password" placeholder="Create password (min. 6 chars)" required>
+                        <i class="fa-solid fa-eye toggle-password"></i>
+                    </div>
+                    <div class="password-strength" style="margin-top: 4px; height: 3px;">
+                        <div class="password-strength-meter" id="password-strength-meter"></div>
+                    </div>
+                    <div class="error-message" id="password-error">Min. 6 characters</div>
+                </div>
+
+                <div class="form-repassword">
+                    <label for="repassword">CONFIRM PASSWORD</label>
+                    <div class="password-container">
+                        <input type="password" id="repassword" name="repassword" placeholder="Confirm password" required>
+                        <i class="fa-solid fa-eye toggle-password"></i>
+                    </div>
+                    <div class="error-message" id="repassword-error">Passwords don't match</div>
+                </div>
+
+                <button type="submit" class="sign-up-btn">Verify & Set Password</button>
+                
+                <div class="login-link" style="margin-top: 15px;">
+                    <a href="login.html">Back to Login</a>
+                </div>
+            </form>
+        </div>  
+    </div>
+    <script src="javascript/faculty-verification.js"></script>
+</body>
+</html>
+

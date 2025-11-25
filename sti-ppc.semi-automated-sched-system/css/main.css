@@ -1632,11 +1632,8 @@ select.form-control:hover {
 
 .fc-event-main {
     overflow: hidden;
-    word-wrap: break-word;
-    word-break: break-word;
-    white-space: normal;
-    line-height: 1.2;
-    max-height: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .fc-event.lecture-type {
@@ -3939,38 +3936,7 @@ tr { border-bottom: 1px solid var(--ui-border); }
     border-radius: 10px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.25);
 }
-.fc-event-main { 
-    background: transparent !important; 
-    overflow: hidden !important;
-    word-wrap: break-word !important;
-    word-break: break-word !important;
-    white-space: normal !important;
-    line-height: 1.2 !important;
-    max-height: 100% !important;
-}
-
-/* Prevent event text from overlapping */
-.fc-timegrid-event .fc-event-main,
-.fc-timegrid-event .fc-event-main-frame {
-    overflow: hidden !important;
-    word-wrap: break-word !important;
-    word-break: break-word !important;
-    white-space: normal !important;
-    max-height: 100% !important;
-}
-
-/* Ensure event content doesn't overflow */
-.fc-timegrid-event {
-    min-height: auto !important;
-    max-height: 100% !important;
-    overflow: hidden !important;
-}
-
-/* Style for event content wrapper */
-.fc-timegrid-event .fc-event-main-frame .fc-event-main {
-    padding: 0 !important;
-    margin: 0 !important;
-}
+.fc-event-main { background: transparent !important; }
 .fc-event:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,0.35); }
 
 .modal-content { background: radial-gradient(800px 600px at top left, rgba(59,130,246,0.10) 0%, transparent 60%), var(--ui-surface); border: 1px solid var(--ui-border); color: var(--ui-text); }
@@ -4195,38 +4161,11 @@ tr { border-bottom: 1px solid var(--border-color) !important; }
     box-shadow: none !important;
     padding: 2px 4px !important;
     font-size: inherit !important;
-    overflow: hidden !important;
-    word-wrap: break-word !important;
-    word-break: break-word !important;
 }
 .fc-event:hover { transform: none !important; filter: none !important; }
 
 /* Remove extra badges styling inside events */
 .event-time { background: transparent !important; color: inherit !important; padding: 0 !important; }
-
-/* Additional event text overflow fixes */
-.fc-timegrid-event .fc-event-main-frame {
-    overflow: hidden !important;
-    word-wrap: break-word !important;
-    word-break: break-word !important;
-    white-space: normal !important;
-}
-
-.fc-timegrid-event .fc-event-main-frame .fc-event-main {
-    overflow: hidden !important;
-    word-wrap: break-word !important;
-    word-break: break-word !important;
-    white-space: normal !important;
-    line-height: 1.2 !important;
-}
-
-/* Ensure event content divs wrap properly */
-.fc-timegrid-event > div,
-.fc-timegrid-event .fc-event-main > div {
-    word-wrap: break-word !important;
-    overflow-wrap: break-word !important;
-    max-width: 100% !important;
-}
 
 /* ======================
    FullCalendar grid reset (slots/rows) – keep fit tweaks above

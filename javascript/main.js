@@ -434,6 +434,7 @@
             const newSubject = extendedProps.subject || eventOrData.title || '';
             const newDeptId = extendedProps.departmentId;
             const newDeptName = extendedProps.department;
+            const newCourseId = extendedProps.courseId || extendedProps.programId || null;
 
             // Enforce room exclusivity first
             const roomsList = (window.rooms && Array.isArray(window.rooms)) ? window.rooms : (function(){
@@ -495,6 +496,7 @@
                 const eFaculty = evt.extendedProps?.faculty;
                 const eSubject = evt.extendedProps?.subject || evt.title || '';
                 const eRoomName = evt.extendedProps?.room || '';
+                const eCourseId = evt.extendedProps?.courseId || evt.extendedProps?.programId || null;
 
                 // Check if subject is the same (prevent merging same subject at same time)
                 const sameSubject = newSubject && eSubject && String(newSubject).trim().toLowerCase() === String(eSubject).trim().toLowerCase();
@@ -503,6 +505,8 @@
                 const sameRoom = eRoomId && newRoomId && String(eRoomId) === String(newRoomId);
                 // Check if faculty is the same
                 const sameFaculty = eFaculty && newFaculty && String(eFaculty) === String(newFaculty);
+                // Check if program/strand is the same (same courseId/programId)
+                const sameProgram = newCourseId && eCourseId && String(newCourseId) === String(eCourseId);
 
                 // Convert to 12-hour format
                 const formatTime12Hour = (date) => {
@@ -514,9 +518,12 @@
                 };
                 const timeStr = `${formatTime12Hour(eStart)} - ${formatTime12Hour(eEnd)}`;
 
-                // Block on any conflict: same subject OR same teacher OR same room
+                // Block on any conflict: same subject OR same teacher OR same room OR same program/strand
                 if (sameSubject) {
                     conflictDetails.push(`Conflict: Subject "${eSubject}" is already scheduled at ${timeStr}.`);
+                } else if (sameProgram) {
+                    const programName = evt.extendedProps?.course || 'this program/strand';
+                    conflictDetails.push(`Conflict: Program/Strand "${programName}" already has a class scheduled at ${timeStr}.`);
                 } else if (sameFaculty) {
                     conflictDetails.push(`Conflict: Teacher "${eFaculty}" is already occupied at ${timeStr}.`);
                 } else if (sameRoom) {
@@ -1974,6 +1981,217 @@ document.addEventListener('DOMContentLoaded', function() {
         showNotification('Classes unmerged successfully.', 'success');
     }
     
+    // Initialize merge classes functionality
+    function initializeMergeClasses() {
+        const mergeSection = document.getElementById('mergeClassesSection');
+        const enableMergeBtn = document.getElementById('enableMergeModeBtn');
+        const mergeActionsContainer = document.getElementById('mergeActionsContainer');
+        const mergeSelectedBtn = document.getElementById('mergeSelectedBtn');
+        const cancelMergeBtn = document.getElementById('cancelMergeBtn');
+        const mergeCountSpan = document.getElementById('mergeCount');
+        const mergeInfo = document.getElementById('mergeInfo');
+        const mergeInfoText = document.getElementById('mergeInfoText');
+        
+        if (!mergeSection || !enableMergeBtn) return;
+        
+        let mergeMode = false;
+        let selectedClassIds = new Set();
+        
+        // Show/hide merge section based on classes count
+        function updateMergeSectionVisibility() {
+            const classesCount = (window.allClasses || []).length;
+            if (classesCount > 0) {
+                mergeSection.style.display = 'block';
+            } else {
+                mergeSection.style.display = 'none';
+                mergeMode = false;
+                selectedClassIds.clear();
+            }
+        }
+        
+        // Toggle merge mode
+        enableMergeBtn.addEventListener('click', function() {
+            mergeMode = !mergeMode;
+            if (mergeMode) {
+                enableMergeBtn.textContent = 'Cancel Selection';
+                enableMergeBtn.classList.remove('btn-secondary');
+                enableMergeBtn.classList.add('btn-warning');
+                mergeActionsContainer.style.display = 'block';
+                addCheckboxesToClasses();
+            } else {
+                enableMergeBtn.textContent = 'Select to Merge';
+                enableMergeBtn.classList.remove('btn-warning');
+                enableMergeBtn.classList.add('btn-secondary');
+                mergeActionsContainer.style.display = 'none';
+                removeCheckboxesFromClasses();
+                selectedClassIds.clear();
+                updateMergeButton();
+            }
+        });
+        
+        // Cancel merge
+        if (cancelMergeBtn) {
+            cancelMergeBtn.addEventListener('click', function() {
+                mergeMode = false;
+                enableMergeBtn.textContent = 'Select to Merge';
+                enableMergeBtn.classList.remove('btn-warning');
+                enableMergeBtn.classList.add('btn-secondary');
+                mergeActionsContainer.style.display = 'none';
+                removeCheckboxesFromClasses();
+                selectedClassIds.clear();
+                updateMergeButton();
+            });
+        }
+        
+        // Add checkboxes to class items
+        function addCheckboxesToClasses() {
+            const classItems = document.querySelectorAll('.class-item');
+            classItems.forEach(item => {
+                const classId = item.dataset.id;
+                const existingCheckbox = item.querySelector('.merge-checkbox');
+                if (!existingCheckbox) {
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'merge-checkbox';
+                    checkbox.dataset.classId = classId;
+                    checkbox.style.cssText = 'position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; cursor: pointer; z-index: 10;';
+                    checkbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            selectedClassIds.add(classId);
+                        } else {
+                            selectedClassIds.delete(classId);
+                        }
+                        updateMergeButton();
+                    });
+                    item.style.position = 'relative';
+                    item.appendChild(checkbox);
+                }
+            });
+        }
+        
+        // Remove checkboxes from class items
+        function removeCheckboxesFromClasses() {
+            const checkboxes = document.querySelectorAll('.merge-checkbox');
+            checkboxes.forEach(cb => cb.remove());
+        }
+        
+        // Update merge button state
+        function updateMergeButton() {
+            const count = selectedClassIds.size;
+            if (mergeCountSpan) {
+                mergeCountSpan.textContent = count;
+            }
+            if (mergeSelectedBtn) {
+                mergeSelectedBtn.disabled = count < 2;
+            }
+            
+            // Show info about selection
+            if (mergeInfo && mergeInfoText) {
+                if (count === 0) {
+                    mergeInfo.style.display = 'none';
+                } else if (count === 1) {
+                    mergeInfo.style.display = 'block';
+                    mergeInfo.style.backgroundColor = '#fef3c7';
+                    mergeInfo.style.color = '#92400e';
+                    mergeInfoText.textContent = 'Select at least 2 classes with the same subject to merge.';
+                } else {
+                    // Check if all selected classes have the same subject
+                    const selectedClasses = Array.from(selectedClassIds).map(id => 
+                        (window.allClasses || []).find(c => c.id === id)
+                    ).filter(Boolean);
+                    
+                    if (selectedClasses.length > 0) {
+                        const firstSubject = selectedClasses[0].subject;
+                        const firstSubjectId = selectedClasses[0].subjectId;
+                        const allSameSubject = selectedClasses.every(c => 
+                            c.subject === firstSubject && 
+                            (c.subjectId === firstSubjectId || (!c.subjectId && !firstSubjectId))
+                        );
+                        
+                        if (allSameSubject) {
+                            mergeInfo.style.display = 'block';
+                            mergeInfo.style.backgroundColor = '#d1fae5';
+                            mergeInfo.style.color = '#059669';
+                            mergeInfoText.textContent = `Ready to merge ${count} classes with subject "${firstSubject}".`;
+                        } else {
+                            mergeInfo.style.display = 'block';
+                            mergeInfo.style.backgroundColor = '#fee2e2';
+                            mergeInfo.style.color = '#dc2626';
+                            mergeInfoText.textContent = 'All selected classes must have the same subject to merge.';
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Merge selected classes
+        if (mergeSelectedBtn) {
+            mergeSelectedBtn.addEventListener('click', function() {
+                if (selectedClassIds.size < 2) return;
+                
+                const selectedClasses = Array.from(selectedClassIds).map(id => 
+                    (window.allClasses || []).find(c => c.id === id)
+                ).filter(Boolean);
+                
+                if (selectedClasses.length < 2) {
+                    showNotification('Please select at least 2 classes to merge.', 'error');
+                    return;
+                }
+                
+                // Check if all have same subject
+                const firstSubject = selectedClasses[0].subject;
+                const firstSubjectId = selectedClasses[0].subjectId;
+                const allSameSubject = selectedClasses.every(c => 
+                    c.subject === firstSubject && 
+                    (c.subjectId === firstSubjectId || (!c.subjectId && !firstSubjectId))
+                );
+                
+                if (!allSameSubject) {
+                    showNotification('All selected classes must have the same subject to merge.', 'error');
+                    return;
+                }
+                
+                // Merge the classes
+                const firstClassId = selectedClasses[0].id;
+                const otherClassIds = selectedClasses.slice(1).map(c => c.id);
+                mergeClasses(firstClassId, otherClassIds);
+                
+                // Reset merge mode
+                mergeMode = false;
+                enableMergeBtn.textContent = 'Select to Merge';
+                enableMergeBtn.classList.remove('btn-warning');
+                enableMergeBtn.classList.add('btn-secondary');
+                mergeActionsContainer.style.display = 'none';
+                removeCheckboxesFromClasses();
+                selectedClassIds.clear();
+                updateMergeButton();
+            });
+        }
+        
+        // Update visibility when classes change
+        const originalAddClass = addClassToList;
+        if (typeof originalAddClass === 'function') {
+            // Monitor for class additions/removals
+            const observer = new MutationObserver(() => {
+                updateMergeSectionVisibility();
+                if (mergeMode) {
+                    addCheckboxesToClasses();
+                }
+            });
+            
+            const classesList = document.getElementById('createdClasses');
+            if (classesList) {
+                observer.observe(classesList, { childList: true, subtree: true });
+            }
+        }
+        
+        // Initial visibility check
+        updateMergeSectionVisibility();
+        
+        // Also check when classes are loaded
+        setTimeout(updateMergeSectionVisibility, 1000);
+    }
+    
     // Remove class item
     function removeClassItem(id) {
         // Remove from array
@@ -2351,9 +2569,8 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function() {
             try {
                 // Track progress using the actual number of scheduling segments (accounts for split hours)
+                // Note: We'll recalculate after grouping merged classes
                 const classesToSchedule = JSON.parse(JSON.stringify(allClasses));
-                const totalSegments = classesToSchedule.reduce((sum, classItem) => sum + getSchedulingSegmentCount(classItem), 0);
-                let totalClasses = totalSegments > 0 ? totalSegments : classesToSchedule.length;
                 let classesProcessed = 0;
                 let scheduledClasses = [];
                 let unscheduledClasses = [];
@@ -2431,11 +2648,101 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Track scheduled times by subject for consistent placement
                 const subjectScheduledTimes = {}; // subjectKey -> { day, time }
                 
-                // Shuffle to randomize placement order
-                shuffleArray(classesToSchedule);
+                // Helper function to check if a class is tertiary (not a strand)
+                const isTertiaryClass = (classItem) => {
+                    if (!classItem.courseId) return false;
+                    try {
+                        const courses = JSON.parse(localStorage.getItem('courses') || '[]');
+                        const strands = JSON.parse(localStorage.getItem('strands') || '[]');
+                        const allPrograms = [...courses, ...strands];
+                        const program = allPrograms.find(p => p.id === classItem.courseId || p.code === classItem.courseId);
+                        return program && program.type !== 'strand';
+                    } catch (e) {
+                        return false;
+                    }
+                };
+                
+                // Group merged classes together - only schedule one representative from each merged group
+                const mergedGroups = new Map(); // mergedGroupKey -> [classes]
+                const unmergedClasses = [];
+                const processedMergedIds = new Set();
+                
+                // First, identify merged groups
+                classesToSchedule.forEach(classItem => {
+                    const isMerged = classItem.mergedClassIds && classItem.mergedClassIds.length > 0;
+                    
+                    if (isMerged) {
+                        // Create a unique key for this merged group (sorted IDs)
+                        const allMergedIds = [classItem.id, ...classItem.mergedClassIds].sort();
+                        const groupKey = allMergedIds.join('|');
+                        
+                        // Check if we've already processed this group
+                        if (!processedMergedIds.has(classItem.id)) {
+                            // Mark all IDs in this group as processed
+                            allMergedIds.forEach(id => processedMergedIds.add(id));
+                            
+                            // Get all classes in this merged group
+                            const groupClasses = classesToSchedule.filter(c => 
+                                allMergedIds.includes(c.id)
+                            );
+                            
+                            // Store the group (use first class as representative)
+                            mergedGroups.set(groupKey, groupClasses);
+                        }
+                    } else {
+                        // Not merged, add to unmerged list
+                        unmergedClasses.push(classItem);
+                    }
+                });
+                
+                // Create final list: one representative from each merged group + all unmerged classes
+                const finalClassesToSchedule = [];
+                
+                // Add one representative from each merged group (use the first one)
+                mergedGroups.forEach((groupClasses, groupKey) => {
+                    if (groupClasses.length > 0) {
+                        // Use the first class as representative, but mark it as representing merged classes
+                        const representative = { ...groupClasses[0] };
+                        representative.isMergedRepresentative = true;
+                        representative.mergedGroupClasses = groupClasses; // Store all merged classes
+                        finalClassesToSchedule.push(representative);
+                        console.log(`Merged group: ${groupClasses.length} classes will be scheduled as one. Representative: ${representative.subject}`);
+                    }
+                });
+                
+                // Add all unmerged classes
+                finalClassesToSchedule.push(...unmergedClasses);
+                
+                // Calculate total segments for progress tracking (using final list, not original)
+                const totalSegments = finalClassesToSchedule.reduce((sum, classItem) => sum + getSchedulingSegmentCount(classItem), 0);
+                let totalClasses = totalSegments > 0 ? totalSegments : finalClassesToSchedule.length;
+                
+                // Sort classes: tertiary classes with lectures first, then others
+                // This ensures lectures are scheduled before labs for tertiary
+                finalClassesToSchedule.sort((a, b) => {
+                    const aIsTertiary = isTertiaryClass(a);
+                    const bIsTertiary = isTertiaryClass(b);
+                    const aHasLecture = normalizeHours(a.lectureHours) > 0;
+                    const bHasLecture = normalizeHours(b.lectureHours) > 0;
+                    const aHasLab = normalizeHours(a.labHours) > 0;
+                    const bHasLab = normalizeHours(b.labHours) > 0;
+                    
+                    // Tertiary classes with lectures come first
+                    if (aIsTertiary && aHasLecture && !bIsTertiary) return -1;
+                    if (bIsTertiary && bHasLecture && !aIsTertiary) return 1;
+                    
+                    // Among tertiary classes, those with lectures come before those with only labs
+                    if (aIsTertiary && bIsTertiary) {
+                        if (aHasLecture && !bHasLecture) return -1;
+                        if (!aHasLecture && bHasLecture) return 1;
+                    }
+                    
+                    // Otherwise, shuffle randomly
+                    return Math.random() - 0.5;
+                });
                 
                 // Process each class (split-aware)
-                for (const classItem of classesToSchedule) {
+                for (const classItem of finalClassesToSchedule) {
                     const lectureHours = normalizeHours(classItem.lectureHours);
                     const labHours = normalizeHours(classItem.labHours);
                     const hasLecture = lectureHours > 0;
@@ -2918,17 +3225,116 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })();
         
+        // Check if this is a tertiary class (not a strand)
+        const isTertiary = classItem.courseId && (() => {
+            try {
+                const courses = JSON.parse(localStorage.getItem('courses') || '[]');
+                const strands = JSON.parse(localStorage.getItem('strands') || '[]');
+                const allPrograms = [...courses, ...strands];
+                const program = allPrograms.find(p => p.id === classItem.courseId || p.code === classItem.courseId);
+                return program && program.type !== 'strand';
+            } catch (e) {
+                return false;
+            }
+        })();
+        
         // Get possible days - limit strands to 4 days (Mon-Fri, excluding Saturday)
         let possibleDays = [...days];
         if (isStrand) {
             // For strands, only use Monday-Friday (exclude Saturday)
             possibleDays = possibleDays.filter(d => d.id !== 'Saturday');
-            // Randomly select 4 days from Mon-Fri
-            shuffleArray(possibleDays);
+            
+            // Count existing strand schedules per day (limit to 5 per day)
+            const strandId = classItem.courseId;
+            const existingEvents = calendar.getEvents();
+            const strandScheduleCounts = {}; // dayId -> count
+            
+            // Initialize counts for each day
+            possibleDays.forEach(d => {
+                strandScheduleCounts[d.id] = 0;
+            });
+            
+            // Count existing schedules for this strand on each day
+            existingEvents.forEach(event => {
+                const eventProps = event.extendedProps || {};
+                const eventDay = eventProps.dayOfWeek;
+                const eventCourseId = eventProps.courseId || eventProps.programId || eventProps.course;
+                
+                // Check if this event belongs to the same strand
+                // Skip fixed schedules and non-strand events
+                if (eventProps.isFixedSchedule) return;
+                
+                if (eventDay && eventCourseId && (eventCourseId === strandId || String(eventCourseId) === String(strandId))) {
+                    if (strandScheduleCounts.hasOwnProperty(eventDay)) {
+                        strandScheduleCounts[eventDay]++;
+                    }
+                }
+            });
+            
+            // Filter out days that already have 5 schedules
+            possibleDays = possibleDays.filter(d => {
+                const count = strandScheduleCounts[d.id] || 0;
+                return count < 5;
+            });
+            
+            // Prioritize Monday first, then keep chronological order (Tue, Wed, Thu, Fri)
+            // Sort to put Monday first, then maintain day order
+            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            possibleDays.sort((a, b) => {
+                const aIndex = dayOrder.indexOf(a.id);
+                const bIndex = dayOrder.indexOf(b.id);
+                return aIndex - bIndex;
+            });
             possibleDays = possibleDays.slice(0, 4);
+        } else if (isTertiary) {
+            // For tertiary programs, limit to 4 classes per day
+            const tertiaryId = classItem.courseId;
+            const existingEvents = calendar.getEvents();
+            const tertiaryScheduleCounts = {}; // dayId -> count
+            
+            // Initialize counts for each day
+            possibleDays.forEach(d => {
+                tertiaryScheduleCounts[d.id] = 0;
+            });
+            
+            // Count existing schedules for this tertiary program on each day
+            existingEvents.forEach(event => {
+                const eventProps = event.extendedProps || {};
+                const eventDay = eventProps.dayOfWeek;
+                const eventCourseId = eventProps.courseId || eventProps.programId || eventProps.course;
+                
+                // Check if this event belongs to the same tertiary program
+                // Skip fixed schedules and non-tertiary events
+                if (eventProps.isFixedSchedule) return;
+                
+                if (eventDay && eventCourseId && (eventCourseId === tertiaryId || String(eventCourseId) === String(tertiaryId))) {
+                    if (tertiaryScheduleCounts.hasOwnProperty(eventDay)) {
+                        tertiaryScheduleCounts[eventDay]++;
+                    }
+                }
+            });
+            
+            // Filter out days that already have 4 or more schedules
+            possibleDays = possibleDays.filter(d => {
+                const count = tertiaryScheduleCounts[d.id] || 0;
+                return count < 4;
+            });
+            
+            // Prioritize Monday first, then keep chronological order
+            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            possibleDays.sort((a, b) => {
+                const aIndex = dayOrder.indexOf(a.id);
+                const bIndex = dayOrder.indexOf(b.id);
+                return aIndex - bIndex;
+            });
         } else {
-            // For programs, use all days
-            shuffleArray(possibleDays);
+            // For other programs, prioritize Monday first, then keep chronological order
+            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            possibleDays.sort((a, b) => {
+                const aIndex = dayOrder.indexOf(a.id);
+                const bIndex = dayOrder.indexOf(b.id);
+                return aIndex - bIndex;
+            });
         }
         
         // Exclude a specific day if provided (for lab scheduling on different day)
@@ -2981,7 +3387,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 possibleTimes.unshift(targetTime);
             }
         } else {
-            shuffleArray(possibleTimes);
+            // Prioritize 7 AM (07:00) first, then keep chronological order
+            possibleTimes.sort((a, b) => {
+                if (a === '07:00') return -1;
+                if (b === '07:00') return 1;
+                // Keep chronological order for the rest
+                return a.localeCompare(b);
+            });
         }
         
         // Try each combination until we find a valid placement
@@ -3110,8 +3522,313 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const room of compatibleRooms) {
                     // dateStr is already calculated above before this loop
                     
-                    // Check if this class is merged
-                    const isMerged = classItem.mergedClassIds && classItem.mergedClassIds.length > 0;
+                    // Check for course/program conflict - same course/program shouldn't have multiple classes at the same time
+                    const classCourseId = classItem.courseId || classItem.programId || classItem.course;
+                    if (classCourseId) {
+                        const existingEvents = calendar.getEvents();
+                        const hasCourseConflict = existingEvents.some(existingEvent => {
+                            // Skip fixed schedules
+                            if (existingEvent.extendedProps?.isFixedSchedule) return false;
+                            
+                            // Check if same day
+                            const existingDay = existingEvent.extendedProps?.dayOfWeek;
+                            if (existingDay !== day.id) return false;
+                            
+                            // Check if same course/program
+                            const existingCourseId = existingEvent.extendedProps?.courseId || 
+                                                    existingEvent.extendedProps?.programId || 
+                                                    existingEvent.extendedProps?.course;
+                            if (!existingCourseId || String(existingCourseId) !== String(classCourseId)) return false;
+                            
+                            // Check if time overlaps
+                            const existingStart = existingEvent.start ? new Date(existingEvent.start) : null;
+                            const existingEnd = existingEvent.end ? new Date(existingEvent.end) : null;
+                            if (!existingStart || !existingEnd) return false;
+                            
+                            const newStart = new Date(`${dateStr}T${startTime}:00`);
+                            const newEnd = new Date(`${dateStr}T${endTime}:00`);
+                            
+                            // Check for time overlap
+                            return newStart < existingEnd && existingStart < newEnd;
+                        });
+                        
+                        if (hasCourseConflict) {
+                            console.log(`Course/Program conflict: ${classItem.course} already has a class scheduled at ${day.id} ${startTime}-${endTime}`);
+                            continue; // Skip this time slot, try next
+                        }
+                        
+                        // Check for lunch break requirement - after 2 classes, need 1-1.5 hour break
+                        const existingEventsForDay = existingEvents.filter(existingEvent => {
+                            // Skip fixed schedules
+                            if (existingEvent.extendedProps?.isFixedSchedule) return false;
+                            
+                            // Check if same day
+                            const existingDay = existingEvent.extendedProps?.dayOfWeek;
+                            if (existingDay !== day.id) return false;
+                            
+                            // Check if same course/program
+                            const existingCourseId = existingEvent.extendedProps?.courseId || 
+                                                    existingEvent.extendedProps?.programId || 
+                                                    existingEvent.extendedProps?.course;
+                            return existingCourseId && String(existingCourseId) === String(classCourseId);
+                        });
+                        
+                        // Sort existing events by start time
+                        existingEventsForDay.sort((a, b) => {
+                            const aStart = a.start ? new Date(a.start) : new Date(0);
+                            const bStart = b.start ? new Date(b.start) : new Date(0);
+                            return aStart - bStart;
+                        });
+                        
+                        // Check if we need lunch break (after 2 consecutive classes)
+                        if (existingEventsForDay.length >= 2) {
+                            // Get the last 2 classes
+                            const lastTwoClasses = existingEventsForDay.slice(-2);
+                            
+                            // Check if they are consecutive (no gap or small gap between them)
+                            let areConsecutive = true;
+                            let totalDuration = 0;
+                            
+                            for (let i = 0; i < lastTwoClasses.length; i++) {
+                                const classEvent = lastTwoClasses[i];
+                                const classStart = classEvent.start ? new Date(classEvent.start) : null;
+                                const classEnd = classEvent.end ? new Date(classEvent.end) : null;
+                                
+                                if (!classStart || !classEnd) {
+                                    areConsecutive = false;
+                                    break;
+                                }
+                                
+                                // Calculate duration in hours
+                                const durationMs = classEnd - classStart;
+                                const durationHours = durationMs / (1000 * 60 * 60);
+                                totalDuration += durationHours;
+                                
+                                // Check if there's a gap between consecutive classes (more than 15 minutes = not consecutive)
+                                if (i < lastTwoClasses.length - 1) {
+                                    const nextClass = lastTwoClasses[i + 1];
+                                    const nextStart = nextClass.start ? new Date(nextClass.start) : null;
+                                    if (nextStart) {
+                                        const gapMs = nextStart - classEnd;
+                                        const gapMinutes = gapMs / (1000 * 60);
+                                        if (gapMinutes > 15) {
+                                            areConsecutive = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // If last 2 classes are consecutive, check if we need lunch break
+                            if (areConsecutive) {
+                                const lastClass = lastTwoClasses[lastTwoClasses.length - 1];
+                                const lastClassEnd = lastClass.end ? new Date(lastClass.end) : null;
+                                const newClassStart = new Date(`${dateStr}T${startTime}:00`);
+                                
+                                if (lastClassEnd && newClassStart) {
+                                    // Calculate gap between last class end and new class start
+                                    const gapMs = newClassStart - lastClassEnd;
+                                    const gapHours = gapMs / (1000 * 60 * 60);
+                                    const gapMinutes = gapMs / (1000 * 60);
+                                    
+                                    // Check if new class starts at lunch time (11:30 AM - 12:30 PM) - allow early lunch
+                                    const newClassStartHour = newClassStart.getHours();
+                                    const newClassStartMin = newClassStart.getMinutes();
+                                    const isLunchTime = (newClassStartHour === 11 && newClassStartMin >= 30) || 
+                                                       (newClassStartHour === 12 && newClassStartMin <= 30);
+                                    
+                                    // Check if we have 3 consecutive short classes (1.5 hours each) - no lunch break needed
+                                    // This would be the 3rd class, so check if the 2 existing + this new one would be 3 consecutive short classes
+                                    const newClassDuration = classItem.unitLoad || 0;
+                                    const isNewClassShort = newClassDuration <= 1.5;
+                                    
+                                    // Check if the last 2 classes are short
+                                    const lastTwoAreShort = lastTwoClasses.every(evt => {
+                                        const evtStart = evt.start ? new Date(evt.start) : null;
+                                        const evtEnd = evt.end ? new Date(evt.end) : null;
+                                        if (!evtStart || !evtEnd) return false;
+                                        const evtDuration = (evtEnd - evtStart) / (1000 * 60 * 60);
+                                        return evtDuration <= 1.5;
+                                    });
+                                    
+                                    // Check if the new class would be consecutive with the last class (gap <= 15 minutes)
+                                    const gapToNewClass = gapMinutes;
+                                    const isNewClassConsecutive = gapToNewClass <= 15;
+                                    
+                                    // Check if this would be 3 consecutive short classes (2 existing + this new one)
+                                    const wouldBeThreeShortClasses = lastTwoAreShort && isNewClassShort && areConsecutive && isNewClassConsecutive;
+                                    
+                                    // Also check if there are already 3 consecutive short classes scheduled
+                                    let hasThreeConsecutiveShort = false;
+                                    if (existingEventsForDay.length >= 3) {
+                                        const lastThree = existingEventsForDay.slice(-3);
+                                        const allShort = lastThree.every(evt => {
+                                            const evtStart = evt.start ? new Date(evt.start) : null;
+                                            const evtEnd = evt.end ? new Date(evt.end) : null;
+                                            if (!evtStart || !evtEnd) return false;
+                                            const evtDuration = (evtEnd - evtStart) / (1000 * 60 * 60);
+                                            return evtDuration <= 1.5;
+                                        });
+                                        
+                                        if (allShort) {
+                                            // Check if they are consecutive
+                                            hasThreeConsecutiveShort = true;
+                                            for (let i = 0; i < lastThree.length - 1; i++) {
+                                                const current = lastThree[i];
+                                                const next = lastThree[i + 1];
+                                                const currentEnd = current.end ? new Date(current.end) : null;
+                                                const nextStart = next.start ? new Date(next.start) : null;
+                                                if (currentEnd && nextStart) {
+                                                    const gap = (nextStart - currentEnd) / (1000 * 60);
+                                                    if (gap > 15) {
+                                                        hasThreeConsecutiveShort = false;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Require lunch break: need at least 1 hour (60 minutes) gap, unless:
+                                    // 1. Class starts at lunch time (early lunch allowed)
+                                    // 2. This would be the 3rd consecutive short class (1.5 hours each)
+                                    // 3. There are already 3 consecutive short classes scheduled
+                                    if (gapMinutes < 60 && !isLunchTime && !wouldBeThreeShortClasses && !hasThreeConsecutiveShort) {
+                                        console.log(`Lunch break required: ${classItem.course} needs 1+ hour break after 2 classes on ${day.id}. Gap: ${gapMinutes.toFixed(0)} minutes`);
+                                        continue; // Skip this time slot, try next
+                                    }
+                                }
+                            }
+                            
+                            // Check for long continuous class sessions - require break after 3+ hours of continuous classes
+                            if (existingEventsForDay.length >= 1) {
+                                // Find all consecutive classes (gaps <= 15 minutes)
+                                const consecutiveGroups = [];
+                                let currentGroup = [];
+                                
+                                for (let i = 0; i < existingEventsForDay.length; i++) {
+                                    const currentEvent = existingEventsForDay[i];
+                                    const currentStart = currentEvent.start ? new Date(currentEvent.start) : null;
+                                    const currentEnd = currentEvent.end ? new Date(currentEvent.end) : null;
+                                    
+                                    if (!currentStart || !currentEnd) continue;
+                                    
+                                    if (currentGroup.length === 0) {
+                                        // Start a new group
+                                        currentGroup.push(currentEvent);
+                                    } else {
+                                        // Check if this event is consecutive with the last event in the group
+                                        const lastEvent = currentGroup[currentGroup.length - 1];
+                                        const lastEnd = lastEvent.end ? new Date(lastEvent.end) : null;
+                                        
+                                        if (lastEnd) {
+                                            const gapMs = currentStart - lastEnd;
+                                            const gapMinutes = gapMs / (1000 * 60);
+                                            
+                                            if (gapMinutes <= 15) {
+                                                // Consecutive - add to current group
+                                                currentGroup.push(currentEvent);
+                                            } else {
+                                                // Not consecutive - save current group and start new one
+                                                if (currentGroup.length > 0) {
+                                                    consecutiveGroups.push([...currentGroup]);
+                                                }
+                                                currentGroup = [currentEvent];
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Add the last group
+                                if (currentGroup.length > 0) {
+                                    consecutiveGroups.push(currentGroup);
+                                }
+                                
+                                // Check the last consecutive group for long duration
+                                if (consecutiveGroups.length > 0) {
+                                    const lastGroup = consecutiveGroups[consecutiveGroups.length - 1];
+                                    
+                                    if (lastGroup.length > 0) {
+                                        const firstClass = lastGroup[0];
+                                        const lastClass = lastGroup[lastGroup.length - 1];
+                                        const firstStart = firstClass.start ? new Date(firstClass.start) : null;
+                                        const lastEnd = lastClass.end ? new Date(lastClass.end) : null;
+                                        
+                                        if (firstStart && lastEnd) {
+                                            // Calculate total continuous duration
+                                            const totalDurationMs = lastEnd - firstStart;
+                                            const totalDurationHours = totalDurationMs / (1000 * 60 * 60);
+                                            
+                                            // If continuous classes run for 3+ hours, require a break
+                                            if (totalDurationHours >= 3) {
+                                                const newClassStart = new Date(`${dateStr}T${startTime}:00`);
+                                                const newClassEnd = new Date(`${dateStr}T${endTime}:00`);
+                                                const gapMs = newClassStart - lastEnd;
+                                                const gapMinutes = gapMs / (1000 * 60);
+                                                
+                                                // Check if new class would be consecutive (gap <= 15 minutes)
+                                                const wouldBeConsecutive = gapMinutes <= 15;
+                                                
+                                                // If new class would be consecutive, check if it would extend the session too long
+                                                if (wouldBeConsecutive && newClassEnd) {
+                                                    const extendedDurationMs = newClassEnd - firstStart;
+                                                    const extendedDurationHours = extendedDurationMs / (1000 * 60 * 60);
+                                                    
+                                                    // If adding this class would create a session longer than 4.5 hours, require a break
+                                                    if (extendedDurationHours > 4.5) {
+                                                        console.log(`Long continuous session break required: ${classItem.course} would have ${extendedDurationHours.toFixed(1)} hours of continuous classes on ${day.id}. Need break before scheduling.`);
+                                                        continue; // Skip this time slot, try next
+                                                    }
+                                                }
+                                                
+                                                // Check if new class starts at lunch time (11:30 AM - 12:30 PM) - allow early lunch
+                                                const newClassStartHour = newClassStart.getHours();
+                                                const newClassStartMin = newClassStart.getMinutes();
+                                                const isLunchTime = (newClassStartHour === 11 && newClassStartMin >= 30) || 
+                                                                   (newClassStartHour === 12 && newClassStartMin <= 30);
+                                                
+                                                // Require at least 1 hour (60 minutes) break, or 1.5 hours (90 minutes) for very long sessions
+                                                const requiredBreakMinutes = totalDurationHours >= 4.5 ? 90 : 60;
+                                                
+                                                // For very long sessions (5+ hours), require break even if gap is slightly larger (up to 30 minutes)
+                                                const maxAllowedGap = totalDurationHours >= 5 ? 30 : 15;
+                                                
+                                                // Enforce break if:
+                                                // 1. New class would be consecutive (gap <= 15 min) OR
+                                                // 2. Session is very long (5+ hours) and gap is still small (<= 30 min)
+                                                const needsBreak = (wouldBeConsecutive || (totalDurationHours >= 5 && gapMinutes <= maxAllowedGap)) && 
+                                                                  gapMinutes < requiredBreakMinutes && 
+                                                                  !isLunchTime;
+                                                
+                                                if (needsBreak) {
+                                                    console.log(`Long continuous session break required: ${classItem.course} has ${totalDurationHours.toFixed(1)} hours of continuous classes on ${day.id}. Need ${requiredBreakMinutes} minute break. Current gap: ${gapMinutes.toFixed(0)} minutes`);
+                                                    continue; // Skip this time slot, try next
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Check if this class is merged or is a merged representative
+                    const isMergedRepresentative = classItem.isMergedRepresentative && classItem.mergedGroupClasses;
+                    const isMerged = (classItem.mergedClassIds && classItem.mergedClassIds.length > 0) || isMergedRepresentative;
+                    
+                    // Get all merged class IDs (either from mergedClassIds or mergedGroupClasses)
+                    let allMergedClassIds = [];
+                    let mergedGroupClasses = [];
+                    
+                    if (isMergedRepresentative) {
+                        // This is a merged representative - get all classes in the group
+                        mergedGroupClasses = classItem.mergedGroupClasses || [];
+                        allMergedClassIds = mergedGroupClasses.map(c => c.id).filter(id => id !== classItem.id);
+                    } else if (isMerged && classItem.mergedClassIds) {
+                        // Regular merged class
+                        allMergedClassIds = classItem.mergedClassIds;
+                        mergedGroupClasses = allClasses.filter(c => allMergedClassIds.includes(c.id));
+                    }
                     
                     // Get department color for this class
                     let departmentColor = getDepartmentColorForClass(classItem);
@@ -3128,11 +3845,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     // If merged, add merged classes info to title
-                    if (isMerged && classItem.mergedClassIds) {
-                        const mergedClasses = allClasses.filter(c => classItem.mergedClassIds.includes(c.id));
-                        const mergedStrands = mergedClasses.map(c => c.course || c.department).filter(Boolean);
-                        if (mergedStrands.length > 0) {
-                            eventTitle += ` [MERGED: ${mergedStrands.join(', ')}]`;
+                    if (isMerged) {
+                        const classesToShow = mergedGroupClasses.length > 0 ? mergedGroupClasses : 
+                            (classItem.mergedClassIds ? allClasses.filter(c => classItem.mergedClassIds.includes(c.id)) : []);
+                        const mergedStrands = classesToShow.map(c => c.course || c.department).filter(Boolean);
+                        // Also include the representative class's course/strand
+                        const currentStrand = classItem.course || classItem.department || '';
+                        const allStrands = [currentStrand, ...mergedStrands].filter(Boolean);
+                        const uniqueStrands = [...new Set(allStrands)];
+                        if (uniqueStrands.length > 0) {
+                            eventTitle += ` [MERGED: ${uniqueStrands.join(', ')}]`;
                         }
                     }
                     
@@ -3170,7 +3892,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             dayOfWeek: day.id,
                             departmentColor: departmentColor,
                             isMerged: isMerged,
-                            mergedClassIds: classItem.mergedClassIds || []
+                            // Include all merged class IDs (either from mergedClassIds or from mergedGroupClasses)
+                            mergedClassIds: isMergedRepresentative 
+                                ? allMergedClassIds 
+                                : (classItem.mergedClassIds || []),
+                            // Store all merged class IDs including the representative
+                            allMergedClassIds: isMergedRepresentative
+                                ? mergedGroupClasses.map(c => c.id)
+                                : (isMerged ? [classItem.id, ...allMergedClassIds] : [])
                         }
                     };
                         
@@ -6204,6 +6933,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize the page with saved data
     loadClassesFromLocalStorage();
     loadScheduleFromLocalStorage();
+    
+    // Initialize merge classes functionality
+    initializeMergeClasses();
     
     // Reload classes when user returns to the tab/window if they're missing
     // This ensures persistence across tab navigation
