@@ -1049,8 +1049,12 @@ label {
     padding: 24px;
     max-width: 500px;
     width: 90%;
+    max-height: calc(100vh - 60px);
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     animation: modalFadeIn 0.3s ease-out;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 @keyframes modalFadeIn {
@@ -1068,9 +1072,14 @@ label {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 0;
     padding-bottom: 16px;
     border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 5;
+    box-shadow: 0 6px 14px -10px rgba(15, 23, 42, 0.6);
 }
 
 .modal-header h3 {
@@ -1106,7 +1115,24 @@ label {
 }
 
 .modal-body {
+    flex: 1 1 auto;
     margin-bottom: 20px;
+    padding-top: 20px;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
+}
+
+.modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.4);
+    border-radius: 999px;
 }
 
 /* Created Classes Modal Stats Grid */
