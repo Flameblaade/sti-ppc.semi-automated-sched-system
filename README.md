@@ -2,6 +2,31 @@
 
 This project implements a web-based scheduling system with secure user authentication featuring email-based two-factor authentication and role-based access control.
 
+## How to Download
+
+You can download this system in two ways:
+
+### Option 1: Clone with Git (Recommended)
+
+If you have Git installed on your computer:
+
+```bash
+git clone https://github.com/Flameblaade/sti-ppc.semi-automated-sched-system.git
+cd sti-ppc.semi-automated-sched-system
+```
+
+### Option 2: Download as ZIP
+
+If you don't have Git installed:
+
+1. Go to the repository page: https://github.com/Flameblaade/sti-ppc.semi-automated-sched-system
+2. Click the green **"Code"** button
+3. Click **"Download ZIP"**
+4. Extract the ZIP file to your desired location
+5. Navigate to the extracted folder
+
+After downloading, follow the instructions in the [How to Run the Project](#how-to-run-the-project) section below.
+
 ## Security Features
 
 1. **Email-based Two-Factor Authentication**
@@ -59,7 +84,7 @@ This project implements a web-based scheduling system with secure user authentic
 
 ### With Server (Full Functionality)
 
-1. Clone the repository
+1. Download the repository (see [How to Download](#how-to-download) section above)
 2. Install dependencies:
 ```bash
 npm install
