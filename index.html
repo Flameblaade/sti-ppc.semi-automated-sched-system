@@ -8,10 +8,16 @@
     <meta name="theme-color" content="#4f46e5">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.css">
     <!-- Choices.js for searchable dropdowns -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
     <link rel="stylesheet" href="css/schedule.css">
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <!-- Choices.js for searchable dropdowns -->
@@ -420,6 +426,73 @@
         </div>
     </div>
     
+    <!-- Class Notification Modal -->
+    <div id="classNotificationModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header" id="classNotificationHeader" style="background: #4caf50;">
+                <h3 id="classNotificationTitle" style="color: white; margin: 0;">
+                    <i class="fas fa-check-circle"></i> Success
+                </h3>
+                <button type="button" class="close-modal" data-close-modal="classNotificationModal" style="color: white;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 30px 20px;">
+                <div id="classNotificationIcon" style="font-size: 4rem; margin-bottom: 20px; color: #4caf50;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h4 id="classNotificationMessage" style="color: #333; margin-bottom: 0;">
+                    Class added successfully!
+                </h4>
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
+                <button type="button" id="closeClassNotificationBtn" class="btn btn-primary" style="min-width: 120px;">
+                    <i class="fas fa-check"></i> OK
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-spinner fa-spin"></i> Generating Schedule</h3>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 30px 20px;">
+                <div class="spinner" style="border: 4px solid rgba(0, 0, 0, 0.1); width: 40px; height: 40px; border-radius: 50%; border-left-color: #667eea; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                <p id="scheduling-status" style="margin: 20px 0; color: #333;">Please wait while we generate your optimal schedule...</p>
+                <div style="width: 100%; height: 10px; background-color: #e2e8f0; border-radius: 10px; overflow: hidden; margin: 20px 0;">
+                    <div class="progress-bar" id="scheduling-progress" style="height: 100%; background-color: #667eea; transition: width 0.4s ease; width: 0%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Conflicts Modal -->
+    <div id="conflictsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header" style="background: #f59e0b;">
+                <h3 style="color: white; margin: 0;"><i class="fas fa-exclamation-triangle"></i> Scheduling Conflicts</h3>
+                <button type="button" class="close-modal" data-close-modal="conflictsModal" style="color: white;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <p style="margin-bottom: 15px; color: #333;">The following classes couldn't be scheduled due to conflicts:</p>
+                <ul id="conflictsList" style="list-style-type: none; padding-left: 0; margin: 20px 0; max-height: 300px; overflow-y: auto;">
+                    <!-- Conflicts will be added here -->
+                </ul>
+                <p style="margin-top: 15px; color: #666; font-size: 0.9rem;">Try reducing the number of classes or adjusting some manually.</p>
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
+                <button type="button" class="btn btn-primary close-modal" data-close-modal="conflictsModal" style="min-width: 120px;">
+                    <i class="fas fa-check"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Delete Fixed Schedule Confirmation Modal -->
     <div id="deleteFixedScheduleModal" class="modal" style="display: none;">
         <div class="modal-content">
@@ -473,7 +546,7 @@
                 
                 <!-- Search Bar -->
                 <div style="margin-bottom: 20px;">
-                    <input type="text" id="classesDetailsSearch" placeholder="Search classes by subject, faculty, program, or department..." style="
+                    <input type="text" id="classesDetailsSearch" placeholder="Search by course, subject, or faculty..." style="
                         width: 100%;
                         padding: 12px 16px;
                         border: 2px solid #e2e8f0;
@@ -484,12 +557,20 @@
                 </div>
                 
                 <!-- Teacher Unit Loads Section -->
-                <div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <h4 style="margin: 0 0 12px 0; color: #1e293b; font-size: 1rem;">
-                        <i class="fas fa-chalkboard-teacher"></i> Teacher Unit Loads
-                    </h4>
-                    <div id="teacherUnitLoads" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; font-size: 0.9rem;">
-                        <!-- Teacher unit loads will be populated here -->
+                <div style="margin-bottom: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden;">
+                    <div class="teacher-loads-header" id="teacherLoadsHeader" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 12px 15px; transition: background-color 0.2s ease;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-chevron-down teacher-loads-arrow" style="color: #2563eb; transition: transform 0.2s ease; font-size: 0.9rem;"></i>
+                            <h4 style="margin: 0; color: #1e293b; font-size: 1rem;">
+                                <i class="fas fa-chalkboard-teacher"></i> Teacher Unit Loads
+                            </h4>
+                        </div>
+                        <span id="teacherLoadsCount" style="background: #2563eb; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">0</span>
+                    </div>
+                    <div class="teacher-loads-content" id="teacherLoadsContent" style="display: none; padding: 12px 15px; max-height: 300px; overflow-y: auto;">
+                        <div id="teacherUnitLoads" style="display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem;">
+                            <!-- Teacher unit loads will be populated here -->
+                        </div>
                     </div>
                 </div>
                 
@@ -563,66 +644,139 @@
     
     <!-- Event Details Modal -->
     <div id="eventDetailsModal" class="modal" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h3><i class="fas fa-calendar-check"></i> Event Details</h3>
+                <h3 id="eventDetailHeaderTitle"><i class="fas fa-calendar-check"></i> Event Details</h3>
                 <button type="button" class="close-modal" data-close-modal="eventDetailsModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <div class="event-detail-item">
-                    <label><i class="fas fa-book"></i> Subject:</label>
-                    <span id="eventDetailSubject"></span>
-                </div>
-                <div class="event-detail-item">
-                    <label><i class="fas fa-clock"></i> Time:</label>
-                    <span id="eventDetailTime"></span>
-                </div>
-                <div class="event-detail-item">
-                    <label><i class="fas fa-calendar-day"></i> Day:</label>
-                    <span id="eventDetailDay"></span>
-                </div>
-                <div class="event-detail-item">
-                    <label><i class="fas fa-building"></i> Department:</label>
-                    <span id="eventDetailDepartment"></span>
-                </div>
-                <div class="event-detail-item">
-                    <label><i class="fas fa-chalkboard-teacher"></i> Teacher:</label>
-                    <span id="eventDetailTeacher"></span>
-                </div>
-                <div class="event-detail-item">
-                    <label><i class="fas fa-door-open"></i> Room:</label>
-                    <span id="eventDetailRoom"></span>
-                </div>
-                <div class="event-detail-item">
-                    <label><i class="fas fa-graduation-cap"></i> Type:</label>
-                    <span id="eventDetailType"></span>
+            <div class="modal-body" style="padding: 18px; max-height: 65vh; overflow-y: auto;">
+                <!-- Event Information Section -->
+                <div style="margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-info-circle" style="color: #667eea; font-size: 0.9rem;"></i> Class Information
+                    </h4>
+                    <div style="background: #f8fafc; border-radius: 6px; padding: 12px; border: 1px solid #e2e8f0;">
+                        <!-- Subject as Title -->
+                        <div style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 10px;">
+                            <h3 id="eventDetailSubject" style="margin: 0; font-size: 1.1rem; font-weight: 700; color: #1e293b;"></h3>
+                        </div>
+                        <!-- Type (Lecture or Laboratory) -->
+                        <div class="event-detail-item" style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <label style="min-width: 130px; font-size: 0.875rem;"><i class="fas fa-graduation-cap"></i> Type:</label>
+                            <span id="eventDetailType" style="color: #475569; font-size: 0.875rem; font-weight: 500;"></span>
+                        </div>
+                        <!-- Course/Strand -->
+                        <div class="event-detail-item" style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <label style="min-width: 130px; font-size: 0.875rem;"><i class="fas fa-building"></i> Course/Strand:</label>
+                            <span id="eventDetailCourse" style="color: #475569; font-size: 0.875rem;"></span>
+                        </div>
+                        <!-- Room -->
+                        <div class="event-detail-item" style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <label style="min-width: 130px; font-size: 0.875rem;"><i class="fas fa-door-open"></i> Room:</label>
+                            <span id="eventDetailRoom" style="color: #475569; font-size: 0.875rem; font-weight: 600;"></span>
+                        </div>
+                        <!-- Faculty -->
+                        <div class="event-detail-item" style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <label style="min-width: 130px; font-size: 0.875rem;"><i class="fas fa-chalkboard-teacher"></i> Faculty:</label>
+                            <span id="eventDetailTeacher" style="color: #475569; font-size: 0.875rem;"></span>
+                        </div>
+                        <!-- Time -->
+                        <div class="event-detail-item" style="padding: 10px 0;">
+                            <label style="min-width: 130px; font-size: 0.875rem;"><i class="fas fa-clock"></i> Time:</label>
+                            <span id="eventDetailTime" style="color: #475569; font-size: 0.875rem;"></span>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="form-group" style="margin-top: 20px;">
-                    <label for="eventFacultySelect"><i class="fas fa-user-check"></i> Assign Faculty Member:</label>
-                    <select id="eventFacultySelect" class="form-control">
-                        <option value="">Loading faculty...</option>
-                    </select>
-                </div>
-                
-                <div class="form-group" style="margin-top: 20px;">
-                    <label for="eventRoomSelect"><i class="fas fa-exchange-alt"></i> Change Room:</label>
-                    <select id="eventRoomSelect" class="form-control">
-                        <option value="">Loading rooms...</option>
-                    </select>
+                <!-- Edit Section -->
+                <div style="margin-bottom: 16px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-edit" style="color: #667eea; font-size: 0.9rem;"></i> Edit Schedule
+                    </h4>
+                    
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="eventFacultySelect" style="display: block; margin-bottom: 6px; font-weight: 500; color: #334155; font-size: 0.875rem;">
+                            <i class="fas fa-user-check" style="color: #667eea; margin-right: 5px; font-size: 0.85rem;"></i> Assign Faculty Member
+                        </label>
+                        <select id="eventFacultySelect" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.875rem; transition: border-color 0.2s;">
+                            <option value="">Loading faculty...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="eventRoomSelect" style="display: block; margin-bottom: 6px; font-weight: 500; color: #334155; font-size: 0.875rem;">
+                            <i class="fas fa-exchange-alt" style="color: #667eea; margin-right: 5px; font-size: 0.85rem;"></i> Change Room
+                        </label>
+                        <select id="eventRoomSelect" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.875rem; transition: border-color 0.2s;">
+                            <option value="">Loading rooms...</option>
+                        </select>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" id="saveFacultyBtn" class="btn btn-primary">
+            <div class="modal-footer" style="padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; border-top: 1px solid #e2e8f0; background: #f8fafc;">
+                <button type="button" id="saveFacultyBtn" class="btn btn-primary" style="min-width: 120px; padding: 8px 14px; font-size: 0.875rem;">
                     <i class="fas fa-user-check"></i> Save Faculty
                 </button>
-                <button type="button" id="saveRoomBtn" class="btn btn-primary">
+                <button type="button" id="saveRoomBtn" class="btn btn-primary" style="min-width: 120px; padding: 8px 14px; font-size: 0.875rem;">
                     <i class="fas fa-save"></i> Save Room
                 </button>
-                <button type="button" id="deleteEventBtn" class="btn btn-danger">
+                <button type="button" id="swapRoomsBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-width: 120px; padding: 8px 14px; font-size: 0.875rem;">
+                    <i class="fas fa-exchange-alt"></i> Swap Rooms
+                </button>
+                <button type="button" id="deleteEventBtn" class="btn btn-danger" style="min-width: 120px; padding: 8px 14px; font-size: 0.875rem;">
                     <i class="fas fa-trash-alt"></i> Delete Schedule
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Swap Rooms Modal -->
+    <div id="swapRoomsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-exchange-alt"></i> Swap Rooms</h3>
+                <button type="button" class="close-modal" data-close-modal="swapRoomsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 18px; max-height: 65vh; overflow-y: auto;">
+                <div style="margin-bottom: 16px; padding: 12px; background: #f0f7ff; border-left: 3px solid #667eea; border-radius: 6px;">
+                    <p style="margin: 0; color: #334155; font-size: 0.875rem; line-height: 1.5;">
+                        <i class="fas fa-info-circle" style="color: #667eea; margin-right: 6px;"></i> Select another class at the same time to swap rooms. Both classes must be at the same time slot.
+                    </p>
+                </div>
+                
+                <div style="margin-bottom: 18px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-calendar-check" style="color: #667eea; font-size: 0.9rem;"></i> Current Class
+                    </h4>
+                    <div id="currentEventInfo" style="padding: 12px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <!-- Current event info will be populated here -->
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-list" style="color: #667eea; font-size: 0.9rem;"></i> Select Class to Swap With
+                    </h4>
+                    <div id="swapEventsList" style="max-height: 280px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #f8fafc;">
+                        <div class="empty-state" style="text-align: center; padding: 20px; color: #94a3b8;">
+                            <i class="fas fa-spinner fa-spin"></i> Loading events...
+                        </div>
+                    </div>
+                    <div id="swapEventsEmpty" style="display: none; text-align: center; padding: 20px; color: #94a3b8; font-size: 0.875rem;">
+                        <i class="fas fa-info-circle"></i> No other classes found at this time slot.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 14px 18px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #e2e8f0; background: #f8fafc;">
+                <button type="button" id="confirmSwapRoomsBtn" class="btn btn-primary" disabled style="min-width: 120px; padding: 8px 14px; font-size: 0.875rem;">
+                    <i class="fas fa-exchange-alt"></i> Swap Rooms
+                </button>
+                <button type="button" id="cancelSwapRoomsBtn" class="btn btn-secondary" style="min-width: 120px; padding: 8px 14px; font-size: 0.875rem;">
+                    <i class="fas fa-times"></i> Cancel
                 </button>
             </div>
         </div>
@@ -829,6 +983,44 @@
                 }
             });
         }, 500);
+    </script>
+    
+    <!-- Class Notification Modal Handler -->
+    <script>
+        // Handle close button for class notification modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('classNotificationModal');
+            const closeBtn = document.getElementById('closeClassNotificationBtn');
+            const closeModalBtn = modal ? modal.querySelector('.close-modal[data-close-modal="classNotificationModal"]') : null;
+            
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    if (modal) {
+                        modal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                });
+            }
+            
+            if (closeModalBtn) {
+                closeModalBtn.addEventListener('click', function() {
+                    if (modal) {
+                        modal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                });
+            }
+            
+            // Close on background click
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                });
+            }
+        });
     </script>
     
 </body>

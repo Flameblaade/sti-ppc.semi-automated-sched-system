@@ -151,6 +151,17 @@
         font-weight: bold !important;
         color: #000 !important;
         padding: 8px 4px !important;
+        position: relative;
+    }
+    
+    /* Room utilization percentage display */
+    .day-utilization {
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-top: 2px;
+        opacity: 0.9;
+        text-align: center;
+        display: block;
     }
     
     .fc-col-header-cell-cushion {
@@ -815,33 +826,33 @@ label {
     background: #94a3b8;
 }
 
-/* Class Item Styles */
+/* Class Item Styles - Styled like fixed schedules */
 .class-item {
-    border-left: 4px solid;
-    padding: 16px;
-    background-color: white;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-left: 3px solid;
+    padding: 12px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
     position: relative;
+    cursor: default;
 }
 
 .class-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .class-item h3 {
-    font-size: 1.05rem;
-    margin-bottom: 8px;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
     font-weight: 600;
-    color: var(--text-color);
+    color: #333;
 }
 
 .class-info {
     font-size: 0.85rem;
-    color: var(--dark-gray);
+    color: #666;
     margin-bottom: 4px;
     display: flex;
     align-items: center;
@@ -1276,6 +1287,57 @@ label {
     color: var(--dark-gray);
 }
 
+/* Class items in Created Classes Details Modal - styled like fixed schedules */
+#createdClassesDetailsModal .class-item {
+    padding: 12px !important;
+    margin-bottom: 8px !important;
+    background: white !important;
+    border-radius: 4px !important;
+    border-left-width: 3px !important;
+    cursor: default !important;
+    user-select: none !important;
+}
+
+/* Disable drag and drop for classes in modal */
+#createdClassesDetailsModal .class-item {
+    pointer-events: auto !important;
+}
+
+#createdClassesDetailsModal .class-item * {
+    pointer-events: none !important;
+}
+
+/* Title (Subject) styling */
+#createdClassesDetailsModal .class-item > div:first-child {
+    font-weight: 600 !important;
+    color: #333 !important;
+    margin-bottom: 4px !important;
+    font-size: 0.95rem !important;
+}
+
+/* Faculty and Course styling */
+#createdClassesDetailsModal .class-item > div:not(:first-child) {
+    font-size: 0.85rem !important;
+    color: #666 !important;
+    margin-bottom: 4px !important;
+}
+
+#createdClassesDetailsModal .class-item > div:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* Compact container for classes list in modal */
+#createdClassesDetailsModal .modal-body > div[style*="max-height: 400px"] {
+    padding: 10px !important;
+    max-height: 500px !important;
+}
+
+#createdClassesDetailsModal #createdClassesDetailsList {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
 .modal-footer {
     display: flex;
     justify-content: flex-end;
@@ -1327,6 +1389,30 @@ label {
     color: var(--dark-gray);
     text-align: right;
     flex: 1;
+    word-break: break-word;
+}
+
+/* Enhanced form controls in event details modal */
+#eventDetailsModal .form-control {
+    transition: all 0.2s ease;
+}
+
+#eventDetailsModal .form-control:hover {
+    border-color: #cbd5e1;
+}
+
+#eventDetailsModal .form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+#eventDetailsModal .form-group label {
+    transition: color 0.2s ease;
+}
+
+#eventDetailsModal .form-group:hover label {
+    color: #1e293b;
 }
 
 .close-modal {
@@ -1548,13 +1634,13 @@ label {
 }
 
 .choices__list--dropdown .choices__item--selectable.is-highlighted {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: #e0e7ff;
+    color: #1e293b;
 }
 
 .choices__item--selectable.is-selected {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: #e0e7ff;
+    color: #1e293b;
 }
 
 .choices__placeholder {

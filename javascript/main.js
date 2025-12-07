@@ -3,6 +3,12 @@
     // Simple notification function that works on index.html
     if (typeof window.showNotification !== 'function') {
         window.showNotification = function(message, type = 'info') {
+            // Suppress error notifications during schedule generation
+            if (type === 'error' && window.isGeneratingSchedule) {
+                console.log('[Notification suppressed during generation]:', message);
+                return;
+            }
+            
             // Remove existing notifications first
             const existing = document.querySelectorAll('.custom-notification');
             existing.forEach(n => n.remove());
@@ -68,6 +74,99 @@
             document.head.appendChild(style);
         }
     }
+    
+    // Show class notification modal (success or error)
+    window.showClassNotificationModal = function(message, type = 'success') {
+        const modal = document.getElementById('classNotificationModal');
+        if (!modal) {
+            // Fallback to regular notification if modal doesn't exist
+            if (typeof window.showNotification === 'function') {
+                window.showNotification(message, type);
+            }
+            return;
+        }
+        
+        // Get modal elements
+        const header = document.getElementById('classNotificationHeader');
+        const title = document.getElementById('classNotificationTitle');
+        const icon = document.getElementById('classNotificationIcon');
+        const messageEl = document.getElementById('classNotificationMessage');
+        const closeBtn = document.getElementById('closeClassNotificationBtn');
+        
+        // Set colors and icons based on type
+        if (type === 'success') {
+            header.style.background = '#4caf50';
+            icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+            icon.style.color = '#4caf50';
+            title.innerHTML = '<i class="fas fa-check-circle"></i> Success';
+        } else if (type === 'error') {
+            header.style.background = '#f44336';
+            icon.innerHTML = '<i class="fas fa-times-circle"></i>';
+            icon.style.color = '#f44336';
+            title.innerHTML = '<i class="fas fa-times-circle"></i> Error';
+        } else {
+            header.style.background = '#2196f3';
+            icon.innerHTML = '<i class="fas fa-info-circle"></i>';
+            icon.style.color = '#2196f3';
+            title.innerHTML = '<i class="fas fa-info-circle"></i> Information';
+        }
+        
+        // Set message (support HTML)
+        if (messageEl) {
+            // Check if message contains HTML tags
+            const hasHTML = /<[a-z][\s\S]*>/i.test(message);
+            if (hasHTML) {
+                messageEl.innerHTML = message;
+            } else {
+                messageEl.textContent = message;
+            }
+        }
+        
+        // Show modal
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        // Close button handler
+        if (closeBtn) {
+            // Remove old listeners by cloning
+            const newCloseBtn = closeBtn.cloneNode(true);
+            closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+            
+            const closeModal = () => {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            };
+            
+            newCloseBtn.addEventListener('click', closeModal);
+            
+            // Close on background click
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+            
+            // Close on Escape key
+            const escapeHandler = (e) => {
+                if (e.key === 'Escape' && modal.style.display === 'flex') {
+                    closeModal();
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+        }
+        
+        // Close button in header
+        const headerCloseBtn = modal.querySelector('.close-modal');
+        if (headerCloseBtn) {
+            const newHeaderCloseBtn = headerCloseBtn.cloneNode(true);
+            headerCloseBtn.parentNode.replaceChild(newHeaderCloseBtn, headerCloseBtn);
+            newHeaderCloseBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            });
+        }
+    };
     
     // Show modal error notification for unit limit exceeded
     window.showUnitLimitErrorModal = function(message) {
@@ -451,7 +550,10 @@
                 if (!allowed) {
                     const roomName = roomObj.name || roomObj.id || 'This room';
                     const deptName = roomObj.department || 'another department';
-                    if (typeof showNotification === 'function') {
+                    // Suppress notifications during schedule generation
+                    if (window.isGeneratingSchedule) {
+                        console.log(`Conflict: Room ${roomName} is exclusive to ${deptName}. Cannot schedule ${newSubject || 'this class'} here.`);
+                    } else if (typeof showNotification === 'function') {
                         showNotification(`Conflict: ${roomName} is exclusive to ${deptName}. Cannot schedule ${newSubject || 'this class'} here.`, 'error');
                     } else {
                         console.error(`Conflict: Room ${roomName} is exclusive to ${deptName}`);
@@ -468,7 +570,10 @@
                 
                 if (fixedConflict && fixedConflict.conflict) {
                     const conflictMsg = `Schedule Conflict: Cannot schedule "${newSubject || 'this class'}" during "${fixedConflict.scheduleName}" (${fixedConflict.scheduleTime}). This fixed schedule does not allow classes.`;
-                    if (typeof showNotification === 'function') {
+                    // Suppress notifications during schedule generation
+                    if (window.isGeneratingSchedule) {
+                        console.log('Fixed Schedule Conflict:', conflictMsg);
+                    } else if (typeof showNotification === 'function') {
                         showNotification(conflictMsg, 'error');
                     } else {
                         console.error('Fixed Schedule Conflict:', conflictMsg);
@@ -534,7 +639,10 @@
             if (conflictDetails.length > 0) {
                 // Format conflict message for better readability
                 const conflictMsg = `Schedule Conflict Detected:<br>${conflictDetails.join('<br>')}<br><br><strong>Cannot schedule "${newSubject || 'this class'}" at this time.</strong>`;
-                if (typeof showNotification === 'function') {
+                // Suppress notifications during schedule generation
+                if (window.isGeneratingSchedule) {
+                    console.log('Schedule Conflict:', conflictDetails.join('; '));
+                } else if (typeof showNotification === 'function') {
                     showNotification(conflictMsg, 'error');
                 } else {
                     console.error('Schedule Conflict:', conflictDetails.join('; '));
@@ -1037,7 +1145,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const selectedFacultyId = facultySelect.value;
-            const selectedFacultyName = facultySelect.options[facultySelect.selectedIndex]?.text || 'Unknown Faculty';
+            const selectedFacultyNameRaw = facultySelect.options[facultySelect.selectedIndex]?.text || 'Unknown Faculty';
+            // Clean faculty name (remove department if present)
+            const selectedFacultyName = cleanFacultyName(selectedFacultyNameRaw);
             const selectedSubjectId = subjectSelect.value;
             const selectedSubjectName = subjectSelect.options[subjectSelect.selectedIndex]?.text || 'Unknown Subject';
             
@@ -1184,11 +1294,61 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateCreatedClassesList();
                 }
                 
-                // Reset form fields but keep department selection
+                // Immediately clear faculty and subject selections (synchronous, before async reset)
+                const facultySelect = document.getElementById('facultySelect');
+                const subjectSelect = document.getElementById('subjectSelect');
+                
+                // Clear faculty select immediately
+                if (facultySelect) {
+                    facultySelect.value = '';
+                    facultySelect.selectedIndex = 0;
+                    if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+                        try {
+                            window.choicesInstances['facultySelect'].setValue([]);
+                            const instance = window.choicesInstances['facultySelect'];
+                            if (instance.store && instance.store.activeItems) {
+                                const activeItems = instance.store.activeItems || [];
+                                activeItems.forEach(item => {
+                                    try {
+                                        instance.removeActiveItemsByValue(item.value);
+                                    } catch (e) {}
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('Error immediately clearing facultySelect:', e);
+                        }
+                    }
+                }
+                
+                // Clear subject select immediately
+                if (subjectSelect) {
+                    subjectSelect.value = '';
+                    subjectSelect.selectedIndex = 0;
+                    if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                        try {
+                            window.choicesInstances['subjectSelect'].setValue([]);
+                            const instance = window.choicesInstances['subjectSelect'];
+                            if (instance.store && instance.store.activeItems) {
+                                const activeItems = instance.store.activeItems || [];
+                                activeItems.forEach(item => {
+                                    try {
+                                        instance.removeActiveItemsByValue(item.value);
+                                    } catch (e) {}
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('Error immediately clearing subjectSelect:', e);
+                        }
+                    }
+                }
+                
+                // Reset form fields but keep program selection (this will handle repopulation if needed)
                 resetFormFieldsPartial();
                 
                 // Show notification
-                showNotification('Class added to list! Click "Generate Schedule" to add to timetable.', 'success');
+                if (typeof window.showNotification === 'function') {
+                    window.showNotification('Class added successfully!', 'success');
+                }
             };
             
             // Validate faculty unit limits if faculty is selected
@@ -1218,7 +1378,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             },
                             () => {
                                 console.log('Superadmin approved unit overload for faculty:', selectedFacultyName);
-                                finalizeClassCreation();
+                                try {
+                                    finalizeClassCreation();
+                                } catch (error) {
+                                    console.error('Error creating class:', error);
+                                    showNotification('Failed to add class. Please try again.', 'error');
+                                }
                             },
                             () => {
                                 console.log('Superadmin cancelled unit overload approval.');
@@ -1232,7 +1397,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            finalizeClassCreation();
+            try {
+                finalizeClassCreation();
+            } catch (error) {
+                console.error('Error creating class:', error);
+                showNotification('Failed to add class. Please try again.', 'error');
+            }
         });
     }
     
@@ -1368,7 +1538,11 @@ document.addEventListener('DOMContentLoaded', function() {
             filteredFaculty.forEach(faculty => {
                 const option = document.createElement('option');
                 option.value = faculty.id;
-                option.textContent = faculty.fullName;
+                // Include department in display: "Name (Department)"
+                const displayName = faculty.department 
+                    ? `${faculty.fullName} (${faculty.department})`
+                    : faculty.fullName;
+                option.textContent = displayName;
                 option.dataset.email = faculty.email || '';
                 facultySelect.appendChild(option);
             });
@@ -1409,11 +1583,27 @@ document.addEventListener('DOMContentLoaded', function() {
             facultySelect.parentElement.classList.remove('error');
         }
         
-        if (subjectSelect && !subjectSelect.value) {
-            subjectSelect.parentElement.classList.add('error');
-            isValid = false;
-        } else if (subjectSelect) {
-            subjectSelect.parentElement.classList.remove('error');
+        // Check subject/course selection
+        let subjectValue = '';
+        if (subjectSelect) {
+            // Check if using Choices.js
+            if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                const choicesValue = window.choicesInstances['subjectSelect'].getValue(true);
+                subjectValue = Array.isArray(choicesValue) ? (choicesValue[0] || '') : (choicesValue || '');
+            } else {
+                subjectValue = subjectSelect.value || '';
+            }
+            
+            if (!subjectValue || subjectValue === '') {
+                subjectSelect.parentElement.classList.add('error');
+                isValid = false;
+                // Show notification in top right
+                if (typeof window.showNotification === 'function') {
+                    window.showNotification('Please select a subject/course in order to submit a class', 'error');
+                }
+            } else {
+                subjectSelect.parentElement.classList.remove('error');
+            }
         }
         
         // Unit load removed; value is defined by subject/course and handled server-side
@@ -1422,30 +1612,174 @@ document.addEventListener('DOMContentLoaded', function() {
     }
       // Reset form fields but keep program selection
     function resetFormFieldsPartial() {
-        // Keep program/strand AND faculty member selected, only clear subject/course
+        // Keep program/strand selected, but reset faculty member and subject/course
         const programSelect = document.getElementById('programSelect');
         const facultySelect = document.getElementById('facultySelect');
         const subjectSelect = document.getElementById('subjectSelect');
         
-        // Only reset subject/course - keep program and faculty selected
-        if (window.choicesInstances) {
-            if (window.choicesInstances['subjectSelect']) {
-                window.choicesInstances['subjectSelect'].setChoiceByValue('');
+        // Helper function to reset Choices.js select to placeholder
+        function resetChoicesSelect(selectId, placeholderLabel) {
+            const selectElement = document.getElementById(selectId);
+            const choicesInstance = window.choicesInstances && window.choicesInstances[selectId];
+            
+            if (choicesInstance) {
+                try {
+                    // Method 1: Get and remove all active items first
+                    const currentValue = choicesInstance.getValue(true);
+                    if (currentValue && currentValue.length > 0) {
+                        const valuesToRemove = Array.isArray(currentValue) ? currentValue : [currentValue];
+                        valuesToRemove.forEach(val => {
+                            if (val) {
+                                try {
+                                    choicesInstance.removeActiveItemsByValue(val);
+                                } catch (e) {
+                                    // Try alternative method
+                                    try {
+                                        const choice = choicesInstance.store.choices.find(c => c.value === val);
+                                        if (choice) {
+                                            choicesInstance.removeActiveItemsByValue(choice.value);
+                                        }
+                                    } catch (e2) {
+                                        // Ignore
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Method 2: Directly set underlying select value to empty
+                    if (selectElement) {
+                        selectElement.value = '';
+                        selectElement.selectedIndex = 0;
+                    }
+                    
+                    // Method 3: Clear Choices.js value
+                    choicesInstance.setValue([]);
+                    
+                    // Method 4: Try to set by empty value to show placeholder
+                    try {
+                        choicesInstance.setChoiceByValue('');
+                    } catch (e) {
+                        // If that fails, try clearing store
+                        if (choicesInstance.store && choicesInstance.store.activeItems) {
+                            choicesInstance.store.activeItems = [];
+                        }
+                    }
+                    
+                    // Method 5: Update the display by accessing the container
+                    try {
+                        const container = choicesInstance.containerOuter.element;
+                        const input = container.querySelector('.choices__input--cloned');
+                        if (input) {
+                            input.value = '';
+                        }
+                        // Update the single item display
+                        const singleItem = container.querySelector('.choices__item--selectable');
+                        if (singleItem && singleItem.textContent !== placeholderLabel) {
+                            // Find placeholder choice and set it
+                            const placeholderChoice = choicesInstance.store.choices.find(c => c.value === '' || c.placeholder);
+                            if (placeholderChoice) {
+                                choicesInstance.setChoiceByValue('');
+                            }
+                        }
+                    } catch (e) {
+                        // Ignore display update errors
+                    }
+                    
+                    // Method 6: Force refresh by triggering events
+                    if (selectElement) {
+                        selectElement.dispatchEvent(new Event('input', { bubbles: true }));
+                        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                } catch (e) {
+                    console.warn(`Error resetting ${selectId} with Choices.js:`, e);
+                    // Fallback: directly set the underlying select
+                    if (selectElement) {
+                        selectElement.value = '';
+                        selectElement.selectedIndex = 0;
+                        // Trigger change event to update Choices.js
+                        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            } else if (selectElement) {
+                // Fallback for non-Choices.js: reset to first option
+                selectElement.value = '';
+                selectElement.selectedIndex = 0;
             }
-            // Don't reset programSelect or facultySelect - keep them selected
         }
         
-        // Reset subject select - load all subjects (no program requirement)
-        if (subjectSelect) {
-            // Load all subjects regardless of program selection
-            if (typeof loadSubjects === 'function') {
-                loadSubjects();
+        // Reset faculty select - clear selection immediately
+        if (facultySelect) {
+            // If program is still selected, just clear the selection (don't reload options)
+            if (programSelect && programSelect.value) {
+                // Clear the selection immediately
+                resetChoicesSelect('facultySelect', 'Select Faculty Member');
+                
+                // If Choices.js is being used, ensure placeholder is visible
+                if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+                    // The options are already loaded, just need to reset selection
+                    // This happens in resetChoicesSelect, but ensure it's done
+                    setTimeout(() => {
+                        resetChoicesSelect('facultySelect', 'Select Faculty Member');
+                    }, 10);
+                }
             } else {
-                // Fallback: just reset to initial state
+                // No program selected, disable faculty dropdown
+                resetChoicesSelect('facultySelect', 'Select Program/Strand First');
+                facultySelect.disabled = true;
+                if (window.choicesInstances && window.choicesInstances['facultySelect']) {
+                    try {
+                        window.choicesInstances['facultySelect'].setChoices(
+                            [{value: '', label: 'Select Program/Strand First', disabled: true}], 
+                            'value', 
+                            'label', 
+                            true
+                        );
+                        resetChoicesSelect('facultySelect', 'Select Program/Strand First');
+                        if (typeof window.choicesInstances['facultySelect'].disable === 'function') {
+                            window.choicesInstances['facultySelect'].disable();
+                        }
+                    } catch (e) {
+                        console.warn('Error resetting facultySelect to disabled state:', e);
+                    }
+                }
+            }
+        }
+        
+        // Reset subject select - clear selection immediately
+        if (subjectSelect) {
+            // Clear the selection immediately
+            resetChoicesSelect('subjectSelect', 'Select Subject/Course');
+            
+            // If program is still selected, subjects should already be loaded, just reset selection
+            if (programSelect && programSelect.value) {
+                // Options are already loaded, just ensure selection is cleared
                 if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
-                    window.choicesInstances['subjectSelect'].setChoices([{value: '', label: 'Select Subject', disabled: true}], 'value', 'label', true);
-                } else {
-                    subjectSelect.innerHTML = '<option value="" selected disabled>Select Subject</option>';
+                    setTimeout(() => {
+                        resetChoicesSelect('subjectSelect', 'Select Subject/Course');
+                    }, 10);
+                }
+            } else {
+                // No program selected - reload subjects to show disabled state
+                if (typeof loadSubjects === 'function') {
+                    loadSubjects(null).then(() => {
+                        if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
+                            try {
+                                window.choicesInstances['subjectSelect'].setChoices(
+                                    [{value: '', label: 'Select Program/Strand First', disabled: true}], 
+                                    'value', 
+                                    'label', 
+                                    true
+                                );
+                                resetChoicesSelect('subjectSelect', 'Select Program/Strand First');
+                                if (typeof window.choicesInstances['subjectSelect'].disable === 'function') {
+                                    window.choicesInstances['subjectSelect'].disable();
+                                }
+                            } catch (e) {
+                                console.warn('Error resetting subjectSelect to disabled state:', e);
+                            }
+                        }
+                    });
                 }
             }
         }
@@ -1594,6 +1928,55 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Helper function to remove department from faculty name
+    function cleanFacultyName(facultyName) {
+        if (!facultyName) return 'N/A';
+        // Remove department suffix if present (format: "Name - Department" or "Name - Department Department")
+        let cleaned = facultyName.replace(/\s*-\s*[^-]+(?:\s+Department)?\s*$/i, '').trim();
+        // Remove "(Optional for Superadmin)" text if present
+        cleaned = cleaned.replace(/\s*\(Optional for Superadmin\)/gi, '').trim();
+        return cleaned || 'N/A';
+    }
+    
+    // Helper function to get course/strand code from courseId
+    function getCourseCode(classData) {
+        if (!classData.courseId) {
+            // If no courseId, try to extract code from course name (format: "CODE - Name")
+            if (classData.course && classData.course.includes(' - ')) {
+                return classData.course.split(' - ')[0];
+            }
+            return classData.course || 'N/A';
+        }
+        
+        try {
+            // Try to get courses/strands from localStorage or global variables
+            const courses = JSON.parse(localStorage.getItem('courses') || '[]');
+            const strands = JSON.parse(localStorage.getItem('strands') || '[]');
+            const allPrograms = [...courses, ...strands];
+            
+            // Find the program/strand by ID or code
+            const program = allPrograms.find(p => 
+                p.id === classData.courseId || 
+                p.code === classData.courseId ||
+                String(p.id) === String(classData.courseId)
+            );
+            
+            if (program && program.code) {
+                return program.code;
+            }
+            
+            // If courseId is actually the code itself, return it
+            if (classData.courseId && !program) {
+                return classData.courseId;
+            }
+        } catch (e) {
+            console.warn('Error getting course code:', e);
+        }
+        
+        // Fallback: return course name or N/A
+        return classData.course || 'N/A';
+    }
+    
     // Add class to the list
     function addClassToList(classData) {
         const classesList = document.getElementById('createdClasses');
@@ -1608,16 +1991,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const classItem = document.createElement('div');
         classItem.className = `class-item ${classData.course.toLowerCase()}`;
         classItem.dataset.id = classData.id;
-        // Apply department color to the draggable card
+        
+        // Get department color for the left border (like fixed schedules)
+        let deptColor = '#2563eb'; // default primary color
         try {
-            const deptColor = getDepartmentColorForClass(classData);
-            console.log('Applying department color to class item:', deptColor);
-            // Use !important to override any CSS rules
-            classItem.style.setProperty('background-color', deptColor, 'important');
-            classItem.style.setProperty('color', '#fff', 'important');
-            classItem.style.setProperty('border-left-color', deptColor, 'important');
+            deptColor = getDepartmentColorForClass(classData);
             classItem.dataset.departmentColor = deptColor;
-            console.log('Applied color:', deptColor, 'to element');
+            console.log('Applied department color to class item:', deptColor);
         } catch (e) {
             console.warn('Could not compute department color for class item', e);
         }
@@ -1627,52 +2007,25 @@ document.addEventListener('DOMContentLoaded', function() {
             ? `${classData.subjectCode} - ${classData.subject}`
             : classData.subject;
         
-        // Format type display with hours
-        let typeDisplay = '';
-        if (classData.lectureHours > 0 && classData.labHours > 0) {
-            typeDisplay = `Lecture (${classData.lectureHours}h) & Lab (${classData.labHours}h)`;
-        } else if (classData.lectureHours > 0) {
-            typeDisplay = `Lecture (${classData.lectureHours}h)`;
-        } else if (classData.labHours > 0) {
-            typeDisplay = `Laboratory (${classData.labHours}h)`;
-        } else {
-            typeDisplay = `${classData.classType} (${classData.unitLoad}h)`;
-        }
+        // Get course/strand code (not the name)
+        const courseCode = getCourseCode(classData);
         
-        // Check if this class is merged
-        const isMerged = classData.mergedClassIds && classData.mergedClassIds.length > 0;
-        const mergedIndicator = isMerged ? `<span class="merged-badge" style="background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem; margin-left: 8px;">MERGED</span>` : '';
+        // Style like fixed schedules: light gray background, colored left border
+        // Show: Subject (title), Faculty, Strand/Course Code
+        classItem.style.cssText = `padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid ${deptColor};`;
+        
+        // Clean faculty name (remove department if present)
+        const cleanFaculty = cleanFacultyName(classData.faculty);
         
         classItem.innerHTML = `
-            <h3>${subjectDisplay}${mergedIndicator}</h3>
-            <div class="class-info"><i class="fas fa-building"></i> ${classData.department || classData.course}</div>
-            <div class="class-info"><i class="fas fa-chalkboard-teacher"></i> ${classData.faculty}</div>
-            <div class="class-info"><i class="fas fa-book"></i> ${typeDisplay}</div>
-            <div class="class-actions">
-                <button class="merge-class-btn" data-id="${classData.id}" title="Merge with other classes">
-                    <i class="fas fa-link"></i> ${isMerged ? 'Unmerge' : 'Merge'}
-                </button>
-                <button class="remove-class-btn" data-id="${classData.id}"><i class="fas fa-trash-alt"></i> Remove</button>
-            </div>
+            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${subjectDisplay}</div>
+            <div style="font-size: 0.85rem; color: #666; margin-bottom: 4px;">${cleanFaculty}</div>
+            <div style="font-size: 0.85rem; color: #666;">${courseCode}</div>
         `;
         
         classesList.appendChild(classItem);
         
-        // Add event listener to remove button
-        classItem.querySelector('.remove-class-btn').addEventListener('click', function() {
-            removeClassItem(classData.id);
-        });
-        
-        // Add event listener to merge button
-        const mergeBtn = classItem.querySelector('.merge-class-btn');
-        if (mergeBtn) {
-            mergeBtn.addEventListener('click', function() {
-                showMergeClassesModal(classData);
-            });
-        }
-        
-        // Make class draggable for manual placement
-        makeClassDraggable(classItem, classData);
+        // Class is not draggable - display only
     }
     
     // Make class draggable to calendar
@@ -1761,13 +2114,26 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Show merge classes modal
     function showMergeClassesModal(classData) {
-        // Find all classes that can be merged (same subject, different strands/courses)
-        const mergeableClasses = allClasses.filter(c => 
-            c.id !== classData.id && 
-            c.subject === classData.subject &&
-            c.subjectId === classData.subjectId &&
-            (c.course !== classData.course || c.courseId !== classData.courseId)
-        );
+        // Find all classes that can be merged (same subject AND same faculty, different strands/courses)
+        const mergeableClasses = allClasses.filter(c => {
+            // Must be different class
+            if (c.id === classData.id) return false;
+            
+            // Must have same subject
+            if (c.subject !== classData.subject || c.subjectId !== classData.subjectId) return false;
+            
+            // Must have same faculty (by ID if available, otherwise by name)
+            let facultyMatch = false;
+            if (classData.facultyId) {
+                facultyMatch = c.facultyId === classData.facultyId;
+            } else {
+                facultyMatch = c.faculty === classData.faculty;
+            }
+            if (!facultyMatch) return false;
+            
+            // Must be different course/strand
+            return (c.course !== classData.course || c.courseId !== classData.courseId);
+        });
         
         // Get currently merged classes
         const currentMergedIds = classData.mergedClassIds || [];
@@ -1826,8 +2192,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${isCurrentlyMerged 
                             ? `This class is currently merged with ${currentMergedIds.length} other class(es). Select "Unmerge" to separate them.`
                             : mergeableClasses.length > 0
-                                ? `Select classes to merge with "${classData.subject}". Merged classes will share the same schedule and appear in black on the timetable.`
-                                : `No other classes found with the same subject "${classData.subject}" to merge with.`
+                                ? `Select classes to merge with "${classData.subject}". Only classes with the same subject and faculty can be merged. Merged classes will share the same schedule and appear in black on the timetable.`
+                                : `No other classes found with the same subject "${classData.subject}" and faculty "${classData.faculty || 'N/A'}" to merge with.`
                         }
                     </p>
                     ${isCurrentlyMerged ? `
@@ -1862,7 +2228,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <div style="flex: 1;">
                                                 <strong>${c.subject}</strong>
                                                 <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
-                                                    ${c.course || c.department} - ${c.faculty}
+                                                    ${c.faculty}
                                                 </div>
                                             </div>
                                         </div>
@@ -1932,9 +2298,44 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Merge classes function
     function mergeClasses(classId, otherClassIds) {
-        // Update all involved classes to have the same mergedClassIds array
-        const allMergedIds = [classId, ...otherClassIds];
+        // Get the main class data
+        const mainClass = allClasses.find(c => c.id === classId);
+        if (!mainClass) {
+            showNotification('Main class not found', 'error');
+            return;
+        }
         
+        // Validate that all classes have the same subject and faculty
+        const allMergedIds = [classId, ...otherClassIds];
+        const classesToMerge = allClasses.filter(c => allMergedIds.includes(c.id));
+        
+        // Check if all classes have the same subject
+        const allSameSubject = classesToMerge.every(c => 
+            c.subject === mainClass.subject && 
+            c.subjectId === mainClass.subjectId
+        );
+        
+        if (!allSameSubject) {
+            showNotification('Cannot merge: All classes must have the same subject', 'error');
+            return;
+        }
+        
+        // Check if all classes have the same faculty (by ID if available, otherwise by name)
+        const allSameFaculty = classesToMerge.every(c => {
+            // If main class has facultyId, compare by ID
+            if (mainClass.facultyId) {
+                return c.facultyId === mainClass.facultyId;
+            }
+            // Otherwise, compare by faculty name
+            return c.faculty === mainClass.faculty;
+        });
+        
+        if (!allSameFaculty) {
+            showNotification('Cannot merge: All classes must have the same faculty', 'error');
+            return;
+        }
+        
+        // Update all involved classes to have the same mergedClassIds array
         allClasses.forEach(c => {
             if (allMergedIds.includes(c.id)) {
                 c.mergedClassIds = allMergedIds.filter(id => id !== c.id);
@@ -2506,16 +2907,21 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to generate schedule
     window.generateSchedule = async function() {
+        // Set flag to suppress conflict notifications during generation (set early to catch all notifications)
+        window.isGeneratingSchedule = true;
+        
         // Check user role permissions
         const userData = JSON.parse(localStorage.getItem('userData') || '{}');
         const userRole = userData.role || 'user';
         
         if (userRole === 'user') {
+            window.isGeneratingSchedule = false; // Clear flag before showing error
             showNotification('Access denied. Only admins and superadmins can generate schedules.', 'error');
             return;
         }
         
         if (allClasses.length === 0) {
+            window.isGeneratingSchedule = false; // Clear flag before showing error
             showNotification('Please add classes before generating a schedule', 'error');
             return;
         }
@@ -2525,6 +2931,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showNotification('Loading rooms...', 'info');
             await loadRooms();
             if (rooms.length === 0) {
+                window.isGeneratingSchedule = false; // Clear flag before showing error
                 showNotification('No rooms available for scheduling. Please add rooms first.', 'error');
                 return;
             }
@@ -2909,9 +3316,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     }, 2000);
                 }, 500);
                 
-                // Close the modal and show results
+                // Show "Checking for conflicts..." message and keep loading modal visible
                 setTimeout(async () => {
-                    hideModal('loadingModal');
+                    // Update status to show conflict checking
+                    if (statusElement) {
+                        statusElement.textContent = "Checking for conflicts...";
+                    }
+                    
+                    // Add a small delay to show the conflict checking message
+                    await new Promise(resolve => setTimeout(resolve, 800));
                     
                     // Ensure fixed schedules are still visible after schedule generation
                     if (typeof window.fixedSchedules !== 'undefined') {
@@ -2923,17 +3336,32 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
-                    if (unscheduledClasses.length > 0) {
-                        showConflictsModal(unscheduledClasses);
-                    } else {
-                        showNotification('Schedule successfully generated!', 'success');
-                    }
+                    // Now close the loading modal and show results
+                    hideModal('loadingModal');
+                    
+                    // Clear the generation flag
+                    window.isGeneratingSchedule = false;
+                    
+                    // Small delay before showing conflicts or success
+                    setTimeout(() => {
+                        if (unscheduledClasses.length > 0) {
+                            showConflictsModal(unscheduledClasses);
+                        } else {
+                            if (typeof window.showNotification === 'function') {
+                                window.showNotification('Schedule successfully generated!', 'success');
+                            }
+                        }
+                    }, 300);
                 }, 500);
                 
             } catch (error) {
                 console.error("Error generating schedule:", error);
                 hideModal('loadingModal');
-                showNotification('Error generating schedule: ' + error.message, 'error');
+                // Clear the generation flag on error
+                window.isGeneratingSchedule = false;
+                if (typeof window.showNotification === 'function') {
+                    window.showNotification('Error generating schedule: ' + error.message, 'error');
+                }
             }
         }, 300);
     };
@@ -4555,7 +4983,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function showModal(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) {
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
             // Prevent background scrolling when modal is open
             document.body.style.overflow = 'hidden';
         }
@@ -8372,14 +8800,19 @@ function initializeCreatedClasses() {
             let visibleCount = 0;
             
             classItems.forEach(item => {
-                const subject = (item.querySelector('h3')?.textContent || '').toLowerCase();
-                const department = (item.querySelector('.class-info')?.textContent || '').toLowerCase();
-                const faculty = (Array.from(item.querySelectorAll('.class-info')).find(el => el.textContent.includes('chalkboard'))?.textContent || '').toLowerCase();
+                // Get all divs within the class item
+                const divs = item.querySelectorAll('div');
+                // First div is the subject (has font-weight: 600)
+                const subject = (divs[0]?.textContent || '').toLowerCase();
+                // Second div is the faculty
+                const faculty = (divs[1]?.textContent || '').toLowerCase();
+                // Third div is the course/department code
+                const course = (divs[2]?.textContent || '').toLowerCase();
                 
                 const matches = searchTerm === '' || 
                     subject.includes(searchTerm) || 
-                    department.includes(searchTerm) || 
-                    faculty.includes(searchTerm);
+                    faculty.includes(searchTerm) || 
+                    course.includes(searchTerm);
                 
                 if (matches) {
                     item.style.display = '';
@@ -8605,19 +9038,28 @@ function showClassesDetailsModal() {
     
     const classes = window.allClasses || [];
     const totalClasses = classes.length;
-    const totalHours = classes.reduce((sum, cls) => {
-        const hours = cls.lectureHours && cls.labHours ? 
-            (parseInt(cls.lectureHours) || 0) + (parseInt(cls.labHours) || 0) : 
-            (parseInt(cls.unitLoad) || 3);
-        return sum + hours;
+    
+    // Calculate stats: courses, subjects, and total units
+    const coursesSet = new Set();
+    classes.forEach(cls => {
+        const course = cls.course || 'Unassigned';
+        coursesSet.add(course);
+    });
+    const totalCourses = coursesSet.size;
+    const totalSubjects = totalClasses;
+    const totalUnits = classes.reduce((sum, cls) => {
+        const units = parseFloat(cls.units || cls.unitLoad || 0);
+        return sum + units;
     }, 0);
     
     // Update stats
-    const totalClassesEl = document.getElementById('detailsTotalClasses');
-    const totalHoursEl = document.getElementById('detailsTotalHours');
+    const totalCoursesEl = document.getElementById('detailsTotalCourses');
+    const totalSubjectsEl = document.getElementById('detailsTotalSubjects');
+    const totalUnitsEl = document.getElementById('detailsTotalUnits');
     
-    if (totalClassesEl) totalClassesEl.textContent = totalClasses;
-    if (totalHoursEl) totalHoursEl.textContent = totalHours;
+    if (totalCoursesEl) totalCoursesEl.textContent = totalCourses;
+    if (totalSubjectsEl) totalSubjectsEl.textContent = totalSubjects;
+    if (totalUnitsEl) totalUnitsEl.textContent = totalUnits.toFixed(1);
     
     // Calculate teacher unit loads
     const teacherUnitLoads = {};
@@ -8630,20 +9072,26 @@ function showClassesDetailsModal() {
         teacherUnitLoads[facultyName] += units;
     });
     
-    // Display teacher unit loads
+    // Display teacher unit loads - compact design
     const teacherUnitLoadsEl = document.getElementById('teacherUnitLoads');
+    const teacherLoadsCountEl = document.getElementById('teacherLoadsCount');
     if (teacherUnitLoadsEl) {
         const teachers = Object.keys(teacherUnitLoads).sort();
         if (teachers.length === 0) {
-            teacherUnitLoadsEl.innerHTML = '<div style="color: #64748b; font-style: italic;">No teachers assigned</div>';
+            teacherUnitLoadsEl.innerHTML = '<div style="color: #64748b; font-style: italic; padding: 8px;">No teachers assigned</div>';
+            if (teacherLoadsCountEl) teacherLoadsCountEl.textContent = '0';
         } else {
+            // Update count badge
+            if (teacherLoadsCountEl) teacherLoadsCountEl.textContent = teachers.length;
+            
+            // Compact list design
             teacherUnitLoadsEl.innerHTML = teachers.map(teacher => {
                 const totalUnits = teacherUnitLoads[teacher].toFixed(1);
                 return `
-                    <div style="padding: 8px 12px; background: white; border-radius: 6px; border: 1px solid #e2e8f0;">
-                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${teacher}</div>
-                        <div style="color: #64748b; font-size: 0.85rem;">
-                            <i class="fas fa-book"></i> ${totalUnits} units
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: white; border-radius: 4px; border-left: 3px solid #2563eb;">
+                        <div style="font-weight: 600; color: #1e293b; font-size: 0.9rem;">${teacher}</div>
+                        <div style="color: #64748b; font-size: 0.85rem; font-weight: 600;">
+                            <i class="fas fa-book" style="margin-right: 4px;"></i>${totalUnits} units
                         </div>
                     </div>
                 `;
@@ -8651,8 +9099,46 @@ function showClassesDetailsModal() {
         }
     }
     
-    // Function to render classes list
-    function renderClassesList(filteredClasses = classes) {
+    // Set up collapsible teacher loads section
+    setTimeout(() => {
+        const teacherLoadsHeader = document.getElementById('teacherLoadsHeader');
+        const teacherLoadsContent = document.getElementById('teacherLoadsContent');
+        const teacherLoadsArrow = document.querySelector('.teacher-loads-arrow');
+        
+        if (teacherLoadsHeader && teacherLoadsContent) {
+            teacherLoadsHeader.addEventListener('click', function() {
+                const isHidden = teacherLoadsContent.style.display === 'none';
+                teacherLoadsContent.style.display = isHidden ? 'block' : 'none';
+                
+                if (teacherLoadsArrow) {
+                    teacherLoadsArrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+                }
+                
+                this.style.backgroundColor = isHidden ? '#e2e8f0' : 'transparent';
+            });
+            
+            // Add hover effect
+            teacherLoadsHeader.addEventListener('mouseenter', function() {
+                if (teacherLoadsContent.style.display === 'none') {
+                    this.style.backgroundColor = '#f1f5f9';
+                }
+            });
+            
+            teacherLoadsHeader.addEventListener('mouseleave', function() {
+                if (teacherLoadsContent.style.display === 'none') {
+                    this.style.backgroundColor = 'transparent';
+                }
+            });
+        }
+    }, 100);
+    
+    // Function to render classes list grouped by course/strand
+    function renderClassesList(filteredClasses = null) {
+        // If no filtered classes provided, use all classes from window
+        if (filteredClasses === null) {
+            filteredClasses = window.allClasses || [];
+        }
+        
         const classesListEl = document.getElementById('createdClassesDetailsList');
         if (classesListEl) {
             if (filteredClasses.length === 0) {
@@ -8664,42 +9150,101 @@ function showClassesDetailsModal() {
                     </div>
                 `;
             } else {
-                classesListEl.innerHTML = filteredClasses.map(cls => {
-                    const lectureHours = parseInt(cls.lectureHours) || 0;
-                    const labHours = parseInt(cls.labHours) || 0;
-                    const totalClassHours = lectureHours + labHours || (parseInt(cls.unitLoad) || 3);
-                    const classType = cls.classType || (lectureHours > 0 && labHours > 0 ? 'mixed' : (lectureHours > 0 ? 'lecture' : 'laboratory'));
-                    const units = parseFloat(cls.units || cls.unitLoad || 0).toFixed(1);
+                // Group classes by course/strand
+                const groupedByCourse = {};
+                filteredClasses.forEach(cls => {
+                    const course = cls.course || 'Unassigned';
+                    if (!groupedByCourse[course]) {
+                        groupedByCourse[course] = [];
+                    }
+                    groupedByCourse[course].push(cls);
+                });
+                
+                // Sort courses alphabetically
+                const sortedCourses = Object.keys(groupedByCourse).sort();
+                
+                // Build HTML for each course/strand
+                classesListEl.innerHTML = sortedCourses.map(course => {
+                    const courseClasses = groupedByCourse[course];
                     
-                    return `
-                        <div class="class-detail-item" style="padding: 16px; margin-bottom: 12px; background: white; border-radius: 8px; border-left: 4px solid #4a90e2; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #333;">${cls.subject || 'Unknown Subject'}</h3>
-                                <span style="background: #4a90e2; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
-                                    ${classType}
-                                </span>
+                    // Get course code (not name) for display
+                    let courseCodeDisplay = course;
+                    if (courseClasses.length > 0) {
+                        const firstClass = courseClasses[0];
+                        const code = getCourseCodeForClass(firstClass);
+                        if (code && code !== 'N/A') {
+                            courseCodeDisplay = code;
+                        }
+                    }
+                    
+                    // Calculate total units for this course
+                    const totalUnits = courseClasses.reduce((sum, cls) => {
+                        const units = parseFloat(cls.units || cls.unitLoad || 0);
+                        return sum + units;
+                    }, 0);
+                    
+                    // Get department color for the course header
+                    let deptColor = '#2563eb';
+                    if (courseClasses.length > 0) {
+                        try {
+                            deptColor = getDepartmentColorForClass(courseClasses[0]);
+                        } catch (e) {
+                            console.warn('Could not get department color for course', e);
+                        }
+                    }
+                    
+                    // Build subjects list for this course
+                    const subjectsHtml = courseClasses.map(cls => {
+                        // Format subject display: code and name
+                        const subjectDisplay = cls.subjectCode 
+                            ? `${cls.subjectCode} - ${cls.subject}`
+                            : cls.subject || 'Unknown Subject';
+                        
+                        // Get units/hours
+                        const units = parseFloat(cls.units || cls.unitLoad || 0).toFixed(1);
+                        const lectureHours = parseInt(cls.lectureHours) || 0;
+                        const labHours = parseInt(cls.labHours) || 0;
+                        const totalHours = lectureHours + labHours || (parseInt(cls.unitLoad) || 3);
+                        
+                        // Format hours display
+                        let hoursDisplay = `${totalHours}h`;
+                        if (lectureHours > 0 && labHours > 0) {
+                            hoursDisplay = `${lectureHours}L + ${labHours}Lab`;
+                        }
+                        
+                        // Get class type
+                        const classType = cls.classType || (lectureHours > 0 && labHours > 0 ? 'Mixed' : (lectureHours > 0 ? 'Lecture' : 'Laboratory'));
+                        
+                        return `
+                            <div style="padding: 10px 12px; margin-bottom: 6px; background: white; border-radius: 4px; border-left: 3px solid ${deptColor};">
+                                <div style="font-weight: 600; color: #333; margin-bottom: 6px; font-size: 0.9rem;">${subjectDisplay}</div>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; font-size: 0.8rem; color: #666;">
+                                    <div><i class="fas fa-chalkboard-teacher" style="color: ${deptColor}; margin-right: 4px;"></i> ${cleanFacultyName(cls.faculty)}</div>
+                                    <div><i class="fas fa-book" style="color: ${deptColor}; margin-right: 4px;"></i> ${units} units</div>
+                                    <div><i class="fas fa-clock" style="color: ${deptColor}; margin-right: 4px;"></i> ${hoursDisplay}</div>
+                                    <div><i class="fas fa-tag" style="color: ${deptColor}; margin-right: 4px;"></i> ${classType}</div>
+                                </div>
                             </div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.9rem; color: #666;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-graduation-cap" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Program:</strong> ${cls.course || 'N/A'}</span>
+                        `;
+                    }).join('');
+                    
+                    // Return course section with collapsible subjects
+                    const courseId = `course-${course.replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 9)}`;
+                    return `
+                        <div style="margin-bottom: 20px; background: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0;">
+                            <div class="course-header" data-course-id="${courseId}" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 8px; margin: -8px; border-radius: 6px; transition: background-color 0.2s ease;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-chevron-down course-arrow" data-course-id="${courseId}" style="color: ${deptColor}; transition: transform 0.2s ease; font-size: 0.9rem;"></i>
+                                    <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: #1e293b;">
+                                        <i class="fas fa-graduation-cap" style="color: ${deptColor}; margin-right: 8px;"></i>${courseCodeDisplay}
+                                    </h4>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-chalkboard-teacher" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Faculty:</strong> ${cls.faculty || 'N/A'}</span>
+                                <div style="background: ${deptColor}; color: white; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 0.9rem;">
+                                    <i class="fas fa-book"></i> ${totalUnits.toFixed(1)} Total Units
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-book" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Units:</strong> ${units}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-clock" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Hours:</strong> ${totalClassHours} ${lectureHours > 0 && labHours > 0 ? `(${lectureHours}L + ${labHours}Lab)` : ''}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-building" style="color: #4a90e2; width: 16px;"></i>
-                                    <span><strong>Department:</strong> ${cls.department || 'N/A'}</span>
-                                </div>
+                            </div>
+                            <div class="course-subjects" id="${courseId}" style="margin-top: 15px; display: none;">
+                                ${subjectsHtml}
                             </div>
                         </div>
                     `;
@@ -8708,30 +9253,126 @@ function showClassesDetailsModal() {
         }
     }
     
+    // Function to setup collapsible course sections
+    function setupCollapsibleCourses() {
+        document.querySelectorAll('.course-header').forEach(header => {
+            // Remove existing listeners by cloning
+            const newHeader = header.cloneNode(true);
+            header.parentNode.replaceChild(newHeader, header);
+            
+            newHeader.addEventListener('click', function() {
+                const courseId = this.getAttribute('data-course-id');
+                const subjectsDiv = document.getElementById(courseId);
+                const arrow = document.querySelector(`.course-arrow[data-course-id="${courseId}"]`);
+                
+                if (subjectsDiv) {
+                    const isHidden = subjectsDiv.style.display === 'none';
+                    subjectsDiv.style.display = isHidden ? 'block' : 'none';
+                    
+                    if (arrow) {
+                        arrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+                    }
+                    
+                    // Update hover state
+                    this.style.backgroundColor = isHidden ? '#e2e8f0' : 'transparent';
+                }
+            });
+            
+            // Add hover effect
+            newHeader.addEventListener('mouseenter', function() {
+                const courseId = this.getAttribute('data-course-id');
+                const subjectsDiv = document.getElementById(courseId);
+                if (subjectsDiv && subjectsDiv.style.display === 'none') {
+                    this.style.backgroundColor = '#f1f5f9';
+                }
+            });
+            
+            newHeader.addEventListener('mouseleave', function() {
+                const courseId = this.getAttribute('data-course-id');
+                const subjectsDiv = document.getElementById(courseId);
+                if (subjectsDiv && subjectsDiv.style.display === 'none') {
+                    this.style.backgroundColor = 'transparent';
+                }
+            });
+        });
+    }
+    
     // Initial render
     renderClassesList();
+    
+    // Set up collapsible course sections after initial render
+    setTimeout(() => {
+        setupCollapsibleCourses();
+    }, 100);
     
     // Set up search functionality
     const searchInput = document.getElementById('classesDetailsSearch');
     if (searchInput) {
-        searchInput.addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase().trim();
-            if (searchTerm === '') {
-                renderClassesList(classes);
-            } else {
-                const filtered = classes.filter(cls => {
-                    const subject = (cls.subject || '').toLowerCase();
-                    const faculty = (cls.faculty || '').toLowerCase();
-                    const course = (cls.course || '').toLowerCase();
-                    const department = (cls.department || '').toLowerCase();
-                    return subject.includes(searchTerm) || 
-                           faculty.includes(searchTerm) || 
-                           course.includes(searchTerm) || 
-                           department.includes(searchTerm);
-                });
-                renderClassesList(filtered);
+        // Clear the search input first
+        searchInput.value = '';
+        
+        // Define search handler function
+        const handleSearch = function(e) {
+            const searchTerm = (e.target.value || '').toLowerCase().trim();
+            // Always get fresh classes data from window.allClasses
+            const currentClasses = window.allClasses || [];
+            
+            if (!searchTerm || searchTerm === '') {
+                // Show all classes when search is empty
+                renderClassesList(currentClasses);
+                // Re-setup collapsible after re-render
+                setTimeout(() => {
+                    setupCollapsibleCourses();
+                }, 100);
+                return;
             }
-        });
+            
+            // Filter classes based on search term
+            const filtered = currentClasses.filter(cls => {
+                if (!cls || typeof cls !== 'object') return false;
+                
+                // Safely get all searchable fields with fallbacks
+                const subject = String(cls.subject || '').toLowerCase();
+                const subjectCode = String(cls.subjectCode || '').toLowerCase();
+                const faculty = String(cls.faculty || '').toLowerCase();
+                let cleanFaculty = '';
+                try {
+                    const cleaned = cleanFacultyName(cls.faculty || '');
+                    cleanFaculty = String(cleaned || '').toLowerCase();
+                } catch (e) {
+                    cleanFaculty = faculty;
+                }
+                const course = String(cls.course || '').toLowerCase();
+                const department = String(cls.department || '').toLowerCase();
+                
+                // Search in all fields - check if any field contains the search term
+                return (subject && subject.includes(searchTerm)) || 
+                       (subjectCode && subjectCode.includes(searchTerm)) ||
+                       (faculty && faculty.includes(searchTerm)) || 
+                       (cleanFaculty && cleanFaculty.includes(searchTerm)) ||
+                       (course && course.includes(searchTerm)) || 
+                       (department && department.includes(searchTerm));
+            });
+            
+            // Render the filtered results
+            renderClassesList(filtered);
+            // Re-setup collapsible after re-render
+            setTimeout(() => {
+                setupCollapsibleCourses();
+            }, 100);
+        };
+        
+        // Remove any existing listener by cloning (to clear old listeners)
+        const oldValue = searchInput.value;
+        const newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+        
+        // Get the new reference and set up the listener
+        const searchInputRef = document.getElementById('classesDetailsSearch');
+        if (searchInputRef) {
+            searchInputRef.value = oldValue;
+            searchInputRef.addEventListener('input', handleSearch);
+        }
     }
     
     // Show modal with proper positioning
@@ -8751,61 +9392,76 @@ function showClassesDetailsModal() {
     document.body.style.overflow = 'hidden';
 }
 
-// Create class element for modal display
+// Helper function to get course/strand code from courseId (global version)
+function getCourseCodeForClass(classData) {
+    if (!classData.courseId) {
+        // If no courseId, try to extract code from course name (format: "CODE - Name")
+        if (classData.course && classData.course.includes(' - ')) {
+            return classData.course.split(' - ')[0];
+        }
+        return classData.course || 'N/A';
+    }
+    
+    try {
+        // Try to get courses/strands from localStorage or global variables
+        const courses = JSON.parse(localStorage.getItem('courses') || '[]');
+        const strands = JSON.parse(localStorage.getItem('strands') || '[]');
+        const allPrograms = [...courses, ...strands];
+        
+        // Find the program/strand by ID or code
+        const program = allPrograms.find(p => 
+            p.id === classData.courseId || 
+            p.code === classData.courseId ||
+            String(p.id) === String(classData.courseId)
+        );
+        
+        if (program && program.code) {
+            return program.code;
+        }
+        
+        // If courseId is actually the code itself, return it
+        if (classData.courseId && !program) {
+            return classData.courseId;
+        }
+    } catch (e) {
+        console.warn('Error getting course code:', e);
+    }
+    
+    // Fallback: return course name or N/A
+    return classData.course || 'N/A';
+}
+
+// Create class element for modal display - styled like fixed schedules
 function createClassElement(classData) {
     const classElement = document.createElement('div');
-    classElement.className = 'class-item';
-    classElement.style.cssText = `
-        padding: 16px;
-        margin-bottom: 12px;
-        background: white;
-        border-radius: 8px;
-        border-left: 4px solid var(--primary-color);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    `;
-    classElement.onmouseenter = function() {
-        this.style.transform = 'translateY(-2px)';
-        this.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.12)';
-    };
-    classElement.onmouseleave = function() {
-        this.style.transform = 'translateY(0)';
-        this.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.08)';
-    };
     
-    // Apply department color if available
+    // Get department color for the left border
+    let deptColor = '#2563eb'; // default primary color
     try {
-        const deptColor = getDepartmentColorForClass(classData);
-        classElement.style.borderLeftColor = deptColor;
+        deptColor = getDepartmentColorForClass(classData);
     } catch (e) {
         console.warn('Could not apply department color to modal class element', e);
     }
     
+    // Style similar to fixed schedules: colored left border, white background
+    classElement.style.cssText = `padding: 12px; margin-bottom: 8px; background: white; border-radius: 4px; border-left: 3px solid ${deptColor};`;
+    
+    // Format subject display: code and name
+    const subjectDisplay = classData.subjectCode 
+        ? `${classData.subjectCode} - ${classData.subject}`
+        : classData.subject || 'Unknown Subject';
+    
+    // Get course/strand code (not the name)
+    const courseCode = getCourseCodeForClass(classData);
+    
+    // Clean faculty name (remove department if present)
+    const cleanFaculty = cleanFacultyName(classData.faculty);
+    
+    // Build the content: Title (Subject), Faculty, Strand/Course Code
     classElement.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--text-color);">${classData.subject || 'Unknown Subject'}</h3>
-            <span style="background: var(--primary-color); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
-                ${classData.classType || 'lecture'}
-            </span>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.9rem; color: var(--dark-gray);">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-graduation-cap" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.course || 'N/A'}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-chalkboard-teacher" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.faculty || 'N/A'}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-clock" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.unitLoad || 3} hours</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fas fa-building" style="color: var(--primary-color); width: 16px;"></i>
-                <span>${classData.department || 'N/A'}</span>
-            </div>
-        </div>
+        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${subjectDisplay}</div>
+        <div style="font-size: 0.85rem; color: #666; margin-bottom: 4px;">${cleanFaculty}</div>
+        <div style="font-size: 0.85rem; color: #666;">${courseCode}</div>
     `;
     
     return classElement;

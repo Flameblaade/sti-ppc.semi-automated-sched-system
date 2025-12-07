@@ -219,6 +219,100 @@ function resolveDepartmentId(departmentIdOrCode) {
     }
 }
 
+// Helper function to get course/strand code from event extendedProps or classData
+function getCourseCodeFromEvent(extendedProps) {
+    const courseId = extendedProps.courseId || extendedProps.programId || '';
+    const courseName = extendedProps.course || extendedProps.department || '';
+    
+    if (!courseId && !courseName) {
+        return 'N/A';
+    }
+    
+    // If courseId exists, try to look up the code
+    if (courseId) {
+        try {
+            const courses = JSON.parse(localStorage.getItem('courses') || '[]');
+            const strands = JSON.parse(localStorage.getItem('strands') || '[]');
+            const allPrograms = [...courses, ...strands];
+            
+            // Find the program/strand by ID or code
+            const program = allPrograms.find(p => 
+                p.id === courseId || 
+                p.code === courseId ||
+                String(p.id) === String(courseId)
+            );
+            
+            if (program && program.code) {
+                return program.code;
+            }
+            
+            // If courseId is actually the code itself, return it
+            return courseId;
+        } catch (e) {
+            console.warn('Error getting course code from event:', e);
+        }
+    }
+    
+    // If no courseId, try to extract code from course name (format: "CODE - Name")
+    if (courseName && courseName.includes(' - ')) {
+        return courseName.split(' - ')[0];
+    }
+    
+    // Fallback: return course name or N/A
+    return courseName || 'N/A';
+}
+
+// Helper function to remove department from faculty name
+function cleanFacultyName(facultyName) {
+    if (!facultyName) return 'N/A';
+    // Remove department suffix if present (format: "Name - Department" or "Name - Department Department")
+    let cleaned = facultyName.replace(/\s*-\s*[^-]+(?:\s+Department)?\s*$/i, '').trim();
+    // Remove "(Optional for Superadmin)" text if present
+    cleaned = cleaned.replace(/\s*\(Optional for Superadmin\)/gi, '').trim();
+    return cleaned || 'N/A';
+}
+
+// Helper function to get department code from event extendedProps or classData
+function getDepartmentCodeFromEvent(extendedProps) {
+    const departmentId = extendedProps.departmentId || '';
+    const departmentName = extendedProps.department || '';
+    
+    if (!departmentId && !departmentName) {
+        return 'N/A';
+    }
+    
+    // If departmentId exists, try to look up the code
+    if (departmentId) {
+        try {
+            const departments = JSON.parse(localStorage.getItem('departments') || '[]');
+            
+            // Find the department by ID or code
+            const department = departments.find(d => 
+                d.id === departmentId || 
+                d.code === departmentId ||
+                String(d.id) === String(departmentId)
+            );
+            
+            if (department && department.code) {
+                return department.code;
+            }
+            
+            // If departmentId is actually the code itself, return it
+            return departmentId;
+        } catch (e) {
+            console.warn('Error getting department code from event:', e);
+        }
+    }
+    
+    // If no departmentId, try to extract code from department name (format: "CODE - Name")
+    if (departmentName && departmentName.includes(' - ')) {
+        return departmentName.split(' - ')[0];
+    }
+    
+    // Fallback: return department name or N/A
+    return departmentName || 'N/A';
+}
+
 // Function to load ALL faculty (not filtered by department) - for program-based selection
 async function loadAllFaculty() {
     const facultySelect = document.getElementById('facultySelect');
@@ -313,16 +407,23 @@ async function loadAllFaculty() {
             String(f.role || '').toLowerCase() !== 'superadmin'
         );
         
-        // Prepare options for Choices.js (include department in label for clarity)
-        const facultyOptions = faculty.map(f => ({
-            value: f.id,
-            label: `${f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty'}${f.department ? ' - ' + f.department : ''}`,
-            customProperties: {
-                email: f.email || '',
-                department: f.department || '',
-                departmentId: f.departmentId || ''
-            }
-        }));
+        // Prepare options for Choices.js (faculty name with department)
+        const facultyOptions = faculty.map(f => {
+            const facultyName = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
+            // Include department in display: "Name (Department)"
+            const displayLabel = f.department 
+                ? `${facultyName} (${f.department})`
+                : facultyName;
+            return {
+                value: f.id,
+                label: displayLabel,
+                customProperties: {
+                    email: f.email || '',
+                    department: f.department || '',
+                    departmentId: f.departmentId || ''
+                }
+            };
+        });
         
         // Update Choices.js instance if available
         if (window.choicesInstances && window.choicesInstances['facultySelect']) {
@@ -338,6 +439,13 @@ async function loadAllFaculty() {
                 if (typeof window.choicesInstances['facultySelect'].enable === 'function') {
                     window.choicesInstances['facultySelect'].enable();
                 }
+                // Reset to placeholder after setting choices
+                try {
+                    window.choicesInstances['facultySelect'].setValue([]);
+                    window.choicesInstances['facultySelect'].setChoiceByValue('');
+                } catch (e) {
+                    console.warn('Error resetting facultySelect to placeholder:', e);
+                }
                 console.log('Faculty dropdown enabled with', facultyOptions.length, 'faculty members');
             } else {
                 window.choicesInstances['facultySelect'].setChoices([{value: '', label: 'No faculty available', disabled: true}], 'value', 'label', true);
@@ -352,7 +460,11 @@ async function loadAllFaculty() {
             faculty.forEach(f => {
                 const option = document.createElement('option');
                 option.value = f.id;
-                const display = `${f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty'}${f.department ? ' - ' + f.department : ''}`;
+                const facultyName = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
+                // Include department in display: "Name (Department)"
+                const display = f.department 
+                    ? `${facultyName} (${f.department})`
+                    : facultyName;
                 option.textContent = display;
                 if (f.email) option.dataset.email = f.email;
                 if (f.department) option.dataset.department = f.department;
@@ -362,6 +474,8 @@ async function loadAllFaculty() {
             
             if ((faculty||[]).length > 0) {
                 facultySelect.disabled = false;
+                // Reset to placeholder (first option)
+                facultySelect.value = '';
                 console.log('Faculty dropdown enabled (native) with', faculty.length, 'faculty members');
             } else {
                 facultySelect.disabled = true;
@@ -503,14 +617,23 @@ async function loadFaculty(departmentIdOrCode) {
             String(f.role || '').toLowerCase() !== 'superadmin'
         );
         
-        // Prepare options for Choices.js
-        const facultyOptions = faculty.map(f => ({
-            value: f.id,
-            label: f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty',
-            customProperties: {
-                email: f.email || ''
-            }
-        }));
+        // Prepare options for Choices.js (faculty name with department)
+        const facultyOptions = faculty.map(f => {
+            const facultyName = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
+            // Include department in display: "Name (Department)"
+            const displayLabel = f.department 
+                ? `${facultyName} (${f.department})`
+                : facultyName;
+            return {
+                value: f.id,
+                label: displayLabel,
+                customProperties: {
+                    email: f.email || '',
+                    department: f.department || '',
+                    departmentId: f.departmentId || ''
+                }
+            };
+        });
         
         // Update Choices.js instance if available
         if (window.choicesInstances && window.choicesInstances['facultySelect']) {
@@ -527,9 +650,15 @@ async function loadFaculty(departmentIdOrCode) {
             faculty.forEach(f => {
                 const option = document.createElement('option');
                 option.value = f.id;
-                const display = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
+                const facultyName = f.name || formatFullName(f.firstName || '', f.middleName || '', f.lastName || '') || f.email || 'Faculty';
+                // Include department in display: "Name (Department)"
+                const display = f.department 
+                    ? `${facultyName} (${f.department})`
+                    : facultyName;
                 option.textContent = display;
                 if (f.email) option.dataset.email = f.email;
+                if (f.department) option.dataset.department = f.department;
+                if (f.departmentId) option.dataset.departmentId = f.departmentId;
                 facultySelect.appendChild(option);
             });
             
@@ -601,11 +730,23 @@ async function loadSubjects(programId) {
         // Update Choices.js instance if available
         if (window.choicesInstances && window.choicesInstances['subjectSelect']) {
             if (subjectOptions.length > 0) {
-                window.choicesInstances['subjectSelect'].setChoices(subjectOptions, 'value', 'label', true);
+                // Add placeholder option at the beginning
+                const optionsWithPlaceholder = [
+                    {value: '', label: 'Select Subject/Course', disabled: true},
+                    ...subjectOptions
+                ];
+                window.choicesInstances['subjectSelect'].setChoices(optionsWithPlaceholder, 'value', 'label', true);
                 // Enable both the underlying select and the Choices.js instance
                 subjectSelect.disabled = false;
                 if (typeof window.choicesInstances['subjectSelect'].enable === 'function') {
                     window.choicesInstances['subjectSelect'].enable();
+                }
+                // Reset to placeholder after setting choices
+                try {
+                    window.choicesInstances['subjectSelect'].setValue([]);
+                    window.choicesInstances['subjectSelect'].setChoiceByValue('');
+                } catch (e) {
+                    console.warn('Error resetting subjectSelect to placeholder:', e);
                 }
                 console.log('Subject dropdown enabled with', subjectOptions.length, 'subjects');
             } else {
@@ -629,6 +770,9 @@ async function loadSubjects(programId) {
             subjectSelect.disabled = (subjectSelect.options.length <= 1);
             if (subjectSelect.options.length <= 1) {
                 subjectSelect.innerHTML = '<option value="" selected disabled>No subjects available</option>';
+            } else {
+                // Reset to placeholder (first option)
+                subjectSelect.value = '';
             }
         }
     } catch (error) {
@@ -980,7 +1124,7 @@ document.addEventListener('DOMContentLoaded', function() {
             initialDate: todayForCalendar, // Show the Monday-Saturday week
             headerToolbar: false, // No navigation buttons - always show current week
             slotMinTime: '07:00:00',
-            slotMaxTime: '21:00:00',
+            slotMaxTime: '21:15:00',
             slotDuration: '00:15:00',
             slotLabelInterval: '00:15:00',
             slotLabelFormat: {
@@ -1008,6 +1152,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 timeGridWeek: {
                     dayHeaderFormat: { weekday: 'long' }
                 }
+            },
+            // Add utilization percentage to day headers
+            dayHeaderDidMount: function(info) {
+                updateDayUtilization(info.el, info.date);
             },
             // Handle when events are dropped onto the calendar
             eventReceive: function(info) {
@@ -1094,6 +1242,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('Event receive reverted due to conflict');
                         return;
                     }
+                }
+                
+                // Update room utilization
+                if (typeof window.updateAllDayUtilizations === 'function') {
+                    setTimeout(() => window.updateAllDayUtilizations(), 100);
                 }
             },
             // Handle when events are moved
@@ -1210,6 +1363,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 });
                             }
                             
+                            // Show notification for successful update
+                            if (typeof window.showNotification === 'function') {
+                                const subjectName = event.extendedProps?.subject || event.title || 'Class';
+                                const dayName = event.extendedProps?.dayOfWeek || 'Unknown';
+                                const timeStr = event.start ? event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+                                window.showNotification(`Class time updated successfully! ${subjectName} - ${dayName} at ${timeStr}`, 'success');
+                            }
                             
                             // Clear flags after a delay
                             setTimeout(() => {
@@ -1220,6 +1380,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             }, 1500);
                         });
                     }, 300);
+                }
+                
+                // Update room utilization
+                if (typeof window.updateAllDayUtilizations === 'function') {
+                    setTimeout(() => window.updateAllDayUtilizations(), 100);
                 }
             },
             // Handle when events are resized (lengthened/shortened)
@@ -1313,6 +1478,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 });
                             }
                             
+                            // Show notification for successful update
+                            if (typeof window.showNotification === 'function') {
+                                const subjectName = event.extendedProps?.subject || event.title || 'Class';
+                                const duration = event.end ? ((event.end - event.start) / (1000 * 60 * 60)).toFixed(1) : 'N/A';
+                                window.showNotification(`Class time updated successfully! ${subjectName} - Duration: ${duration} hours`, 'success');
+                            }
+                            
                             // Clear flags after a delay
                             setTimeout(() => {
                                 if (window.isCurrentlySaving !== undefined) {
@@ -1321,10 +1493,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 window.isResizingEvent = false;
                             }, 1500);
                             
-                            // Show notification
-                            if (typeof showNotification === 'function') {
-                                const duration = event.end ? ((event.end - event.start) / (1000 * 60 * 60)).toFixed(1) : 'N/A';
-                                showNotification(`Event duration updated to ${duration} hours`, 'success');
+                            // Update room utilization
+                            if (typeof window.updateAllDayUtilizations === 'function') {
+                                setTimeout(() => window.updateAllDayUtilizations(), 100);
                             }
                         }).catch(error => {
                             console.error('Error saving schedule after resize:', error);
@@ -1344,33 +1515,44 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             // Custom event content to show detailed information
+            // Display order: 1. Subject name as title, 2. Type, 3. Course/strand, 4. Room, 5. Faculty, 6. Time
             eventContent: function(arg) {
                 const event = arg.event;
                 const extendedProps = event.extendedProps || {};
                 
                 // Extract event details
                 const subject = extendedProps.subject || event.title || '';
-                const department = extendedProps.department || extendedProps.course || '';
-                const teacher = extendedProps.faculty || '';
+                const classType = extendedProps.classType || '';
+                const course = extendedProps.course || extendedProps.department || '';
                 const room = extendedProps.room || '';
+                const teacher = extendedProps.faculty || '';
                 
                 // Check if this is a merged class
                 const isMerged = extendedProps.isMerged || false;
                 const mergedClassIds = extendedProps.mergedClassIds || [];
                 
-                // Get merged strands information
+                // Get merged strands information (codes only)
                 let mergedStrandsInfo = '';
                 if (isMerged && mergedClassIds.length > 0) {
                     // Try to get merged strands from window.allClasses if available
                     if (window.allClasses && Array.isArray(window.allClasses)) {
                         const mergedClasses = window.allClasses.filter(c => c && mergedClassIds.includes(c.id));
-                        const mergedStrands = mergedClasses.map(c => c.course || c.department).filter(Boolean);
-                        if (mergedStrands.length > 0) {
-                            // Include the current class's strand/course in the list
-                            const currentStrand = department || extendedProps.course || '';
-                            const allStrands = [currentStrand, ...mergedStrands].filter(Boolean);
-                            const uniqueStrands = [...new Set(allStrands)];
-                            mergedStrandsInfo = uniqueStrands.join(', ');
+                        // Get codes for merged classes
+                        const mergedStrandCodes = mergedClasses.map(c => {
+                            const code = getCourseCodeFromEvent({
+                                courseId: c.courseId,
+                                course: c.course,
+                                department: c.department
+                            });
+                            return code;
+                        }).filter(Boolean);
+                        
+                        if (mergedStrandCodes.length > 0) {
+                            // Include the current class's strand/course code in the list
+                            const currentStrandCode = getCourseCodeFromEvent(extendedProps);
+                            const allStrandCodes = [currentStrandCode, ...mergedStrandCodes].filter(Boolean);
+                            const uniqueStrandCodes = [...new Set(allStrandCodes)];
+                            mergedStrandsInfo = uniqueStrandCodes.join(', ');
                         }
                     }
                     
@@ -1415,6 +1597,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     ? cleanSubject.substring(0, maxSubjectLength) + '...' 
                     : cleanSubject;
                 
+                // Build HTML in the requested order:
+                // 1. Subject name as title
                 let html = `<div style="font-weight: 600; margin-bottom: 2px; word-wrap: break-word; overflow-wrap: break-word;">${displaySubject}</div>`;
                 
                 // Show merged strands prominently if merged
@@ -1422,20 +1606,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     html += `<div style="font-size: 9px; font-weight: 600; color: #ffffff; background-color: rgba(255, 255, 255, 0.25); padding: 2px 4px; border-radius: 3px; margin-bottom: 3px; display: inline-block; word-wrap: break-word; max-width: 100%;"><i class="fas fa-link" style="margin-right: 3px; font-size: 0.8em;"></i>Merged: ${mergedStrandsInfo}</div>`;
                 }
                 
-                if (timeStr) {
-                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-clock" style="margin-right: 4px;"></i>${timeStr}</div>`;
+                // 2. Type (lecture or laboratory)
+                if (classType) {
+                    const typeDisplay = classType.charAt(0).toUpperCase() + classType.slice(1);
+                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-graduation-cap" style="margin-right: 4px;"></i>${typeDisplay}</div>`;
                 }
                 
-                if (department && !mergedStrandsInfo) {
-                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-building" style="margin-right: 4px;"></i>${department}</div>`;
+                // 3. Course/strand (code only, not name)
+                const displayCourse = mergedStrandsInfo || getCourseCodeFromEvent(extendedProps);
+                if (displayCourse && displayCourse !== 'N/A') {
+                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-building" style="margin-right: 4px;"></i>${displayCourse}</div>`;
                 }
                 
-                if (teacher) {
-                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-chalkboard-teacher" style="margin-right: 4px;"></i>${teacher}</div>`;
-                }
-                
+                // 4. Room
                 if (room) {
                     html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-door-open" style="margin-right: 4px;"></i>${room}</div>`;
+                }
+                
+                // 5. Faculty (clean name - remove department if present)
+                if (teacher) {
+                    const cleanTeacher = cleanFacultyName(teacher);
+                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-chalkboard-teacher" style="margin-right: 4px;"></i>${cleanTeacher}</div>`;
+                }
+                
+                // 6. Time
+                if (timeStr) {
+                    html += `<div style="font-size: 10px; opacity: 0.9; word-wrap: break-word; overflow-wrap: break-word;"><i class="fas fa-clock" style="margin-right: 4px;"></i>${timeStr}</div>`;
                 }
                 
                 content.innerHTML = html;
@@ -1509,7 +1705,28 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load schedule after calendar is rendered (for all users)
         setTimeout(() => {
             if (typeof window.loadScheduleFromLocalStorage === 'function') {
-                window.loadScheduleFromLocalStorage();
+                const loadResult = window.loadScheduleFromLocalStorage();
+                // Handle both promise and non-promise returns
+                if (loadResult && typeof loadResult.then === 'function') {
+                    loadResult.then(() => {
+                        // Update room utilization after schedule loads
+                        if (typeof window.updateAllDayUtilizations === 'function') {
+                            setTimeout(() => window.updateAllDayUtilizations(), 500);
+                        }
+                    }).catch(() => {
+                        // Still update even if load fails
+                        if (typeof window.updateAllDayUtilizations === 'function') {
+                            setTimeout(() => window.updateAllDayUtilizations(), 500);
+                        }
+                    });
+                } else {
+                    // Not a promise, just update after a delay
+                    setTimeout(() => {
+                        if (typeof window.updateAllDayUtilizations === 'function') {
+                            window.updateAllDayUtilizations();
+                        }
+                    }, 1000);
+                }
             }
             
             // Fixed schedules will be loaded by loadScheduleFromLocalStorage, no need to load here
@@ -1520,6 +1737,227 @@ document.addEventListener('DOMContentLoaded', function() {
         window.isCurrentlySaving = false;
     } else {
         console.error('FullCalendar library not loaded or calendar element not found');
+    }
+    
+    // ========== ROOM UTILIZATION CALCULATION ==========
+    /**
+     * Calculate room utilization for a specific day
+     * @param {Date} date - The date to calculate utilization for
+     * @returns {number} - Utilization percentage (0-100)
+     */
+    function calculateDayUtilization(date) {
+        const calendar = window.calendar;
+        if (!calendar) return 100;
+        
+        // Time range: 7 AM to 9 PM (21:00)
+        const startHour = 7;
+        const endHour = 21;
+        const slotDurationMinutes = 15; // 15-minute blocks
+        
+        // Calculate total time slots
+        const totalHours = endHour - startHour; // 14 hours
+        const totalSlots = (totalHours * 60) / slotDurationMinutes; // 56 slots
+        const percentagePerSlot = 100 / totalSlots; // ~1.785% per slot
+        
+        // Get all events for this day
+        const dayStart = new Date(date);
+        dayStart.setHours(startHour, 0, 0, 0);
+        const dayEnd = new Date(date);
+        dayEnd.setHours(endHour, 0, 0, 0);
+        
+        // Get all events that overlap with this day
+        const allEvents = calendar.getEvents();
+        const dayEvents = allEvents.filter(event => {
+            // Skip fixed schedules - only count actual classes
+            if (event.extendedProps?.isFixedSchedule) return false;
+            
+            const eventStart = event.start;
+            const eventEnd = event.end;
+            
+            if (!eventStart || !eventEnd) return false;
+            
+            // Check if event overlaps with the day (7 AM to 9 PM)
+            return eventStart < dayEnd && eventEnd > dayStart;
+        });
+        
+        // If no classes exist for this day, return 100% (no subtraction)
+        if (dayEvents.length === 0) {
+            return 100;
+        }
+        
+        // Find the earliest class start time and latest class end time
+        let earliestStart = null;
+        let latestEnd = null;
+        
+        dayEvents.forEach(event => {
+            const eventStart = new Date(event.start);
+            const eventEnd = new Date(event.end);
+            
+            if (!earliestStart || eventStart < earliestStart) {
+                earliestStart = eventStart;
+            }
+            if (!latestEnd || eventEnd > latestEnd) {
+                latestEnd = eventEnd;
+            }
+        });
+        
+        // Convert to minutes from 7 AM
+        const earliestStartMinutes = (earliestStart.getHours() - startHour) * 60 + earliestStart.getMinutes();
+        const latestEndMinutes = (latestEnd.getHours() - startHour) * 60 + latestEnd.getMinutes();
+        
+        // Clamp to valid range (7 AM - 9 PM)
+        const firstClassSlot = Math.max(0, Math.floor(earliestStartMinutes / slotDurationMinutes));
+        const lastClassSlot = Math.min(totalSlots - 1, Math.floor((latestEndMinutes - 1) / slotDurationMinutes));
+        
+        // Create a set of occupied time slots (only between first and last class)
+        const occupiedSlots = new Set();
+        
+        dayEvents.forEach(event => {
+            const eventStart = new Date(event.start);
+            const eventEnd = new Date(event.end);
+            
+            // Clamp event times to 7 AM - 9 PM range
+            const slotStart = Math.max(
+                (eventStart.getHours() - startHour) * 60 + eventStart.getMinutes(),
+                0
+            );
+            const slotEnd = Math.min(
+                (eventEnd.getHours() - startHour) * 60 + eventEnd.getMinutes(),
+                totalHours * 60
+            );
+            
+            // Mark all 15-minute slots covered by this event as occupied
+            for (let minutes = slotStart; minutes < slotEnd; minutes += slotDurationMinutes) {
+                const slotIndex = Math.floor(minutes / slotDurationMinutes);
+                if (slotIndex >= 0 && slotIndex < totalSlots) {
+                    occupiedSlots.add(slotIndex);
+                }
+            }
+        });
+        
+        // Calculate utilization: Start at 100%, subtract for:
+        // 1. Empty slots from 7 AM until the first class starts
+        // 2. Empty slots between classes (gaps)
+        // Don't subtract for time after the last class ends
+        
+        // Count empty slots from 7 AM (slot 0) until first class starts
+        const emptySlotsBeforeFirstClass = firstClassSlot;
+        
+        // Count empty slots between first and last class
+        const totalSlotsBetweenClasses = lastClassSlot - firstClassSlot + 1;
+        const occupiedSlotsBetweenClasses = Array.from(occupiedSlots).filter(slot => 
+            slot >= firstClassSlot && slot <= lastClassSlot
+        ).length;
+        const emptySlotsBetweenClasses = totalSlotsBetweenClasses - occupiedSlotsBetweenClasses;
+        
+        // Total empty slots to subtract: before first class + gaps between classes
+        const totalEmptySlots = emptySlotsBeforeFirstClass + emptySlotsBetweenClasses;
+        
+        // Subtract for empty slots before first class and gaps between classes
+        const utilization = 100 - (totalEmptySlots * percentagePerSlot);
+        
+        // Ensure utilization doesn't go below 0
+        return Math.max(0, Math.round(utilization * 100) / 100); // Round to 2 decimal places
+    }
+    
+    /**
+     * Update the utilization percentage display for a day header
+     * @param {HTMLElement} headerEl - The day header element
+     * @param {Date} date - The date for this day
+     */
+    function updateDayUtilization(headerEl, date) {
+        if (!headerEl || !date) return;
+        
+        const utilization = calculateDayUtilization(date);
+        
+        // Remove existing utilization display if any
+        const existingUtil = headerEl.querySelector('.day-utilization');
+        if (existingUtil) {
+            existingUtil.remove();
+        }
+        
+        // Create utilization display element
+        const utilEl = document.createElement('div');
+        utilEl.className = 'day-utilization';
+        utilEl.style.cssText = `
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: ${utilization >= 80 ? '#059669' : utilization >= 50 ? '#f59e0b' : '#ef4444'};
+            margin-top: 2px;
+            opacity: 0.9;
+        `;
+        utilEl.textContent = `${utilization}%`;
+        
+        // Append to header
+        headerEl.appendChild(utilEl);
+    }
+    
+    /**
+     * Update utilization for all visible day headers
+     */
+    function updateAllDayUtilizations() {
+        const calendar = window.calendar;
+        if (!calendar) return;
+        
+        // Get the current view's date range
+        const view = calendar.view;
+        if (!view) return;
+        
+        // Get all day headers
+        const dayHeaders = document.querySelectorAll('.fc-col-header-cell');
+        dayHeaders.forEach(header => {
+            // Get the date from the header's data attribute or text
+            const headerText = header.textContent.trim();
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayIndex = dayNames.findIndex(day => headerText.includes(day));
+            
+            if (dayIndex !== -1) {
+                // Get the date for this day of the week in the current view
+                const viewStart = view.activeStart;
+                const currentDay = viewStart.getDay();
+                const daysToAdd = (dayIndex - currentDay + 7) % 7;
+                const targetDate = new Date(viewStart);
+                targetDate.setDate(viewStart.getDate() + daysToAdd);
+                
+                updateDayUtilization(header, targetDate);
+            }
+        });
+    }
+    
+    // Make updateAllDayUtilizations globally accessible
+    window.updateAllDayUtilizations = updateAllDayUtilizations;
+    
+    // Update utilization when events change
+    if (window.calendar) {
+        // Update after calendar renders
+        setTimeout(() => {
+            updateAllDayUtilizations();
+        }, 1000);
+        
+        // Update when events are added, removed, or modified
+        const originalAddEvent = window.calendar.addEvent.bind(window.calendar);
+        window.calendar.addEvent = function(...args) {
+            const result = originalAddEvent(...args);
+            setTimeout(() => updateAllDayUtilizations(), 100);
+            return result;
+        };
+        
+        const originalRemoveEvent = window.calendar.getEventById ? 
+            (function() {
+                const original = window.calendar.getEventById.bind(window.calendar);
+                return function(id) {
+                    const event = original(id);
+                    if (event && event.remove) {
+                        const originalRemove = event.remove.bind(event);
+                        event.remove = function() {
+                            const result = originalRemove();
+                            setTimeout(() => updateAllDayUtilizations(), 100);
+                            return result;
+                        };
+                    }
+                    return event;
+                };
+            })() : null;
     }
     
     // Update user info
@@ -1809,20 +2247,66 @@ document.addEventListener('DOMContentLoaded', function() {
         const isAdmin = userRole === 'admin' || userRole === 'superadmin';
         const allowEdit = canEdit && isAdmin;
         
-        // Populate modal with event details
-        document.getElementById('eventDetailSubject').textContent = eventData.subject || 'N/A';
-        document.getElementById('eventDetailTime').textContent = eventData.time || 'N/A';
-        document.getElementById('eventDetailDay').textContent = eventData.day || 'N/A';
-        document.getElementById('eventDetailDepartment').textContent = eventData.department || 'N/A';
-        document.getElementById('eventDetailTeacher').textContent = eventData.teacher || 'N/A';
-        document.getElementById('eventDetailRoom').textContent = eventData.currentRoom || 'N/A';
+        // Populate modal with event details in the requested order:
+        // 1. Subject name as title
+        // 2. Type (lecture or laboratory)
+        // 3. Course/strand
+        // 4. Room
+        // 5. Faculty
+        // 6. Time
         
-        // Display class type (Lecture or Laboratory)
+        // Subject as title (in the modal body, not header)
+        const eventDetailSubject = document.getElementById('eventDetailSubject');
+        if (eventDetailSubject) {
+            eventDetailSubject.textContent = eventData.subject || 'N/A';
+        }
+        
+        // Type (Lecture or Laboratory)
         const classType = eventData.classType || '';
         const typeDisplay = classType ? (classType.charAt(0).toUpperCase() + classType.slice(1)) : 'N/A';
         const eventDetailType = document.getElementById('eventDetailType');
         if (eventDetailType) {
             eventDetailType.textContent = typeDisplay;
+        }
+        
+        // Course/Strand - get from event if available
+        const eventDetailCourse = document.getElementById('eventDetailCourse');
+        if (eventDetailCourse) {
+            // Try course first, then department
+            let course = eventData.course || '';
+            if (!course && eventData.eventId) {
+                // Try to get from the actual event
+                const calendar = window.calendar;
+                if (calendar) {
+                    const event = calendar.getEventById(eventData.eventId);
+                    if (event && event.extendedProps) {
+                        course = event.extendedProps.course || event.extendedProps.department || '';
+                    }
+                }
+            }
+            // Fallback to department if course not found
+            if (!course) {
+                course = eventData.department || 'N/A';
+            }
+            eventDetailCourse.textContent = course;
+        }
+        
+        // Room
+        const eventDetailRoom = document.getElementById('eventDetailRoom');
+        if (eventDetailRoom) {
+            eventDetailRoom.textContent = eventData.currentRoom || 'N/A';
+        }
+        
+        // Faculty
+        const eventDetailTeacher = document.getElementById('eventDetailTeacher');
+        if (eventDetailTeacher) {
+            eventDetailTeacher.textContent = eventData.teacher || 'Not assigned';
+        }
+        
+        // Time
+        const eventDetailTime = document.getElementById('eventDetailTime');
+        if (eventDetailTime) {
+            eventDetailTime.textContent = eventData.time || 'N/A';
         }
         
         // Update faculty label to show current faculty
@@ -1841,9 +2325,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const roomSelectContainer = document.getElementById('eventRoomSelect')?.parentElement;
         const roomSelect = document.getElementById('eventRoomSelect');
         const saveRoomBtn = document.getElementById('saveRoomBtn');
+        const swapRoomsBtn = document.getElementById('swapRoomsBtn');
         const deleteEventBtn = document.getElementById('deleteEventBtn');
         
-        // Load verified faculty members for assignment (load ALL faculty like the faculty tab)
+        // Load faculty members for assignment (mirror faculty tab list, include pending users)
         if (allowEdit && facultySelect) {
             facultySelect.innerHTML = '<option value="">Loading faculty...</option>';
             facultySelect.disabled = true;
@@ -1854,17 +2339,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response && response.ok) {
                     const faculty = await response.json();
                     
-                    // Filter to only verified faculty and exclude superadmin
-                    const verifiedFaculty = faculty.filter(f => 
-                        f.verified === true &&
+                    // Allow both verified and pending users while still hiding the superadmin account
+                    let availableFaculty = Array.isArray(faculty) ? faculty.filter(f => 
+                        f &&
                         f.email !== 'superadmin@school.edu' &&
                         f.role !== 'superadmin' &&
                         String(f.role || '').toLowerCase() !== 'superadmin'
-                    );
-                    
+                    ) : [];
+
                     facultySelect.innerHTML = '<option value="">Select a faculty member...</option>';
                     
-                    if (verifiedFaculty.length > 0) {
+                    if (availableFaculty.length > 0) {
                         // Get current faculty ID for selection
                         const currentFacultyId = eventData.eventId ? (() => {
                             const calendar = window.calendar;
@@ -1877,23 +2362,26 @@ document.addEventListener('DOMContentLoaded', function() {
                             return null;
                         })() : null;
                         
-                        verifiedFaculty.forEach(member => {
+                        availableFaculty.forEach(member => {
                             const option = document.createElement('option');
-                            option.value = member.id;
+                            const optionValue = member.id || member.userId || member._id || member.email;
+                            if (!optionValue) {
+                                return;
+                            }
+                            option.value = optionValue;
                             const name = formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || 'Faculty';
-                            // Include department in display for clarity
-                            const displayName = member.department ? `${name} - ${member.department}` : name;
-                            option.textContent = displayName;
+                            // Display faculty name only (no department)
+                            option.textContent = name;
                             
                             // Mark current faculty as selected
-                            if (member.id === currentFacultyId) {
+                            if (optionValue === currentFacultyId) {
                                 option.selected = true;
                             }
                             
                             facultySelect.appendChild(option);
                         });
                     } else {
-                        facultySelect.innerHTML = '<option value="">No verified faculty available</option>';
+                        facultySelect.innerHTML = '<option value="">No faculty records available</option>';
                     }
                     
                     facultySelect.disabled = false;
@@ -1990,6 +2478,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // Show/hide swap rooms button based on edit permissions
+        if (swapRoomsBtn) {
+            swapRoomsBtn.style.display = allowEdit ? '' : 'none';
+        }
+        
         // Store event ID for handlers
         if (roomSelect) roomSelect.dataset.eventId = eventData.eventId || '';
         if (facultySelect) facultySelect.dataset.eventId = eventData.eventId || '';
@@ -2013,21 +2506,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     const event = calendar.getEventById(eventId);
                     if (!event) return;
                     
-                    // Resolve department ID properly (handle codes, IDs, or malformed values)
-                    const resolvedDeptId = resolveDepartmentId(eventData.departmentId);
-                    if (!resolvedDeptId) {
-                        console.warn('Could not resolve department ID:', eventData.departmentId);
-                        if (typeof showNotification === 'function') {
-                            showNotification('Could not resolve department ID', 'error');
-                        }
-                        return;
-                    }
-                    
-                    // Get faculty member details
-                    const response = await fetchWithAuth(`/api/faculty?departmentId=${encodeURIComponent(resolvedDeptId)}`);
+                    // Get faculty member details - fetch all faculty (no department filter needed)
+                    // This matches how the dropdown is populated
+                    const response = await fetchWithAuth(`/api/faculty`);
                     if (response && response.ok) {
                         const faculty = await response.json();
-                        const selectedFaculty = faculty.find(f => f.id === selectedFacultyId);
+                        // Find the selected faculty by ID, userId, _id, or email (matching the dropdown logic)
+                        const selectedFaculty = faculty.find(f => 
+                            f && (
+                                f.id === selectedFacultyId || 
+                                f.userId === selectedFacultyId || 
+                                f._id === selectedFacultyId || 
+                                f.email === selectedFacultyId
+                            )
+                        );
                         
                         if (selectedFaculty) {
                             const facultyName = formatFullName(selectedFaculty.firstName || '', selectedFaculty.middleName || '', selectedFaculty.lastName || '') || selectedFaculty.email || 'Faculty';
@@ -2056,6 +2548,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (typeof showNotification === 'function') {
                                 showNotification('Faculty assigned successfully!', 'success');
                             }
+                        } else {
+                            if (typeof showNotification === 'function') {
+                                showNotification('Selected faculty member not found', 'error');
+                            }
+                        }
+                    } else {
+                        if (typeof showNotification === 'function') {
+                            showNotification('Failed to load faculty information', 'error');
                         }
                     }
                 } catch (error) {
@@ -2108,6 +2608,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show modal
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
+        modal.scrollTop = 0;
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+            modalContent.scrollTop = 0;
+        }
         
         // Add animation
         setTimeout(() => {
@@ -2543,9 +3048,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const clearFiltersBtn = document.getElementById('clearFiltersBtn');
         const filterStatus = document.getElementById('filterStatus');
         
-        if (!filterDepartment || !filterFaculty || !filterRoom || !filterCourse) {
-            console.warn('Filter elements not found');
-            return;
+        // Check for required filter elements (filterDepartment is optional)
+        if (!filterFaculty || !filterRoom || !filterCourse) {
+            console.warn('Filter elements not found - some filters may not be available');
+            // Don't return early, continue with available filters
+            if (!filterFaculty && !filterRoom && !filterCourse) {
+                return; // Only return if none of the main filters exist
+            }
         }
         
         // Load filter options from calendar events
@@ -2593,15 +3102,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (props.course) courses.add(props.course);
             });
             
-            // Populate department filter
-            const deptOptions = filterDepartment.querySelectorAll('option:not(:first-child)');
-            deptOptions.forEach(opt => opt.remove());
-            departments.forEach(dept => {
-                const option = document.createElement('option');
-                option.value = dept;
-                option.textContent = dept;
-                filterDepartment.appendChild(option);
-            });
+            // Populate department filter (if it exists)
+            if (filterDepartment) {
+                const deptOptions = filterDepartment.querySelectorAll('option:not(:first-child)');
+                deptOptions.forEach(opt => opt.remove());
+                departments.forEach(dept => {
+                    const option = document.createElement('option');
+                    option.value = dept;
+                    option.textContent = dept;
+                    filterDepartment.appendChild(option);
+                });
+            }
             
             // Populate faculty filter
             const facOptions = filterFaculty.querySelectorAll('option:not(:first-child)');
@@ -2639,10 +3150,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const calendar = window.calendar;
             if (!calendar) return;
             
-            const selectedDept = filterDepartment.value;
-            const selectedFaculty = filterFaculty.value;
-            const selectedRoom = filterRoom.value;
-            const selectedCourse = filterCourse.value;
+            const selectedDept = filterDepartment ? filterDepartment.value : '';
+            const selectedFaculty = filterFaculty ? filterFaculty.value : '';
+            const selectedRoom = filterRoom ? filterRoom.value : '';
+            const selectedCourse = filterCourse ? filterCourse.value : '';
             
             const events = calendar.getEvents();
             let visibleCount = 0;
@@ -2731,10 +3242,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Clear all filters
         function clearFilters() {
-            filterDepartment.value = '';
-            filterFaculty.value = '';
-            filterRoom.value = '';
-            filterCourse.value = '';
+            if (filterDepartment) filterDepartment.value = '';
+            if (filterFaculty) filterFaculty.value = '';
+            if (filterRoom) filterRoom.value = '';
+            if (filterCourse) filterCourse.value = '';
             applyFilters();
             updateFilterVisuals();
         }
@@ -2746,7 +3257,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 { element: filterFaculty, labelId: 'filterFaculty' },
                 { element: filterRoom, labelId: 'filterRoom' },
                 { element: filterCourse, labelId: 'filterCourse' }
-            ];
+            ].filter(f => f.element !== null); // Only include existing filters
             
             filters.forEach(({ element, labelId }) => {
                 if (element) {
@@ -2767,22 +3278,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Event listeners
-        filterDepartment.addEventListener('change', () => {
-            updateFilterVisuals();
-            applyFilters();
-        });
-        filterFaculty.addEventListener('change', () => {
-            updateFilterVisuals();
-            applyFilters();
-        });
-        filterRoom.addEventListener('change', () => {
-            updateFilterVisuals();
-            applyFilters();
-        });
-        filterCourse.addEventListener('change', () => {
-            updateFilterVisuals();
-            applyFilters();
-        });
+        if (filterDepartment) {
+            filterDepartment.addEventListener('change', () => {
+                updateFilterVisuals();
+                applyFilters();
+            });
+        }
+        if (filterFaculty) {
+            filterFaculty.addEventListener('change', () => {
+                updateFilterVisuals();
+                applyFilters();
+            });
+        }
+        if (filterRoom) {
+            filterRoom.addEventListener('change', () => {
+                updateFilterVisuals();
+                applyFilters();
+            });
+        }
+        if (filterCourse) {
+            filterCourse.addEventListener('change', () => {
+                updateFilterVisuals();
+                applyFilters();
+            });
+        }
         
         if (clearFiltersBtn) {
             clearFiltersBtn.addEventListener('click', () => {
@@ -2961,13 +3480,19 @@ function initializeUnassignedSchedules() {
             
             const unassignedSchedules = await response.json();
             
-            // Update badge
+            // Filter out fixed schedules (they don't require faculty members)
+            const nonFixedSchedules = unassignedSchedules.filter(schedule => {
+                const extendedProps = schedule.extendedProps || {};
+                return !extendedProps.isFixedSchedule;
+            });
+            
+            // Update badge with filtered count
             if (unassignedCountBadge) {
-                unassignedCountBadge.textContent = unassignedSchedules.length;
+                unassignedCountBadge.textContent = nonFixedSchedules.length;
             }
             
-            // Store all unassigned schedules for filtering
-            allUnassignedSchedules = unassignedSchedules;
+            // Store all unassigned schedules for filtering (excluding fixed schedules)
+            allUnassignedSchedules = nonFixedSchedules;
             
             // Check if there are any schedules at all (to determine if panel should show)
             // We need to fetch the full schedule to check if any schedules exist
@@ -3004,7 +3529,7 @@ function initializeUnassignedSchedules() {
             
             // Display schedules (apply search filter if any)
             const searchTerm = searchInput ? searchInput.value : '';
-            displayUnassignedSchedules(unassignedSchedules, searchTerm);
+            displayUnassignedSchedules(nonFixedSchedules, searchTerm);
             
         } catch (error) {
             console.error('Error loading unassigned schedules:', error);
@@ -3016,9 +3541,15 @@ function initializeUnassignedSchedules() {
      * Display unassigned schedules with optional search filter
      */
     function displayUnassignedSchedules(schedules, searchTerm = '') {
-        // Filter schedules based on search term
+        // First, filter out fixed schedules (they don't require faculty members)
+        const nonFixedSchedules = schedules.filter(schedule => {
+            const extendedProps = schedule.extendedProps || {};
+            return !extendedProps.isFixedSchedule;
+        });
+        
+        // Then filter schedules based on search term
         const filteredSchedules = searchTerm.trim() 
-            ? schedules.filter(schedule => {
+            ? nonFixedSchedules.filter(schedule => {
                 const extendedProps = schedule.extendedProps || {};
                 const subject = (extendedProps.subject || schedule.title || '').toLowerCase();
                 const department = (extendedProps.department || extendedProps.course || '').toLowerCase();
@@ -3035,7 +3566,7 @@ function initializeUnassignedSchedules() {
                        endTime.includes(searchLower) ||
                        room.includes(searchLower);
             })
-            : schedules;
+            : nonFixedSchedules;
         
         // Display schedules
         if (filteredSchedules.length === 0) {
@@ -3199,7 +3730,8 @@ function initializeUnassignedSchedules() {
                 const option = document.createElement('option');
                 option.value = member.id;
                 const name = formatFullName(member.firstName || '', member.middleName || '', member.lastName || '') || member.email || 'Faculty';
-                option.textContent = `${name}${member.department ? ' - ' + member.department : ''}`;
+                // Display faculty name only (no department)
+                option.textContent = name;
                 assignFacultySelect.appendChild(option);
             });
         }
@@ -3218,4 +3750,537 @@ function initializeUnassignedSchedules() {
     setInterval(() => {
         loadUnassignedSchedules();
     }, 30000);
+    
+    // ========== SWAP ROOMS FUNCTIONALITY ==========
+    
+    // Function to find events at the same time slot
+    function findEventsAtSameTime(currentEvent) {
+        const calendar = window.calendar;
+        if (!calendar || !currentEvent) {
+            console.log('[Swap Rooms] Calendar or event not available');
+            return [];
+        }
+        
+        const allEvents = calendar.getEvents();
+        const sameTimeEvents = [];
+        
+        // Get current event's time information
+        const currentStart = currentEvent.start;
+        const currentEnd = currentEvent.end;
+        const currentEventId = currentEvent.id;
+        
+        if (!currentStart || !currentEnd) {
+            console.log('[Swap Rooms] Current event missing start/end times');
+            return [];
+        }
+        
+        // Convert to time strings for comparison (HH:MM format)
+        // Handle both Date objects and date strings
+        const getTimeString = (date) => {
+            if (!date) return null;
+            try {
+                const d = date instanceof Date ? date : new Date(date);
+                if (isNaN(d.getTime())) return null;
+                const hours = d.getHours().toString().padStart(2, '0');
+                const minutes = d.getMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}`;
+            } catch (e) {
+                console.warn('[Swap Rooms] Error parsing date:', date, e);
+                return null;
+            }
+        };
+        
+        // Get day of week (0 = Sunday, 1 = Monday, etc.)
+        const getDayOfWeek = (date) => {
+            if (!date) return null;
+            try {
+                const d = date instanceof Date ? date : new Date(date);
+                if (isNaN(d.getTime())) return null;
+                return d.getDay();
+            } catch (e) {
+                console.warn('[Swap Rooms] Error getting day of week:', date, e);
+                return null;
+            }
+        };
+        
+        const currentStartTime = getTimeString(currentStart);
+        const currentEndTime = getTimeString(currentEnd);
+        const currentDay = getDayOfWeek(currentStart);
+        
+        if (!currentStartTime || !currentEndTime || currentDay === null) {
+            console.log('[Swap Rooms] Invalid current event times:', {
+                currentStartTime,
+                currentEndTime,
+                currentDay
+            });
+            return [];
+        }
+        
+        console.log('[Swap Rooms] Looking for events matching:');
+        console.log('  Current Event ID:', currentEventId);
+        console.log('  Current Day:', currentDay, '(' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][currentDay] + ')');
+        console.log('  Current Start Time:', currentStartTime);
+        console.log('  Current End Time:', currentEndTime);
+        console.log('  Current Start Date:', currentStart);
+        console.log('  Current End Date:', currentEnd);
+        console.log('  Total Events:', allEvents.length);
+        
+        // Find events at the same time slot (same day of week, same start and end time)
+        let checkedCount = 0;
+        let skippedCount = 0;
+        allEvents.forEach(event => {
+            // Skip the current event and fixed schedules
+            if (event.id === currentEventId) {
+                skippedCount++;
+                return;
+            }
+            if (event.extendedProps?.isFixedSchedule) {
+                skippedCount++;
+                return;
+            }
+            
+            if (event.start && event.end) {
+                checkedCount++;
+                const eventStartTime = getTimeString(event.start);
+                const eventEndTime = getTimeString(event.end);
+                const eventDay = getDayOfWeek(event.start);
+                
+                // Skip if we couldn't parse the event times
+                if (!eventStartTime || !eventEndTime || eventDay === null) {
+                    console.log('[Swap Rooms] Skipping event - invalid times:', {
+                        id: event.id,
+                        subject: event.extendedProps?.subject || event.title,
+                        start: event.start,
+                        end: event.end
+                    });
+                    return;
+                }
+                
+                // Log all events being checked for debugging
+                const dayMatch = eventDay === currentDay;
+                const startTimeMatch = eventStartTime === currentStartTime;
+                const endTimeMatch = eventEndTime === currentEndTime;
+                const allMatch = dayMatch && startTimeMatch && endTimeMatch;
+                
+                console.log('[Swap Rooms] Checking event:');
+                console.log('  ID:', event.id);
+                console.log('  Subject:', event.extendedProps?.subject || event.title);
+                console.log('  Day:', eventDay, '(' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDay] + ')', dayMatch ? '✓' : '✗');
+                console.log('  Start Time:', eventStartTime, startTimeMatch ? '✓' : '✗', '(looking for:', currentStartTime + ')');
+                console.log('  End Time:', eventEndTime, endTimeMatch ? '✓' : '✗', '(looking for:', currentEndTime + ')');
+                console.log('  Room:', event.extendedProps?.room, '(ID:', event.extendedProps?.roomId + ')');
+                console.log('  Event Start Date:', event.start);
+                console.log('  Event End Date:', event.end);
+                console.log('  MATCH:', allMatch ? 'YES ✓' : 'NO ✗');
+                console.log('  ---');
+                
+                // Check if same day of week and overlapping time slots
+                // Convert times to minutes for easier comparison
+                const timeToMinutes = (timeStr) => {
+                    const [hours, minutes] = timeStr.split(':').map(Number);
+                    return hours * 60 + minutes;
+                };
+                
+                const currentStartMinutes = timeToMinutes(currentStartTime);
+                const currentEndMinutes = timeToMinutes(currentEndTime);
+                const eventStartMinutes = timeToMinutes(eventStartTime);
+                const eventEndMinutes = timeToMinutes(eventEndTime);
+                
+                // Check if times overlap (events share the same time slot)
+                const timesOverlap = (currentStartMinutes < eventEndMinutes && currentEndMinutes > eventStartMinutes);
+                
+                // Check if same day of week and times overlap
+                if (eventDay === currentDay && timesOverlap) {
+                    console.log('[Swap Rooms] ✓ MATCH FOUND (overlapping times):');
+                    console.log('  ID:', event.id);
+                    console.log('  Subject:', event.extendedProps?.subject || event.title);
+                    console.log('  Day:', eventDay + ' (' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDay] + ')', '✓');
+                    console.log('  Time:', eventStartTime + '-' + eventEndTime, '(overlaps with:', currentStartTime + '-' + currentEndTime + ')');
+                    console.log('  Room:', event.extendedProps?.room, '(ID:', event.extendedProps?.roomId + ')');
+                    sameTimeEvents.push(event);
+                }
+            } else {
+                console.log('[Swap Rooms] Skipping event - missing start/end:', {
+                    id: event.id,
+                    subject: event.extendedProps?.subject || event.title,
+                    hasStart: !!event.start,
+                    hasEnd: !!event.end
+                });
+            }
+        });
+        
+        console.log('[Swap Rooms] Summary:');
+        console.log('  Total Events:', allEvents.length);
+        console.log('  Checked:', checkedCount);
+        console.log('  Skipped:', skippedCount);
+        console.log('  Matches Found:', sameTimeEvents.length);
+        if (sameTimeEvents.length > 0) {
+            console.log('  Matching Events:');
+            sameTimeEvents.forEach((evt, idx) => {
+                console.log(`    ${idx + 1}. ${evt.extendedProps?.subject || evt.title} - Room: ${evt.extendedProps?.room}`);
+            });
+        }
+        
+        return sameTimeEvents;
+    }
+    
+    // Function to show swap rooms modal
+    function showSwapRoomsModal(currentEventData) {
+        const swapModal = document.getElementById('swapRoomsModal');
+        const currentEventInfo = document.getElementById('currentEventInfo');
+        const swapEventsList = document.getElementById('swapEventsList');
+        const swapEventsEmpty = document.getElementById('swapEventsEmpty');
+        const confirmSwapBtn = document.getElementById('confirmSwapRoomsBtn');
+        
+        if (!swapModal || !currentEventInfo || !swapEventsList) return;
+        
+        const calendar = window.calendar;
+        if (!calendar) return;
+        
+        const currentEvent = calendar.getEventById(currentEventData.eventId);
+        if (!currentEvent) return;
+        
+        // Populate current event info
+        const currentRoom = currentEvent.extendedProps?.room || 'N/A';
+        const currentSubject = currentEvent.extendedProps?.subject || currentEvent.title || 'N/A';
+        const currentTime = currentEventData.time || 'N/A';
+        const currentDay = currentEventData.day || 'N/A';
+        
+        // Get actual times from event for display
+        const actualStartTime = currentEvent.start ? 
+            currentEvent.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }) : '';
+        const actualEndTime = currentEvent.end ? 
+            currentEvent.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }) : '';
+        const actualDayOfWeek = currentEvent.start ? 
+            ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][currentEvent.start.getDay()] : '';
+        
+        currentEventInfo.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <strong style="color: #333;">${currentSubject}</strong><br>
+                    <span style="color: #666; font-size: 0.9rem;">
+                        <i class="fas fa-calendar-day"></i> ${currentDay} | 
+                        <i class="fas fa-clock"></i> ${currentTime} | 
+                        <i class="fas fa-door-open"></i> ${currentRoom}
+                    </span>
+                    ${actualStartTime && actualEndTime ? `<br><span style="color: #94a3b8; font-size: 0.8rem; font-style: italic;">Searching for: ${actualDayOfWeek} ${actualStartTime}-${actualEndTime}</span>` : ''}
+                </div>
+            </div>
+        `;
+        
+        // Find events at the same time
+        const sameTimeEvents = findEventsAtSameTime(currentEvent);
+        
+        console.log('[Swap Rooms] Current event details for search:');
+        console.log('  Subject:', currentSubject);
+        console.log('  Day:', actualDayOfWeek, '(day index:', currentEvent.start ? currentEvent.start.getDay() : 'N/A', ')');
+        console.log('  Time:', actualStartTime + '-' + actualEndTime);
+        console.log('  Room:', currentRoom);
+        
+        // Clear and populate swap events list
+        swapEventsList.innerHTML = '';
+        swapEventsEmpty.style.display = 'none';
+        
+        if (sameTimeEvents.length === 0) {
+            swapEventsList.style.display = 'none';
+            swapEventsEmpty.style.display = 'block';
+            confirmSwapBtn.disabled = true;
+        } else {
+            swapEventsList.style.display = 'block';
+            confirmSwapBtn.disabled = true;
+            
+            sameTimeEvents.forEach((event, index) => {
+                const eventRoom = event.extendedProps?.room || 'N/A';
+                const eventRoomId = event.extendedProps?.roomId || '';
+                const eventSubject = event.extendedProps?.subject || event.title || 'N/A';
+                const eventTeacher = event.extendedProps?.faculty || 'Not assigned';
+                const eventDept = event.extendedProps?.department || 'N/A';
+                
+                // Skip if same room (no point swapping)
+                if (eventRoomId === currentEvent.extendedProps?.roomId) {
+                    return;
+                }
+                
+                const eventItem = document.createElement('div');
+                eventItem.className = 'swap-event-item';
+                eventItem.style.cssText = `
+                    padding: 12px;
+                    margin-bottom: 10px;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    background: white;
+                `;
+                
+                eventItem.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <strong style="color: #333; display: block; margin-bottom: 5px;">${eventSubject}</strong>
+                            <span style="color: #666; font-size: 0.85rem; display: block; margin-bottom: 3px;">
+                                <i class="fas fa-building"></i> ${eventDept} | 
+                                <i class="fas fa-chalkboard-teacher"></i> ${eventTeacher}
+                            </span>
+                            <span style="color: #667eea; font-size: 0.9rem; font-weight: 600;">
+                                <i class="fas fa-door-open"></i> ${eventRoom}
+                            </span>
+                        </div>
+                        <div style="margin-left: 15px;">
+                            <i class="fas fa-check-circle" style="color: #667eea; font-size: 1.5rem; display: none;"></i>
+                        </div>
+                    </div>
+                `;
+                
+                // Add click handler
+                eventItem.addEventListener('click', function() {
+                    // Remove selection from other items
+                    swapEventsList.querySelectorAll('.swap-event-item').forEach(item => {
+                        item.style.borderColor = '#e0e0e0';
+                        item.style.background = 'white';
+                        item.querySelector('.fa-check-circle').style.display = 'none';
+                    });
+                    
+                    // Select this item
+                    this.style.borderColor = '#667eea';
+                    this.style.background = '#f0f7ff';
+                    this.querySelector('.fa-check-circle').style.display = 'block';
+                    
+                    // Enable swap button
+                    confirmSwapBtn.disabled = false;
+                    confirmSwapBtn.dataset.swapEventId = event.id;
+                });
+                
+                swapEventsList.appendChild(eventItem);
+            });
+            
+            // If no valid events (all have same room), show empty message
+            if (swapEventsList.children.length === 0) {
+                swapEventsList.style.display = 'none';
+                swapEventsEmpty.style.display = 'block';
+                swapEventsEmpty.innerHTML = `
+                    <i class="fas fa-info-circle"></i> 
+                    No other classes with different rooms found at this time slot.
+                `;
+            }
+        }
+        
+        // Show modal
+        swapModal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    // Handle swap rooms button click
+    const swapRoomsBtn = document.getElementById('swapRoomsBtn');
+    if (swapRoomsBtn) {
+        swapRoomsBtn.addEventListener('click', function() {
+            const eventDetailsModal = document.getElementById('eventDetailsModal');
+            const roomSelect = document.getElementById('eventRoomSelect');
+            const eventId = roomSelect?.dataset.eventId;
+            
+            if (!eventId) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Event ID not found', 'error');
+                }
+                return;
+            }
+            
+            const calendar = window.calendar;
+            if (!calendar) return;
+            
+            const event = calendar.getEventById(eventId);
+            if (!event) return;
+            
+            // Get event data
+            const eventData = {
+                eventId: event.id,
+                subject: event.extendedProps?.subject || event.title,
+                day: event.start ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][event.start.getDay()] : 'N/A',
+                time: event.start && event.end ? 
+                    `${event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} - ${event.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : 'N/A',
+                currentRoom: event.extendedProps?.room || 'N/A',
+                currentRoomId: event.extendedProps?.roomId
+            };
+            
+            // Close event details modal
+            if (eventDetailsModal) {
+                eventDetailsModal.style.display = 'none';
+            }
+            
+            // Show swap rooms modal
+            showSwapRoomsModal(eventData);
+        });
+    }
+    
+    // Handle confirm swap rooms button
+    const confirmSwapRoomsBtn = document.getElementById('confirmSwapRoomsBtn');
+    if (confirmSwapRoomsBtn) {
+        confirmSwapRoomsBtn.addEventListener('click', async function() {
+            const swapModal = document.getElementById('swapRoomsModal');
+            const roomSelect = document.getElementById('eventRoomSelect');
+            const currentEventId = roomSelect?.dataset.eventId;
+            const swapEventId = this.dataset.swapEventId;
+            
+            if (!currentEventId || !swapEventId) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Please select a class to swap with', 'error');
+                }
+                return;
+            }
+            
+            const calendar = window.calendar;
+            if (!calendar) return;
+            
+            const currentEvent = calendar.getEventById(currentEventId);
+            const swapEvent = calendar.getEventById(swapEventId);
+            
+            if (!currentEvent || !swapEvent) {
+                if (typeof showNotification === 'function') {
+                    showNotification('One or both events not found', 'error');
+                }
+                return;
+            }
+            
+            // Get room information
+            const currentRoomId = currentEvent.extendedProps?.roomId;
+            const currentRoomName = currentEvent.extendedProps?.room || 'N/A';
+            const swapRoomId = swapEvent.extendedProps?.roomId;
+            const swapRoomName = swapEvent.extendedProps?.room || 'N/A';
+            
+            // Validate that rooms are different
+            if (currentRoomId === swapRoomId) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Both classes are in the same room. No swap needed.', 'info');
+                }
+                return;
+            }
+            
+            // Validate room compatibility for both events
+            try {
+                // Get all rooms
+                let allRooms = [];
+                try {
+                    const response = await fetchWithAuth('/api/rooms');
+                    if (response && response.ok) {
+                        allRooms = await response.json();
+                    }
+                } catch (e) {
+                    const savedRooms = localStorage.getItem('rooms');
+                    if (savedRooms) {
+                        allRooms = JSON.parse(savedRooms);
+                    }
+                }
+                
+                if (!allRooms || allRooms.length === 0) {
+                    allRooms = window.rooms || [];
+                }
+                
+                // Check if swap room is compatible with current event
+                const swapRoomObj = allRooms.find(r => String(r.id) === String(swapRoomId));
+                if (swapRoomObj) {
+                    const isExclusive = swapRoomObj.exclusive === true || swapRoomObj.exclusive === 'true' || swapRoomObj.exclusive === 1;
+                    if (isExclusive) {
+                        const currentEventDeptId = currentEvent.extendedProps?.departmentId;
+                        const swapRoomDeptId = swapRoomObj.departmentId ? String(swapRoomObj.departmentId).trim() : '';
+                        const currentEventDeptIdStr = currentEventDeptId ? String(currentEventDeptId).trim() : '';
+                        
+                        if (swapRoomDeptId && currentEventDeptIdStr && swapRoomDeptId !== currentEventDeptIdStr) {
+                            if (typeof showNotification === 'function') {
+                                showNotification(`Cannot swap: Room "${swapRoomName}" is exclusive to another department.`, 'error');
+                            }
+                            return;
+                        }
+                    }
+                }
+                
+                // Check if current room is compatible with swap event
+                const currentRoomObj = allRooms.find(r => String(r.id) === String(currentRoomId));
+                if (currentRoomObj) {
+                    const isExclusive = currentRoomObj.exclusive === true || currentRoomObj.exclusive === 'true' || currentRoomObj.exclusive === 1;
+                    if (isExclusive) {
+                        const swapEventDeptId = swapEvent.extendedProps?.departmentId;
+                        const currentRoomDeptId = currentRoomObj.departmentId ? String(currentRoomObj.departmentId).trim() : '';
+                        const swapEventDeptIdStr = swapEventDeptId ? String(swapEventDeptId).trim() : '';
+                        
+                        if (currentRoomDeptId && swapEventDeptIdStr && currentRoomDeptId !== swapEventDeptIdStr) {
+                            if (typeof showNotification === 'function') {
+                                showNotification(`Cannot swap: Room "${currentRoomName}" is exclusive to another department.`, 'error');
+                            }
+                            return;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error validating room compatibility:', error);
+                // Continue with swap if validation fails (don't block the user)
+            }
+            
+            // Perform the swap
+            try {
+                // Swap the rooms
+                currentEvent.setExtendedProp('roomId', swapRoomId);
+                currentEvent.setExtendedProp('room', swapRoomName);
+                swapEvent.setExtendedProp('roomId', currentRoomId);
+                swapEvent.setExtendedProp('room', currentRoomName);
+                
+                // Force re-render
+                currentEvent.setProp('title', currentEvent.extendedProps.subject || currentEvent.title);
+                swapEvent.setProp('title', swapEvent.extendedProps.subject || swapEvent.title);
+                
+                // Save to server
+                if (typeof window.saveScheduleToLocalStorage === 'function') {
+                    await window.saveScheduleToLocalStorage();
+                }
+                
+                // Close modal
+                if (swapModal) {
+                    swapModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+                
+                // Show success notification
+                if (typeof showNotification === 'function') {
+                    showNotification(`Rooms swapped successfully! "${currentRoomName}" ↔ "${swapRoomName}"`, 'success');
+                }
+            } catch (error) {
+                console.error('Error swapping rooms:', error);
+                if (typeof showNotification === 'function') {
+                    showNotification('Failed to swap rooms', 'error');
+                }
+            }
+        });
+    }
+    
+    // Handle cancel swap rooms button
+    const cancelSwapRoomsBtn = document.getElementById('cancelSwapRoomsBtn');
+    if (cancelSwapRoomsBtn) {
+        cancelSwapRoomsBtn.addEventListener('click', function() {
+            const swapModal = document.getElementById('swapRoomsModal');
+            if (swapModal) {
+                swapModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    }
+    
+    // Handle swap rooms modal close button
+    document.querySelectorAll('[data-close-modal="swapRoomsModal"]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const swapModal = document.getElementById('swapRoomsModal');
+            if (swapModal) {
+                swapModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    });
+    
+    // Close swap rooms modal when clicking outside
+    const swapRoomsModal = document.getElementById('swapRoomsModal');
+    if (swapRoomsModal) {
+        swapRoomsModal.addEventListener('click', function(e) {
+            if (e.target === swapRoomsModal) {
+                swapRoomsModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    }
 }

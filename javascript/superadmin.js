@@ -3228,8 +3228,11 @@ async function saveFaculty(modal) {
         const teachesTertiary = teachesTertiaryInput ? teachesTertiaryInput.checked : false;
         const teachesSHS = teachesSHSInput ? teachesSHSInput.checked : false;
         
-        if (!firstName || !lastName || !departmentId || !employmentType) {
-            showNotification('Please fill in all required fields (First Name, Last Name, Department, Employment Type)', 'error');
+        // Check if at least one teaching level is selected
+        const hasTeachingLevel = mixedTeaching || teachesTertiary || teachesSHS;
+        
+        if (!firstName || !lastName || !departmentId || !employmentType || !hasTeachingLevel) {
+            showNotification('Please fill in all required fields (First Name, Last Name, Department, Employment Type, Teaching Level)', 'error');
             return;
         }
         
@@ -3569,18 +3572,11 @@ async function saveFacultyChanges(facultyId, modal) {
         const teachesTertiary = teachesTertiaryInput ? teachesTertiaryInput.checked : false;
         const teachesSHS = teachesSHSInput ? teachesSHSInput.checked : false;
         
-        if (!firstName || !lastName) {
-            showNotification('Please fill in first name and last name', 'error');
-            return;
-        }
+        // Check if at least one teaching level is selected
+        const hasTeachingLevel = mixedTeaching || teachesTertiary || teachesSHS;
         
-        if (!departmentId) {
-            showNotification('Please select a department', 'error');
-            return;
-        }
-        
-        if (!employmentType) {
-            showNotification('Please select an employment type', 'error');
+        if (!firstName || !lastName || !departmentId || !employmentType || !hasTeachingLevel) {
+            showNotification('Please fill in all required fields (First Name, Last Name, Department, Employment Type, Teaching Level)', 'error');
             return;
         }
         
